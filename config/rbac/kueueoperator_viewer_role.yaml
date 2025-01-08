@@ -1,0 +1,23 @@
+# permissions for end users to view kueueoperators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: kueue-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: kueueoperator-viewer-role
+rules:
+- apiGroups:
+  - cache.kannon92
+  resources:
+  - kueueoperators
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cache.kannon92
+  resources:
+  - kueueoperators/status
+  verbs:
+  - get

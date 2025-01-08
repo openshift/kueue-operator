@@ -1,0 +1,27 @@
+# permissions for end users to edit kueueoperators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: kueue-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: kueueoperator-editor-role
+rules:
+- apiGroups:
+  - cache.kannon92
+  resources:
+  - kueueoperators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cache.kannon92
+  resources:
+  - kueueoperators/status
+  verbs:
+  - get

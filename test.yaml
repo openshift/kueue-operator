@@ -1,0 +1,91 @@
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |
+    apiVersion: config.kueue.x-k8s.io/v1beta1
+    kind: Configuration
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: :8080
+    # enableClusterQueueResources: true
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: c1f6bfd2.kueue.x-k8s.io
+    controller:
+      groupKindConcurrency:
+        Job.batch: 5
+        Pod: 5
+        Workload.kueue.x-k8s.io: 5
+        LocalQueue.kueue.x-k8s.io: 1
+        Cohort.kueue.x-k8s.io: 1
+        ClusterQueue.kueue.x-k8s.io: 1
+        ResourceFlavor.kueue.x-k8s.io: 1
+    clientConnection:
+      qps: 50
+      burst: 100
+    #pprofBindAddress: :8083
+    #waitForPodsReady:
+    #  enable: false
+    #  timeout: 5m
+    #  blockAdmission: false
+    #  requeuingStrategy:
+    #    timestamp: Eviction
+    #    backoffLimitCount: null # null indicates infinite requeuing
+    #    backoffBaseSeconds: 60
+    #    backoffMaxSeconds: 3600
+    #manageJobsWithoutQueueName: true
+    #managedJobsNamespaceSelector:
+    #  matchLabels:
+    #    kueue-managed: "true"
+    #internalCertManagement:
+    #  enable: false
+    #  webhookServiceName: ""
+    #  webhookSecretName: ""
+    integrations:
+      frameworks:
+      - "batch/job"
+      - "jobset.x-k8s.io/jobset"
+    #  - "pod"
+    #  - "deployment" # requires enabling pod integration
+    #  - "statefulset" # requires enabling pod integration
+    #  externalFrameworks:
+    #  - "Foo.v1.example.com"
+    #  podOptions:
+    #    namespaceSelector:
+    #      matchExpressions:
+    #        - key: kubernetes.io/metadata.name
+    #          operator: NotIn
+    #          values: [ kube-system, kueue-system ]
+    #fairSharing:
+    #  enable: true
+    #  preemptionStrategies: [LessThanOrEqualToFinalShare, LessThanInitialShare]
+    #resources:
+    #  excludeResourcePrefixes: []
+    #  transformations:
+    #  - input: nvidia.com/mig-4g.5gb
+    #    strategy: Replace | Retain
+    #    outputs:
+    #      example.com/accelerator-memory: 5Gi
+    #      example.com/accelerator-gpc: 4
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2024-12-10T18:49:49Z"
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: kueue
+    control-plane: controller-manager
+    olm.managed: "true"
+    operators.coreos.com/kueue.openshift-kueue: ""
+  name: kueue-manager-config
+  namespace: openshift-kueue
+  ownerReferences:
+  - apiVersion: operators.coreos.com/v1alpha1
+    blockOwnerDeletion: false
+    controller: false
+    kind: ClusterServiceVersion
+    name: kueue.v0.0.1
+    uid: 7fcef45a-2b75-45ff-941c-29a572807502
+  resourceVersion: "88380"
+  uid: f4e18ebc-f722-40c4-9c36-9474e1539726

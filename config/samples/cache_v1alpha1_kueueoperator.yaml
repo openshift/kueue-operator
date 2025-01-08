@@ -1,0 +1,9 @@
+apiVersion: cache.kannon92/v1alpha1
+kind: KueueOperator
+metadata:
+  labels:
+    app.kubernetes.io/name: kueue-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: kueueoperator-sample
+spec:
+  # TODO(user): Add fields here

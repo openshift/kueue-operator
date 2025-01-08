@@ -1,0 +1,47 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: kueue-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: KueueOperator is the Schema for the kueueoperators API
+      displayName: Kueue Operator
+      kind: KueueOperator
+      name: kueueoperators.cache.kannon92
+      version: v1
+  description: Operator for installing kueue into openshift
+  displayName: kueue-operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - kueue
+  links:
+  - name: Kueue Operator
+    url: https://kueue-operator.domain
+  maintainers:
+  - email: kehannon@redhat.com
+    name: kevinhannon
+  maturity: alpha
+  provider:
+    name: openshift
+  version: 0.0.0

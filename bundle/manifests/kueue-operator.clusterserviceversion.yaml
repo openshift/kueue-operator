@@ -1,0 +1,539 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+    createdAt: "2024-12-20T13:53:02Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.37.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+  name: kueue-operator.v0.0.1
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - kind: AdmissionCheck
+      name: admissionchecks.kueue.x-k8s.io
+      version: v1beta1
+    - kind: ClusterQueue
+      name: clusterqueues.kueue.x-k8s.io
+      version: v1beta1
+    - kind: Cohort
+      name: cohorts.kueue.x-k8s.io
+      version: v1alpha1
+    - description: KueueOperator is the Schema for the kueueoperators API
+      displayName: Kueue Operator
+      kind: KueueOperator
+      name: kueueoperators.cache.kannon92
+      version: v1
+    - kind: LocalQueue
+      name: localqueues.kueue.x-k8s.io
+      version: v1beta1
+    - kind: MultiKueueCluster
+      name: multikueueclusters.kueue.x-k8s.io
+      version: v1beta1
+    - kind: MultiKueueConfig
+      name: multikueueconfigs.kueue.x-k8s.io
+      version: v1beta1
+    - kind: ProvisioningRequestConfig
+      name: provisioningrequestconfigs.kueue.x-k8s.io
+      version: v1beta1
+    - kind: ResourceFlavor
+      name: resourceflavors.kueue.x-k8s.io
+      version: v1beta1
+    - kind: Topology
+      name: topologies.kueue.x-k8s.io
+      version: v1alpha1
+    - kind: WorkloadPriorityClass
+      name: workloadpriorityclasses.kueue.x-k8s.io
+      version: v1beta1
+    - kind: Workload
+      name: workloads.kueue.x-k8s.io
+      version: v1beta1
+  description: Operator for installing kueue into openshift
+  displayName: kueue-operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - limitranges
+          - namespaces
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods/finalizers
+          verbs:
+          - get
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - pods/status
+          verbs:
+          - get
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - podtemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - mutatingwebhookconfigurations
+          - validatingwebhookconfigurations
+          verbs:
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - validatingadmissionpolicies
+          - validatingadmissionpolicybindings
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - autoscaling.x-k8s.io
+          resources:
+          - provisioningrequests
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - autoscaling.x-k8s.io
+          resources:
+          - provisioningrequests/status
+          verbs:
+          - get
+        - apiGroups:
+          - batch
+          resources:
+          - jobs
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - batch
+          resources:
+          - jobs/finalizers
+          - jobs/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - flowcontrol.apiserver.k8s.io
+          resources:
+          - flowschemas
+          - prioritylevelconfigurations
+          verbs:
+          - list
+          - watch
+        - apiGroups:
+          - flowcontrol.apiserver.k8s.io
+          resources:
+          - flowschemas/status
+          verbs:
+          - patch
+        - apiGroups:
+          - jobset.x-k8s.io
+          resources:
+          - jobsets
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - jobset.x-k8s.io
+          resources:
+          - jobsets/finalizers
+          verbs:
+          - get
+          - update
+        - apiGroups:
+          - jobset.x-k8s.io
+          resources:
+          - jobsets/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - kubeflow.org
+          resources:
+          - mpijobs
+          - mxjobs
+          - paddlejobs
+          - pytorchjobs
+          - tfjobs
+          - xgboostjobs
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kubeflow.org
+          resources:
+          - mpijobs/finalizers
+          - mxjobs/finalizers
+          - mxjobs/status
+          - paddlejobs/finalizers
+          - pytorchjobs/finalizers
+          - tfjobs/finalizers
+          - xgboostjobs/finalizers
+          verbs:
+          - get
+          - update
+        - apiGroups:
+          - kubeflow.org
+          resources:
+          - mpijobs/status
+          - paddlejobs/status
+          - pytorchjobs/status
+          - tfjobs/status
+          - xgboostjobs/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - kueue.x-k8s.io
+          resources:
+          - admissionchecks
+          - clusterqueues
+          - cohorts
+          - localqueues
+          - workloads
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kueue.x-k8s.io
+          resources:
+          - admissionchecks/finalizers
+          - clusterqueues/finalizers
+          - localqueues/finalizers
+          - resourceflavors/finalizers
+          - workloads/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - kueue.x-k8s.io
+          resources:
+          - admissionchecks/status
+          - clusterqueues/status
+          - localqueues/status
+          - multikueueclusters/status
+          - workloads/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - kueue.x-k8s.io
+          resources:
+          - multikueueclusters
+          - multikueueconfigs
+          - provisioningrequestconfigs
+          - topologies
+          - workloadpriorityclasses
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - kueue.x-k8s.io
+          resources:
+          - resourceflavors
+          verbs:
+          - delete
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - node.k8s.io
+          resources:
+          - runtimeclasses
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ray.io
+          resources:
+          - rayclusters
+          - rayjobs
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ray.io
+          resources:
+          - rayclusters/finalizers
+          - rayclusters/status
+          - rayjobs/finalizers
+          - rayjobs/status
+          verbs:
+          - get
+          - update
+        - apiGroups:
+          - scheduling.k8s.io
+          resources:
+          - priorityclasses
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - secrets
+          - serviceaccounts
+          - services
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - cache.kannon92
+          resources:
+          - kueueoperators
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - cache.kannon92
+          resources:
+          - kueueoperators/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - cache.kannon92
+          resources:
+          - kueueoperators/status
+          verbs:
+          - get
+          - patch
+          - update
+        - nonResourceURLs:
+          - /metrics
+          verbs:
+          - get
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: kueue-operator-controller-manager
+      deployments:
+      - label:
+          app.kubernetes.io/managed-by: kustomize
+          app.kubernetes.io/name: kueue-operator
+          control-plane: controller-manager
+        name: kueue-operator-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --leader-elect
+                command:
+                - /manager
+                image: controller:latest
+                imagePullPolicy: IfNotPresent
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: kueue-operator-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: kueue-operator-controller-manager
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - kueue
+  links:
+  - name: Kueue Operator
+    url: https://kueue-operator.domain
+  maintainers:
+  - email: kehannon@redhat.com
+    name: kevinhannon
+  maturity: alpha
+  provider:
+    name: openshift
+  version: 0.0.1
