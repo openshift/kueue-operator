@@ -144,6 +144,8 @@ func (r *KueueOperatorReconciler) createServices(ctx context.Context, serviceLis
 				log.Error(err, "unable to create service")
 				return nil
 			}
+		} else {
+			return err
 		}
 	}
 	return nil

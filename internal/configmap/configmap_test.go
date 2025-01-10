@@ -19,6 +19,8 @@ package configmap
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	corev1 "k8s.io/api/core/v1"
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
@@ -39,28 +41,28 @@ func TestBuildConfigMap(t *testing.T) {
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `
-			apiVersion: config.kueue.x-k8s.io/v1beta1
-            controller:
-              groupKindConcurrency:
-                ClusterQueue.kueue.x-k8s.io: 1
-                Job.batch: 5
-                LocalQueue.kueue.x-k8s.io: 1
-                Pod: 5
-                ResourceFlavor.kueue.x-k8s.io: 1
-                Workload.kueue.x-k8s.io: 5
-            health:
-              healthProbeBindAddress: :8081
-            integrations:
-              frameworks:
-              - batch.job
-            kind: Configuration
-            manageJobsWithoutQueueName: false
-            metrics:
-              bindAddress: :8080
-              enableClusterQueueResources: true
-            webhook:
-              port: 9443",`,
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch.job
+kind: Configuration
+manageJobsWithoutQueueName: false
+metrics:
+  bindAddress: :8080
+  enableClusterQueueResources: true
+webhook:
+  port: 9443
+`,
 				},
 			},
 			wantErr: nil,
@@ -70,8 +72,8 @@ func TestBuildConfigMap(t *testing.T) {
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
 			got, err := BuildConfigMap("test", tc.configuration)
-			if got.Data["controller_manager_config.yaml"] != tc.wantCfgMap.Data["controller_manager.config.yaml"] {
-				t.Errorf("Unexpected result: want=%v, got=%v", tc.wantCfgMap, got)
+			if diff := cmp.Diff(got.Data["controller_manager_config.yaml"], tc.wantCfgMap.Data["controller_manager_config.yaml"]); len(diff) != 0 {
+				t.Errorf("Unexpected buckets (-want,+got):\n%s", diff)
 			}
 			if err != nil && tc.wantErr == nil {
 				t.Errorf("Unexpected error: want=%v, got=%v", tc.wantErr, err)

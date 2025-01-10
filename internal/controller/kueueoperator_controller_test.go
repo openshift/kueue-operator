@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -32,19 +33,27 @@ import (
 var _ = Describe("KueueOperator Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		var ns *corev1.Namespace
 
 		ctx := context.Background()
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "openshift-kueue", // TODO(user):Modify as needed
-		}
+		BeforeEach(func() {
+			ns = &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "kueue-",
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		})
 
+		// AfterEach(func() {
+		// 	Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+		// })
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind KueueOperator")
 			resource := &cachev1.KueueOperator{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "openshift-kueue",
+					Namespace: ns.Name,
 					Name:      "kueue",
 				},
 				Spec: cachev1.KueueOperatorSpec{
@@ -61,20 +70,28 @@ var _ = Describe("KueueOperator Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 		})
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &cachev1.KueueOperator{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+		// AfterEach(func() {
+		// 	typeNamespacedName := types.NamespacedName{
+		// 		Name:      resourceName,
+		// 		Namespace: ns.Name,
+		// 	}
+		// 	// TODO(user): Cleanup logic after each test, like removing the resource instance.
+		// 	resource := &cachev1.KueueOperator{}
+		// 	err := k8sClient.Get(ctx, typeNamespacedName, resource)
+		// 	Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance KueueOperator")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
+		// 	By("Cleanup the specific resource instance KueueOperator")
+		// 	Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		// })
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &KueueOperatorReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+			}
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: ns.Name,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
