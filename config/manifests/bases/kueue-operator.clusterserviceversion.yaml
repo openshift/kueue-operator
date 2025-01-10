@@ -10,11 +10,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: KueueOperator is the Schema for the kueueoperators API
+    - description: Kueue is the Schema for the Kueue API
       displayName: Kueue Operator
-      kind: KueueOperator
-      name: kueueoperators.cache.kannon92
-      version: v1
+      kind: Kueue
+      name: operator.openshift.io.kueue
+      version: v1beta1
   description: Operator for installing kueue into openshift
   displayName: kueue-operator
   icon:
@@ -40,7 +40,7 @@ spec:
     url: https://kueue-operator.domain
   maintainers:
   - email: kehannon@redhat.com
-    name: kevinhannon
+    name: kannon92
   maturity: alpha
   provider:
     name: openshift

@@ -1,23 +1,23 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.5
-  creationTimestamp: null
-  name: kueueoperators.cache.kannon92
+  name: kueues.operator.openshift.io
 spec:
-  group: cache.kannon92
+  group: operator.openshift.io
   names:
-    kind: KueueOperator
-    listKind: KueueOperatorList
-    plural: kueueoperators
-    singular: kueueoperator
+    kind: Kueue
+    listKind: KueueList
+    plural: kueues
+    singular: kueue
   scope: Namespaced
   versions:
-  - name: v1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: KueueOperator is the Schema for the kueueoperators API
+        description: Kueue is the Schema for the kueue API
         properties:
           apiVersion:
             description: |-
@@ -37,7 +37,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: KueueOperatorSpec defines the desired state of KueueOperator
+            description: KueueSpec defines the desired state of Kueue
             properties:
               kueue:
                 description: |-
@@ -281,7 +281,7 @@ spec:
                 type: object
             type: object
           status:
-            description: KueueOperatorStatus defines the observed state of KueueOperator
+            description: KueueStatus defines the observed state of Kueue
             properties:
               kueueReady:
                 type: boolean
@@ -293,9 +293,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

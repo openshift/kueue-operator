@@ -1,4 +1,4 @@
-module github.com/kannon92/kueue-operator
+module github.com/openshift/kueue-operator
 
 go 1.23.0
 

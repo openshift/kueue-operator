@@ -24,10 +24,10 @@ import (
 
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
-	cachev1 "github.com/kannon92/kueue-operator/api/v1"
+	kueue "github.com/openshift/kueue-operator/api/v1beta1"
 )
 
-func BuildConfigMap(namespace string, kueueCfg cachev1.KueueConfiguration) (*corev1.ConfigMap, error) {
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev1.ConfigMap, error) {
 	config := defaultKueueConfigurationTemplate(kueueCfg)
 	cfg, err := yaml.Marshal(config)
 	if err != nil {
@@ -43,7 +43,7 @@ func BuildConfigMap(namespace string, kueueCfg cachev1.KueueConfiguration) (*cor
 	return cfgMap, nil
 }
 
-func defaultKueueConfigurationTemplate(kueueCfg cachev1.KueueConfiguration) *configapi.Configuration {
+func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",

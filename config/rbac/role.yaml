@@ -32,9 +32,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - cache.kannon92
+  - operator.openshift.
   resources:
-  - kueueoperators
+  - kueue
   verbs:
   - create
   - delete
@@ -44,15 +44,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - cache.kannon92
+  - operator.openshift.
   resources:
-  - kueueoperators/finalizers
+  - kueue/finalizers
   verbs:
   - update
 - apiGroups:
-  - cache.kannon92
+  - operator.openshift.
   resources:
-  - kueueoperators/status
+  - kueue/status
   verbs:
   - get
   - patch

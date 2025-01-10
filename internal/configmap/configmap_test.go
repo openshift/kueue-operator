@@ -24,17 +24,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
-	cachev1 "github.com/kannon92/kueue-operator/api/v1"
+	kueue "github.com/openshift/kueue-operator/api/v1beta1"
 )
 
 func TestBuildConfigMap(t *testing.T) {
 	testCases := map[string]struct {
-		configuration cachev1.KueueConfiguration
+		configuration kueue.KueueConfiguration
 		wantCfgMap    *corev1.ConfigMap
 		wantErr       error
 	}{
 		"simple configuration": {
-			configuration: cachev1.KueueConfiguration{
+			configuration: kueue.KueueConfiguration{
 				Integrations: configapi.Integrations{
 					Frameworks: []string{"batch.job"},
 				},

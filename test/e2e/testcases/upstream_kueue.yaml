@@ -1,10 +1,10 @@
-apiVersion: cache.kannon92/v1
-kind: KueueOperator
+apiVersion: operator.openshift.io/v1beta1
+kind: Kueue
 metadata:
   labels:
     app.kubernetes.io/name: kueue-operator
     app.kubernetes.io/managed-by: kustomize
-  name: kueueoperator-sample
+  name: kueue-openshift-default
   namespace: openshift-kueue-operator
 spec:
   kueue:

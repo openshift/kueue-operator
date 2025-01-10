@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,14 +24,14 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// KueueOperatorSpec defines the desired state of KueueOperator
-type KueueOperatorSpec struct {
+// KueueSpec defines the desired state of Kueue
+type KueueSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Kueue *Kueue `json:"kueue,omitempty"`
+	Kueue *KueueOperand `json:"kueue,omitempty"`
 }
 
-type Kueue struct {
+type KueueOperand struct {
 	// The config that is persisted to a config map
 	Config KueueConfiguration `json:"config"`
 	// Image
@@ -49,32 +49,32 @@ type KueueConfiguration struct {
 	FeatureGates map[string]bool `json:"featureGates,omitempty"`
 }
 
-// KueueOperatorStatus defines the observed state of KueueOperator
-type KueueOperatorStatus struct {
+// KueueStatus defines the observed state of Kueue
+type KueueStatus struct {
 	KueueReady bool `json:"kueueReady"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// KueueOperator is the Schema for the kueueoperators API
-type KueueOperator struct {
+// Kueue is the Schema for the kueue API
+type Kueue struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   KueueOperatorSpec   `json:"spec,omitempty"`
-	Status KueueOperatorStatus `json:"status,omitempty"`
+	Spec   KueueSpec   `json:"spec,omitempty"`
+	Status KueueStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// KueueOperatorList contains a list of KueueOperator
-type KueueOperatorList struct {
+// KueueList contains a list of Kueue
+type KueueList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []KueueOperator `json:"items"`
+	Items           []Kueue `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&KueueOperator{}, &KueueOperatorList{})
+	SchemeBuilder.Register(&Kueue{}, &KueueList{})
 }

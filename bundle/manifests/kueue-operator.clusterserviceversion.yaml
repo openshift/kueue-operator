@@ -4,7 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2024-12-20T13:53:02Z"
+    createdAt: "2025-01-10T17:50:12Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: kueue-operator.v0.0.1
@@ -22,11 +22,9 @@ spec:
     - kind: Cohort
       name: cohorts.kueue.x-k8s.io
       version: v1alpha1
-    - description: KueueOperator is the Schema for the kueueoperators API
-      displayName: Kueue Operator
-      kind: KueueOperator
-      name: kueueoperators.cache.kannon92
-      version: v1
+    - kind: Kueue
+      name: kueues.operator.openshift.io
+      version: v1beta1
     - kind: LocalQueue
       name: localqueues.kueue.x-k8s.io
       version: v1beta1
@@ -384,9 +382,9 @@ spec:
           - update
           - watch
         - apiGroups:
-          - cache.kannon92
+          - operator.openshift.
           resources:
-          - kueueoperators
+          - kueue
           verbs:
           - create
           - delete
@@ -396,15 +394,15 @@ spec:
           - update
           - watch
         - apiGroups:
-          - cache.kannon92
+          - operator.openshift.
           resources:
-          - kueueoperators/finalizers
+          - kueue/finalizers
           verbs:
           - update
         - apiGroups:
-          - cache.kannon92
+          - operator.openshift.
           resources:
-          - kueueoperators/status
+          - kueue/status
           verbs:
           - get
           - patch
@@ -532,7 +530,7 @@ spec:
     url: https://kueue-operator.domain
   maintainers:
   - email: kehannon@redhat.com
-    name: kevinhannon
+    name: kannon92
   maturity: alpha
   provider:
     name: openshift

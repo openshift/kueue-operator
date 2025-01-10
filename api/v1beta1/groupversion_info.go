@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v11 contains API Schema definitions for the cache v1 API group
+// Package v1beta1 contains API Schema definitions for the kueue v1beta1 API group
 // +kubebuilder:object:generate=true
-// +groupName=cache.kannon92
-package v1
+// +groupName=operator.openshift.io
+package v1beta1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -26,7 +26,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "cache.kannon92", Version: "v1"}
+	GroupVersion = schema.GroupVersion{Group: "operator.openshift.io", Version: "v1beta1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
