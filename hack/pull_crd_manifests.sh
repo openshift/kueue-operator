@@ -17,6 +17,7 @@ podman run --rm -v "${PWD}":/workdir:z mikefarah/yq 'select(.kind == "RoleBindin
 podman run --rm -v "${PWD}":/workdir:z mikefarah/yq 'select(.kind == "APIService")' /workdir/kueue_manifest.yaml > $REPO_ROOT/assets/kueue/$1/apiservice.yaml
 podman run --rm -v "${PWD}":/workdir:z mikefarah/yq 'select(.kind == "MutatingWebhookConfiguration")' /workdir/kueue_manifest.yaml > $REPO_ROOT/assets/kueue/$1/mutatingwebhook.yaml
 podman run --rm -v "${PWD}":/workdir:z mikefarah/yq 'select(.kind == "ValidatingWebhookConfiguration")' /workdir/kueue_manifest.yaml > $REPO_ROOT/assets/kueue/$1/validatingwebhook.yaml
+podman run --rm -v "${PWD}":/workdir:z mikefarah/yq 'select(.kind == "Service")' /workdir/kueue_manifest.yaml > $REPO_ROOT/assets/kueue/$1/service.yaml
 
 
-rm kueue_manifest.yaml
+#rm kueue_manifest.yaml
