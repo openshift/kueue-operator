@@ -5,7 +5,6 @@ go 1.23.0
 toolchain go1.23.4
 
 replace (
-	github.com/openshift/api => github.com/kannon92/api v0.0.0-20250110183840-c1a063b1614a
 	github.com/openshift/client-go => github.com/bertinatto/client-go v0.0.0-20241209194446-f30a3ddc774e
 	github.com/openshift/library-go => github.com/dusk125/library-go v0.0.0-20241212055402-9dbaddb63ab9
 )
@@ -14,7 +13,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
-	github.com/openshift/api v0.0.0-20250110183840-c1a063b1614a
+	github.com/openshift/api v0.0.0-20250115152744-52377f09e5c9
 	github.com/openshift/build-machinery-go v0.0.0-20250102153059-e85a1a7ecb5c
 	github.com/openshift/client-go v0.0.0-20250106104058-89709a455e2a
 	github.com/openshift/library-go v0.0.0-20250113184904-020245f2cade

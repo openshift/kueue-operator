@@ -1,4 +1,4 @@
-apiVersion: operator.openshift.io/v1beta1
+apiVersion: operator.openshift.io/v1alpha1
 kind: Kueue
 metadata:
   labels:

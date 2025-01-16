@@ -26,11 +26,11 @@ CODEGEN_GROUPS_VERSION :=kueue:v1alpha1
 # $2 - image ref
 # $3 - Dockerfile path
 # $4 - context directory for image build
-$(call build-image,ocp-lws-operator,$(IMAGE_REGISTRY)/ocp/4.19:kueue-operator, ./Dockerfile,.)
+$(call build-image,ocp-kueue-operator,$(IMAGE_REGISTRY)/ocp/4.19:kueue-operator, ./Dockerfile,.)
 
 $(call verify-golang-versions,Dockerfile)
 
-$(call add-crd-gen,lwsoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
+$(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
 
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 # the e2e imports pkg/cmd which has a data race in the transport library with the library-go init code
