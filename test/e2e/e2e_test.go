@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/kannon92/kueue-operator/test/utils"
+	"github.com/openshift/kueue-operator/test/utils"
 )
 
 const namespace = "kueue-operator-system"

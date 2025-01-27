@@ -1,0 +1,288 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "Kueue",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "kueue-operator"
+            },
+            "name": "cluster",
+            "namespace": "openshift-kueue-operator"
+          },
+          "spec": {
+            "config": {
+              "integrations": {
+                "frameworks": [
+                  "batch/job"
+                ]
+              }
+            },
+            "image": "registry.k8s.io/kueue/kueue:v0.10.0"
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "Kueue",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "kueue-operator"
+            },
+            "name": "cluster",
+            "namespace": "openshift-kueue-operator"
+          },
+          "spec": {
+            "config": {
+              "integrations": {
+                "externalFrameworks": [
+                  "AppWrapper.v1beta2.workload.codeflare.dev"
+                ],
+                "frameworks": [
+                  "batch/job",
+                  "kubeflow.org/mpijob",
+                  "ray.io/rayjob",
+                  "ray.io/raycluster",
+                  "jobset.x-k8s.io/jobset",
+                  "kubeflow.org/mxjob",
+                  "kubeflow.org/paddlejob",
+                  "kubeflow.org/pytorchjob",
+                  "kubeflow.org/tfjob",
+                  "kubeflow.org/xgboostjob"
+                ]
+              }
+            },
+            "image": "registry.k8s.io/kueue/kueue:v0.10.0"
+          }
+        }
+      ]
+    capabilities: Basic Install
+    createdAt: "2025-01-22T14:02:31Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.37.0
+    operators.operatorframework.io/project_layout: unknown
+  name: kueue.v0.0.1
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - kind: Kueue
+      name: kueues.operator.openshift.io
+      version: v1alpha1
+  description: Kueue description. TODO.
+  displayName: Kueue
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - operator.openshift.io
+          resources:
+          - kueues
+          - kueues/status
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - watch
+          - deletecollection
+          - list
+          - create
+          - update
+          - delete
+          - patch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterroles
+          - clusterrolebindings
+          - roles
+          - rolebindings
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+          - bind
+          - escalate
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - replicasets
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          - serviceaccounts
+          - events
+          - pods
+          - secrets
+          - configmaps
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - infrastructures
+          - apiservers
+          verbs:
+          - get
+          - watch
+          - list
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - servicemonitors
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - validatingwebhookconfigurations
+          - mutatingwebhookconfigurations
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        serviceAccountName: openshift-kueue-operator
+      deployments:
+      - name: openshift-kueue-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              name: openshift-kueue-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                name: openshift-kueue-operator
+            spec:
+              containers:
+              - args:
+                - operator
+                command:
+                - kueue-operator
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                - name: OPERATOR_NAME
+                  value: openshift-kueue-operator
+                - name: RELATED_IMAGE_OPERAND_IMAGE
+                  value: registry.k8s.io/kueue/kueue:v0.10.0
+                image: quay.io/kevin-oss/kueue-operator:jan22440
+                imagePullPolicy: Always
+                name: openshift-kueue-operator
+                ports:
+                - containerPort: 60000
+                  name: metrics
+                resources: {}
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  readOnlyRootFilesystem: true
+                volumeMounts:
+                - mountPath: /tmp
+                  name: tmp
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              serviceAccountName: openshift-kueue-operator
+              volumes:
+              - emptyDir: {}
+                name: tmp
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - kueue
+  links:
+  - name: Kueue
+    url: https://kueue.domain
+  maintainers:
+  - email: your@email.com
+    name: Maintainer Name
+  maturity: alpha
+  provider:
+    name: Provider Name
+    url: https://your.domain
+  relatedImages:
+  - image: registry.k8s.io/kueue/kueue:v0.10.0
+    name: operand-image
+  version: 0.0.1
