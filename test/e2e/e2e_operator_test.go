@@ -38,7 +38,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -46,11 +45,16 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
+const (
+	operatorReadyTime time.Duration = 2 * time.Minute
+	operatorPoll                    = 10 * time.Second
+)
+
 var _ = Describe("Kueue Operator", Ordered, func() {
 	var namespace = "openshift-kueue-operator"
-	AfterEach(func() {
-		Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
-	})
+	// AfterEach(func() {
+	// 	Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
+	// })
 	When("installs", func() {
 		It("operator pods should be ready", func() {
 			Expect(deployOperator()).To(Succeed(), "operator deployment should not fail")
@@ -71,7 +75,28 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					}
 				}
 				return fmt.Errorf("pod is not ready")
-			}, time.Minute, 5*time.Second).Should(Succeed(), "operator pod failed to be ready")
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "operator pod failed to be ready")
+		})
+		It("kueue pods should be ready", func() {
+			Eventually(func() error {
+				ctx := context.TODO()
+				podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					klog.Errorf("Unable to list pods: %v", err)
+					return nil
+				}
+				for _, pod := range podItems.Items {
+					if !strings.HasPrefix(pod.Name, "kueue-") {
+						continue
+					}
+					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
+					if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
+						return nil
+					}
+				}
+				return fmt.Errorf("pod is not ready")
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "kueue pod failed to be ready")
+
 		})
 	})
 })
@@ -219,20 +244,15 @@ func deployOperator() error {
 		},
 	}
 
-	// create required resources, e.g. namespace, crd, roles
-	if err := wait.PollImmediate(1*time.Second, 10*time.Second, func() (bool, error) {
+	Eventually(func() error {
 		for _, asset := range assets {
 			klog.Infof("Creating %v", asset.path)
 			if err := asset.readerAndApply(bindata.MustAsset(asset.path)); err != nil {
-				klog.Errorf("Unable to create %v: %v", asset.path, err)
-				return false, nil
+				return err
 			}
 		}
+		return nil
+	}, operatorReadyTime, operatorPoll).Should(Succeed(), "assets should be deployed")
 
-		return true, nil
-	}); err != nil {
-		klog.Errorf("Unable to create SSO resources: %v", err)
-		return err
-	}
 	return nil
 }

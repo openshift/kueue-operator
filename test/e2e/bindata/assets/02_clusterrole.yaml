@@ -104,8 +104,8 @@ rules:
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
-        - validatingwebhookconfigurations
-        - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+      - mutatingwebhookconfigurations
     verbs:
       - create
       - delete
@@ -119,6 +119,20 @@ rules:
       - apiextensions.k8s.io
     resources:
       - customresourcedefinitions
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - cert-manager.io
+    resources:
+      - issuers
+      - certificates
     verbs:
       - create
       - delete
