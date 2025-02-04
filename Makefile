@@ -20,6 +20,9 @@ OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
 
+NAMESPACE ?= openshift-kueue-operator
+KUBECONFIG ?= ${HOME}/.kube/config
+
 CONTAINER_TOOL ?= podman
 
 CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
@@ -46,7 +49,7 @@ $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 # the e2e imports pkg/cmd which has a data race in the transport library with the library-go init code
 test-e2e: GO_TEST_FLAGS :=-v
-test-e2e: test-unit
+test-e2e: deploy-cert-manager test-unit
 .PHONY: test-e2e
 
 regen-crd:
@@ -82,9 +85,9 @@ deploy-ocp:
 undeploy-ocp:
 	hack/undeploy-ocp.sh
 
-.PHONY: deploy-cert-manager-ocp
-deploy-cert-manager-ocp:
-	oc apply -f hack/manifests/cert-manager-ocp.yaml
+.PHONY: deploy-cert-manager
+deploy-cert-manager:
+	oc apply -f hack/manifests/cert-manager-rh.yaml
 
 # Below targets require you to login to your registry
 .PHONY: operator-build

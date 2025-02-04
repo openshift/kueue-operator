@@ -8,22 +8,18 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apiextclientv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	k8sclient "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
-	ssclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	ssscheme "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/scheme"
-	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
 	"github.com/openshift/kueue-operator/test/e2e/bindata"
 )
 
@@ -33,8 +29,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if os.Getenv("IMAGE_FORMAT") == "" {
-		klog.Errorf("IMAGE_FORMAT environment variable not set")
+	if os.Getenv("OPERATOR_IMAGE") == "" {
+		klog.Errorf("OPERATOR_IMAGE environment variable not set")
+		os.Exit(1)
+	}
+
+	if os.Getenv("KUEUE_IMAGE") == "" {
+		klog.Errorf("OPERATOR_IMAGE environment variable not set")
 		os.Exit(1)
 	}
 
@@ -47,7 +48,7 @@ func TestMain(m *testing.M) {
 	apiExtClient := getApiExtensionKubeClient()
 	ssClient := getKueueClient()
 
-	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events("default"), "test-e2e", &corev1.ObjectReference{})
+	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events("default"), "test-e2e", &corev1.ObjectReference{}, clock.RealClock{})
 
 	ctx, cancelFnc := context.WithCancel(context.TODO())
 	defer cancelFnc()
@@ -99,7 +100,7 @@ func TestMain(m *testing.M) {
 			},
 		},
 		{
-			path: "assets/06_clusterrole_kueue-batch.yaml",
+			path: "assets/06_clusterrole_kueue-admin.yaml",
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyClusterRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleV1OrDie(objBytes))
 				return err
@@ -113,9 +114,9 @@ func TestMain(m *testing.M) {
 				// override the operator image with the one built in the CI
 
 				// E.g. IMAGE_FORMAT=registry.build03.ci.openshift.org/ci-op-52fj47p4/stable:${component}
-				registry := strings.Split(os.Getenv("IMAGE_FORMAT"), "/")[0]
+				operatorImage := os.Getenv("OPERATOR_IMAGE")
 
-				required.Spec.Template.Spec.Containers[0].Image = registry + "/" + os.Getenv("NAMESPACE") + "/pipeline:secondary-scheduler-operator"
+				required.Spec.Template.Spec.Containers[0].Image = operatorImage
 				_, _, err := resourceapply.ApplyDeployment(
 					ctx,
 					kubeClient.AppsV1(),
@@ -135,7 +136,8 @@ func TestMain(m *testing.M) {
 					return err
 				}
 				requiredSS := requiredObj.(*ssv1.Kueue)
-
+				kueueImage := os.Getenv("KUEUE_IMAGE")
+				requiredSS.Spec.Image = kueueImage
 				_, err = ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
 				return err
 			},
@@ -158,22 +160,23 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	var secondarySchedulerPod *corev1.Pod
-	// Wait until the secondary scheduler pod is running
+	var kueuePod *corev1.Pod
+	// Wait until the kueue operator pod is running
+	namespace := os.Getenv("NAMESPACE")
 	if err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
 		klog.Infof("Listing pods...")
-		podItems, err := kubeClient.CoreV1().Pods().List(ctx, metav1.ListOptions{})
+		podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			klog.Errorf("Unable to list pods: %v", err)
 			return false, nil
 		}
 		for _, pod := range podItems.Items {
-			if !strings.HasPrefix(pod.Name, operatorclient.OperandName+"-") {
+			if !strings.HasPrefix(pod.Name, namespace+"-") {
 				continue
 			}
 			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
 			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
-				secondarySchedulerPod = pod.DeepCopy()
+				kueuePod = pod.DeepCopy()
 				return true, nil
 			}
 		}
@@ -183,120 +186,12 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	klog.Infof("Secondary scheduler running in %v", secondarySchedulerPod.Name)
+	klog.Infof("Kueue running in %v", kueuePod.Name)
+	// delete cluster at least
+	if err := ssClient.KueueV1alpha1().Kueues(namespace).Delete(ctx, "cluster", metav1.DeleteOptions{}); err != nil {
+		klog.Errorf("Unable to delete cluster kueue resource: %v", err)
+		os.Exit(1)
+	}
+
 	os.Exit(m.Run())
-}
-
-// func TestScheduling(t *testing.T) {
-// 	kubeClient := getKubeClientOrDie()
-
-// 	ctx := context.TODO()
-
-// 	pod := &corev1.Pod{
-// 		ObjectMeta: metav1.ObjectMeta{
-// 			Namespace: "default",
-// 			Name:      "test-secondary-scheduler-sheduling-pod",
-// 			Labels:    map[string]string{"app": "test-secondary-scheduler-sheduling"},
-// 		},
-// 		Spec: corev1.PodSpec{
-// 			SecurityContext: &corev1.PodSecurityContext{
-// 				RunAsNonRoot: utilpointer.BoolPtr(true),
-// 				SeccompProfile: &corev1.SeccompProfile{
-// 					Type: corev1.SeccompProfileTypeRuntimeDefault,
-// 				},
-// 			},
-// 			SchedulerName: "secondary-scheduler",
-// 			Containers: []corev1.Container{{
-// 				SecurityContext: &corev1.SecurityContext{
-// 					AllowPrivilegeEscalation: utilpointer.BoolPtr(false),
-// 					Capabilities: &corev1.Capabilities{
-// 						Drop: []corev1.Capability{
-// 							"ALL",
-// 						},
-// 					},
-// 				},
-// 				Name:            "pause",
-// 				ImagePullPolicy: "Always",
-// 				Image:           "kubernetes/pause",
-// 				Ports:           []corev1.ContainerPort{{ContainerPort: 80}},
-// 			}},
-// 		},
-// 	}
-// 	if _, err := kubeClient.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-// 		t.Fatalf("Unable to create a pod: %v", err)
-// 	}
-
-// 	defer func() {
-// 		wait.PollImmediate(1*time.Second, 10*time.Second, func() (bool, error) {
-// 			kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
-// 			_, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-// 			if apierrors.IsNotFound(err) {
-// 				return true, nil
-// 			}
-// 			return false, nil
-// 		})
-// 	}()
-
-// 	if err := wait.PollImmediate(1*time.Second, time.Minute, func() (bool, error) {
-// 		klog.Infof("Listing pods...")
-// 		pod, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-// 		if err != nil {
-// 			klog.Errorf("Unable to get pod: %v", err)
-// 			return false, nil
-// 		}
-// 		if pod.Spec.NodeName == "" {
-// 			klog.Infof("Pod not yet assigned to a node")
-// 			return false, nil
-// 		}
-// 		klog.Infof("Pod successfully assigned to a node: %v", pod.Spec.NodeName)
-
-// 		return true, nil
-// 	}); err != nil {
-// 		t.Fatalf("Unable to wait for a scheduled pod: %v", err)
-// 	}
-// }
-
-func getKubeClientOrDie() *k8sclient.Clientset {
-	kubeconfig := os.Getenv("KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		klog.Errorf("Unable to build config: %v", err)
-		os.Exit(1)
-	}
-	client, err := k8sclient.NewForConfig(config)
-	if err != nil {
-		klog.Errorf("Unable to build client: %v", err)
-		os.Exit(1)
-	}
-	return client
-}
-
-func getApiExtensionKubeClient() *apiextclientv1.Clientset {
-	kubeconfig := os.Getenv("KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		klog.Errorf("Unable to build config: %v", err)
-		os.Exit(1)
-	}
-	client, err := apiextclientv1.NewForConfig(config)
-	if err != nil {
-		klog.Errorf("Unable to build client: %v", err)
-		os.Exit(1)
-	}
-	return client
-}
-
-func getKueueClient() *ssclient.Clientset {
-	kubeconfig := os.Getenv("KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		klog.Errorf("Unable to build config: %v", err)
-		os.Exit(1)
-	}
-	client, err := ssclient.NewForConfig(config)
-	if err != nil {
-		klog.Errorf("Unable to build client: %v", err)
-		os.Exit(1)
-	}
-	return client
 }
