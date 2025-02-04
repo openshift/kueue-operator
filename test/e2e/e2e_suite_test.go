@@ -52,6 +52,5 @@ var _ = BeforeSuite(func() {
 	kubeConfig = os.Getenv("KUBECONFIG")
 	operatorImage = os.Getenv("OPERATOR_IMAGE")
 	kueueImage = os.Getenv("KUEUE_IMAGE")
-	namespace = os.Getenv("NAMESPACE")
 	kubeClient = getKubeClientOrDie()
 })
