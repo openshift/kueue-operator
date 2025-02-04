@@ -47,12 +47,13 @@ import (
 )
 
 var _ = Describe("Kueue Operator", Ordered, func() {
-	BeforeEach(func() {
-		Expect(deployOperator()).To(Succeed())
+	var namespace = "openshift-kueue-operator"
+	AfterEach(func() {
+		Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
 	})
-
 	When("installs", func() {
 		It("operator pods should be ready", func() {
+			Expect(deployOperator()).To(Succeed(), "operator deployment should not fail")
 			Eventually(func() error {
 				ctx := context.TODO()
 				podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
@@ -70,7 +71,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					}
 				}
 				return fmt.Errorf("pod is not ready")
-			}, time.Minute, 5*time.Second).Should(Succeed(), "failed to be ready")
+			}, time.Minute, 5*time.Second).Should(Succeed(), "operator pod failed to be ready")
 		})
 	})
 })
@@ -125,7 +126,7 @@ func deployOperator() error {
 	apiExtClient := getApiExtensionKubeClient()
 	ssClient := getKueueClient()
 
-	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events("default"), "test-e2e", &corev1.ObjectReference{}, clock.RealClock{})
+	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events(namespace), "test-e2e", &corev1.ObjectReference{}, clock.RealClock{})
 
 	ctx, cancelFnc := context.WithCancel(context.TODO())
 	defer cancelFnc()
@@ -188,9 +189,6 @@ func deployOperator() error {
 			path: "assets/07_deployment.yaml",
 			readerAndApply: func(objBytes []byte) error {
 				required := resourceread.ReadDeploymentV1OrDie(objBytes)
-				// override the operator image with the one built in the CI
-
-				// E.g. IMAGE_FORMAT=registry.build03.ci.openshift.org/ci-op-52fj47p4/stable:${component}
 				operatorImage := os.Getenv("OPERATOR_IMAGE")
 
 				required.Spec.Template.Spec.Containers[0].Image = operatorImage
