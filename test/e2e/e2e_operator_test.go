@@ -18,12 +18,15 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	ssscheme "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/scheme"
 	"github.com/openshift/kueue-operator/test/e2e/bindata"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -37,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	//+kubebuilder:scaffold:imports
@@ -49,13 +53,36 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 	When("installs", func() {
 		It("operator pods should be ready", func() {
+			Eventually(func() error {
+				ctx := context.TODO()
+				podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					klog.Errorf("Unable to list pods: %v", err)
+					return nil
+				}
+				for _, pod := range podItems.Items {
+					if !strings.HasPrefix(pod.Name, namespace+"-") {
+						continue
+					}
+					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
+					if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
+						return nil
+					}
+				}
+				return fmt.Errorf("pod is not ready")
+			}, time.Minute, 5*time.Second).Should(Succeed(), "failed to be ready")
 		})
 	})
 })
 
 func getKubeClientOrDie() *kubernetes.Clientset {
-
-	client, err := kubeClient.NewForConfig(kubeConfig)
+	kubeconfig := os.Getenv("KUBECONFIG")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		klog.Errorf("Unable to build config: %v", err)
+		os.Exit(1)
+	}
+	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		klog.Errorf("Unable to build client: %v", err)
 		os.Exit(1)
@@ -78,14 +105,14 @@ func getApiExtensionKubeClient() *apiextv1.ApiextensionsV1Client {
 	return client
 }
 
-func getKueueClient() *ssclient.Clientset {
+func getKueueClient() *kueueclient.Clientset {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		klog.Errorf("Unable to build config: %v", err)
 		os.Exit(1)
 	}
-	client, err := ssclient.NewForConfig(config)
+	client, err := kueueclient.NewForConfig(config)
 	if err != nil {
 		klog.Errorf("Unable to build client: %v", err)
 		os.Exit(1)
@@ -110,7 +137,7 @@ func deployOperator() error {
 		{
 			path: "assets/00_kueue-operator.crd.yaml",
 			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(ctx, apiExtClient.ApiextensionsV1(), eventRecorder, resourceread.ReadCustomResourceDefinitionV1OrDie(objBytes))
+				_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(ctx, apiExtClient, eventRecorder, resourceread.ReadCustomResourceDefinitionV1OrDie(objBytes))
 				return err
 			},
 		},

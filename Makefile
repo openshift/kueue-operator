@@ -46,11 +46,12 @@ $(call verify-golang-versions,Dockerfile)
 
 $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
 
+.PHONY: test-e2e
 test-e2e: GO_TEST_PACKAGES :=./test/e2e
 # the e2e imports pkg/cmd which has a data race in the transport library with the library-go init code
 test-e2e: GO_TEST_FLAGS :=-v
-test-e2e: deploy-cert-manager test-unit
-.PHONY: test-e2e
+test-e2e: deploy-cert-manager
+	ginkgo -v ./test/e2e/...
 
 regen-crd:
 	go build -o $(LOCALBIN)/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -171,3 +172,7 @@ sync-manifests:
 			echo 'Running sync_manifests.py...'; \
 			python3 hack/sync_manifests.py $(VERSION) \
 		"
+GINKGO = $(shell pwd)/bin/ginkgo
+.PHONY: ginkgo
+ginkgo: ## Download ginkgo locally if necessary.
+	GOBIN=$(LOCALBIN) GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
