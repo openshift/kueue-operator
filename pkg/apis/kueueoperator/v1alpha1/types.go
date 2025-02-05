@@ -51,6 +51,20 @@ type KueueConfiguration struct {
 	// Supports https://github.com/kubernetes-sigs/kueue/blob/release-0.10/keps/2937-resource-transformer/README.md
 	// +optional
 	Resources *configapi.Resources `json:"resources,omitempty"`
+	// ManageJobsWithoutQueueName controls whether or not Kueue reconciles
+	// jobs that don't set the annotation kueue.x-k8s.io/queue-name.
+	// If set to true, then those jobs will be suspended and never started unless
+	// they are assigned a queue and eventually admitted. This also applies to
+	// jobs created before starting the kueue controller.
+	// Defaults to false; therefore, those jobs are not managed and if they are created
+	// unsuspended, they will start immediately.
+	// +optional
+	ManageJobsWithoutQueueName bool `json:"manageJobsWithoutQueueName"`
+	// ManagedJobsNamespaceSelector can be used to omit some namespaces from ManagedJobsWithoutQueueName
+	// +optional
+	ManagedJobsNamespaceSelector *metav1.LabelSelector `json:"managedJobsNamespaceSelector,omitempty"`
+	// FairSharing controls the fair sharing semantics across the cluster.
+	FairSharing *configapi.FairSharing `json:"fairSharing,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
