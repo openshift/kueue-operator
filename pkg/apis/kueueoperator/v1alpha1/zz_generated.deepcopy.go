@@ -21,6 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	v1beta1 "sigs.k8s.io/kueue/apis/config/v1beta1"
 )
@@ -72,6 +73,16 @@ func (in *KueueConfiguration) DeepCopyInto(out *KueueConfiguration) {
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = new(v1beta1.Resources)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ManagedJobsNamespaceSelector != nil {
+		in, out := &in.ManagedJobsNamespaceSelector, &out.ManagedJobsNamespaceSelector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.FairSharing != nil {
+		in, out := &in.FairSharing, &out.FairSharing
+		*out = new(v1beta1.FairSharing)
 		(*in).DeepCopyInto(*out)
 	}
 	return
