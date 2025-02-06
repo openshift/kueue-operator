@@ -23,29 +23,7 @@ metadata:
                 ]
               }
             },
-            "image": "$KUEUE_IMAGE"
-          }
-        },
-        {
-          "apiVersion": "operator.openshift.io/v1alpha1",
-          "kind": "Kueue",
-          "metadata": {
-            "labels": {
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "kueue-operator"
-            },
-            "name": "cluster",
-            "namespace": "openshift-kueue-operator"
-          },
-          "spec": {
-            "config": {
-              "integrations": {
-                "frameworks": [
-                  "batch/job"
-                ]
-              }
-            },
-            "image": "registry.k8s.io/kueue/kueue:v0.10.0"
+            "image": "KUEUE_IMAGE"
           }
         },
         {
@@ -79,12 +57,12 @@ metadata:
                 ]
               }
             },
-            "image": "registry.k8s.io/kueue/kueue:v0.10.0"
+            "image": "KUEUE_IMAGE"
           }
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-01-31T17:54:42Z"
+    createdAt: "2025-02-06T15:26:05Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: kueue-operator.v0.0.1
@@ -230,6 +208,20 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - cert-manager.io
+          resources:
+          - issuers
+          - certificates
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
         serviceAccountName: openshift-kueue-operator
       deployments:
       - name: openshift-kueue-operator
@@ -257,8 +249,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: $KUEUE_IMAGE
-                image: $OPERATOR_IMAGE
+                  value: KUEUE_IMAGE
+                image: OPERATOR_IMAGE
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -305,6 +297,6 @@ spec:
     name: Provider Name
     url: https://your.domain
   relatedImages:
-  - image: $KUEUE_IMAGE
+  - image: KUEUE_IMAGE
     name: operand-image
   version: 0.0.1
