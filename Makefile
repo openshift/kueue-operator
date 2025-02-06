@@ -47,8 +47,8 @@ $(call verify-golang-versions,Dockerfile)
 $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
 
 .PHONY: test-e2e
-test-e2e: deploy-cert-manager
-	ginkgo -v ./test/e2e/...
+test-e2e: ginkgo
+	${GINKGO} -v ./test/e2e/...
 
 regen-crd:
 	go build -o $(LOCALBIN)/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen

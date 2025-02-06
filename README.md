@@ -78,3 +78,10 @@ spec:
       frameworks:
       - "batch/job" 
 ```
+
+### E2E Test
+
+1. Set kubeconfig to point to a OCP cluster
+1. Set OPERATOR_IMAGE to point to your operator image
+1. Set KUEUE_IMAGE to point to your kueue image you want to test
+1. make deploy-cert-manager test-e2e
