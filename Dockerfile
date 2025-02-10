@@ -18,4 +18,4 @@ LABEL io.k8s.display-name="OpenShift Kueue Operator based on RHEL 9" \
       description="kueue-operator-container" \
       maintainer="Node team, <aos-node@redhat.com>"
 
-USER nobody
+USER 1001
