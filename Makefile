@@ -20,6 +20,9 @@ OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
 
+NAMESPACE ?= openshift-kueue-operator
+KUBECONFIG ?= ${HOME}/.kube/config
+
 CONTAINER_TOOL ?= podman
 
 CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
@@ -43,11 +46,9 @@ $(call verify-golang-versions,Dockerfile)
 
 $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
 
-test-e2e: GO_TEST_PACKAGES :=./test/e2e
-# the e2e imports pkg/cmd which has a data race in the transport library with the library-go init code
-test-e2e: GO_TEST_FLAGS :=-v
-test-e2e: test-unit
 .PHONY: test-e2e
+test-e2e: ginkgo
+	${GINKGO} -v ./test/e2e/...
 
 regen-crd:
 	go build -o $(LOCALBIN)/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -82,9 +83,9 @@ deploy-ocp:
 undeploy-ocp:
 	hack/undeploy-ocp.sh
 
-.PHONY: deploy-cert-manager-ocp
-deploy-cert-manager-ocp:
-	oc apply -f hack/manifests/cert-manager-ocp.yaml
+.PHONY: deploy-cert-manager
+deploy-cert-manager:
+	oc apply -f hack/manifests/cert-manager-rh.yaml
 
 # Below targets require you to login to your registry
 .PHONY: operator-build
@@ -168,3 +169,7 @@ sync-manifests:
 			echo 'Running sync_manifests.py...'; \
 			python3 hack/sync_manifests.py $(VERSION) \
 		"
+GINKGO = $(shell pwd)/bin/ginkgo
+.PHONY: ginkgo
+ginkgo: ## Download ginkgo locally if necessary.
+	GOBIN=$(LOCALBIN) GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
