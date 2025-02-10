@@ -75,6 +75,11 @@ func (in *KueueConfiguration) DeepCopyInto(out *KueueConfiguration) {
 		*out = new(v1beta1.Resources)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ManageJobsWithoutQueueName != nil {
+		in, out := &in.ManageJobsWithoutQueueName, &out.ManageJobsWithoutQueueName
+		*out = new(ManageJobsWithoutQueueNameOption)
+		**out = **in
+	}
 	if in.ManagedJobsNamespaceSelector != nil {
 		in, out := &in.ManagedJobsNamespaceSelector, &out.ManagedJobsNamespaceSelector
 		*out = new(v1.LabelSelector)

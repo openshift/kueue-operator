@@ -44,6 +44,15 @@ func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev
 }
 
 func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
+	managedJobsConversion := ptr.Deref(kueueCfg.ManageJobsWithoutQueueName, kueue.QueueName)
+	managedJobsBool := false
+	if managedJobsConversion == kueue.QueueName {
+		managedJobsBool = false
+	} else if managedJobsConversion == kueue.NoQueueName {
+		managedJobsBool = true
+	} else {
+		managedJobsBool = false
+	}
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -72,7 +81,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 			},
 		},
 		WaitForPodsReady:             kueueCfg.WaitForPodsReady,
-		ManageJobsWithoutQueueName:   kueueCfg.ManageJobsWithoutQueueName,
+		ManageJobsWithoutQueueName:   managedJobsBool,
 		FairSharing:                  kueueCfg.FairSharing,
 		ManagedJobsNamespaceSelector: kueueCfg.ManagedJobsNamespaceSelector,
 		Integrations:                 &kueueCfg.Integrations,

@@ -18,6 +18,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	kueueoperatorv1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	v1beta1 "sigs.k8s.io/kueue/apis/config/v1beta1"
 )
@@ -25,13 +26,13 @@ import (
 // KueueConfigurationApplyConfiguration represents a declarative configuration of the KueueConfiguration type for use
 // with apply.
 type KueueConfigurationApplyConfiguration struct {
-	WaitForPodsReady             *v1beta1.WaitForPodsReady           `json:"waitForPodsReady,omitempty"`
-	Integrations                 *v1beta1.Integrations               `json:"integrations,omitempty"`
-	FeatureGates                 map[string]bool                     `json:"featureGates,omitempty"`
-	Resources                    *v1beta1.Resources                  `json:"resources,omitempty"`
-	ManageJobsWithoutQueueName   *bool                               `json:"manageJobsWithoutQueueName,omitempty"`
-	ManagedJobsNamespaceSelector *v1.LabelSelectorApplyConfiguration `json:"managedJobsNamespaceSelector,omitempty"`
-	FairSharing                  *v1beta1.FairSharing                `json:"fairSharing,omitempty"`
+	WaitForPodsReady             *v1beta1.WaitForPodsReady                               `json:"waitForPodsReady,omitempty"`
+	Integrations                 *v1beta1.Integrations                                   `json:"integrations,omitempty"`
+	FeatureGates                 map[string]bool                                         `json:"featureGates,omitempty"`
+	Resources                    *v1beta1.Resources                                      `json:"resources,omitempty"`
+	ManageJobsWithoutQueueName   *kueueoperatorv1alpha1.ManageJobsWithoutQueueNameOption `json:"manageJobsWithoutQueueName,omitempty"`
+	ManagedJobsNamespaceSelector *v1.LabelSelectorApplyConfiguration                     `json:"managedJobsNamespaceSelector,omitempty"`
+	FairSharing                  *v1beta1.FairSharing                                    `json:"fairSharing,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -81,7 +82,7 @@ func (b *KueueConfigurationApplyConfiguration) WithResources(value v1beta1.Resou
 // WithManageJobsWithoutQueueName sets the ManageJobsWithoutQueueName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ManageJobsWithoutQueueName field is set to the value of the last call.
-func (b *KueueConfigurationApplyConfiguration) WithManageJobsWithoutQueueName(value bool) *KueueConfigurationApplyConfiguration {
+func (b *KueueConfigurationApplyConfiguration) WithManageJobsWithoutQueueName(value kueueoperatorv1alpha1.ManageJobsWithoutQueueNameOption) *KueueConfigurationApplyConfiguration {
 	b.ManageJobsWithoutQueueName = &value
 	return b
 }

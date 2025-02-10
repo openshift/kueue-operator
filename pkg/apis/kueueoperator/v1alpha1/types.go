@@ -37,6 +37,15 @@ type KueueOperandSpec struct {
 	Image string `json:"image"`
 }
 
+type ManageJobsWithoutQueueNameOption string
+
+const (
+	// NoQueueName means that all jobs will be gated by Kueue
+	NoQueueName ManageJobsWithoutQueueNameOption = "NoQueueName"
+	// QueueName means that the jobs require a queue label.
+	QueueName ManageJobsWithoutQueueNameOption = "QueueName"
+)
+
 type KueueConfiguration struct {
 	// waitForPodsReady configures gang admission
 	// +optional
@@ -53,13 +62,10 @@ type KueueConfiguration struct {
 	Resources *configapi.Resources `json:"resources,omitempty"`
 	// ManageJobsWithoutQueueName controls whether or not Kueue reconciles
 	// jobs that don't set the annotation kueue.x-k8s.io/queue-name.
-	// If set to true, then those jobs will be suspended and never started unless
-	// they are assigned a queue and eventually admitted. This also applies to
-	// jobs created before starting the kueue controller.
-	// Defaults to false; therefore, those jobs are not managed and if they are created
-	// unsuspended, they will start immediately.
+	// Allowed values are NoQueueName and QueueName
+	// Default will be QueueName
 	// +optional
-	ManageJobsWithoutQueueName bool `json:"manageJobsWithoutQueueName"`
+	ManageJobsWithoutQueueName *ManageJobsWithoutQueueNameOption `json:"manageJobsWithoutQueueName,omitempty"`
 	// ManagedJobsNamespaceSelector can be used to omit some namespaces from ManagedJobsWithoutQueueName
 	// +optional
 	ManagedJobsNamespaceSelector *metav1.LabelSelector `json:"managedJobsNamespaceSelector,omitempty"`
