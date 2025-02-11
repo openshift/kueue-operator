@@ -23,7 +23,7 @@ metadata:
                 ]
               }
             },
-            "image": "KUEUE_IMAGE"
+            "image": "quay.io/kevin-oss/kueue:feb10-1248"
           }
         },
         {
@@ -57,12 +57,12 @@ metadata:
                 ]
               }
             },
-            "image": "KUEUE_IMAGE"
+            "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:9d1a04972e2a26a9cd761a7bb33ef8b5b459ba0939421b242565d845a1445129"
           }
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-02-06T15:26:05Z"
+    createdAt: "2025-02-13T21:53:36Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: kueue-operator.v0.0.1
@@ -249,8 +249,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: KUEUE_IMAGE
-                image: OPERATOR_IMAGE
+                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:9d1a04972e2a26a9cd761a7bb33ef8b5b459ba0939421b242565d845a1445129
+                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:1a53d9d948321330995d1c71781b7999f2637f79a0dfe381a301ce6179b278d4
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -297,6 +297,6 @@ spec:
     name: Provider Name
     url: https://your.domain
   relatedImages:
-  - image: KUEUE_IMAGE
+  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:9d1a04972e2a26a9cd761a7bb33ef8b5b459ba0939421b242565d845a1445129
     name: operand-image
   version: 0.0.1

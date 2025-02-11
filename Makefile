@@ -74,11 +74,17 @@ generate-clients:
 
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
 	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
 
 .PHONY: deploy-ocp
-deploy-ocp: 
-	hack/deploy-ocp.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+deploy-ocp:
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+	oc apply -f deploy/
+	oc apply -f deploy/crd/
+	oc apply -f deploy/examples/job.yaml
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
 
 .PHONY: undeploy-ocp
 undeploy-ocp:
