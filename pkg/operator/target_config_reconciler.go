@@ -216,26 +216,14 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["rolebinding/leader-election"] = resourceVersion
 
-	if roleBindings, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
+	if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
 		klog.Error("unable to create role prometheus")
 		return err
-	} else {
-		resourceVersion := "0"
-		if roleBindings != nil { // SyncConfigMap can return nil
-			resourceVersion = roleBindings.ObjectMeta.ResourceVersion
-		}
-		specAnnotations["role/prometheus"] = resourceVersion
 	}
 
-	if roleBindings, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
+	if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
 		klog.Error("unable to bind role prometheus")
 		return err
-	} else {
-		resourceVersion := "0"
-		if roleBindings != nil { // SyncConfigMap can return nil
-			resourceVersion = roleBindings.ObjectMeta.ResourceVersion
-		}
-		specAnnotations["rolebindings/prometheus"] = resourceVersion
 	}
 
 	controllerService, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
@@ -319,7 +307,7 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if _, _, err := c.manageServiceMonitor(c.ctx); err != nil {
+	if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
 		return err
 	}
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
@@ -695,7 +683,7 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
-func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context) (*unstructured.Unstructured, bool, error) {
+func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
 
 	// Create ServiceMonitor object
 	serviceMonitor := monitoringv1.ServiceMonitor{
@@ -705,7 +693,15 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context) (*uns
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "kueue-metrics",
-			Namespace: c.operatorNamespace, // Set your namespace
+			Namespace: c.operatorNamespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "operator.openshift.io/v1alpha1",
+					Kind:       "Kueue",
+					Name:       kueue.Name,
+					UID:        kueue.UID,
+				},
+			},
 		},
 		Spec: monitoringv1.ServiceMonitorSpec{
 			Selector: metav1.LabelSelector{
