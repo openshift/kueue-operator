@@ -2,6 +2,10 @@
 
 Kueue Operator provides the ability to deploy kueue using different configurations
 
+## Dependencies
+
+The Kueue Operator needs CertManager installed to operate correctly
+
 ## Releases
 
 | ko version   | ocp version         |kueue version  | k8s version | golang |
@@ -45,8 +49,12 @@ on the Kueue release policy.
 
 1. Run `make bundle-push` to push the bundle image to your repository.
 
-1. Run `operator sdk run bundle --namespace OPERATOR_NAMESPACE ${BUNDLE_IMAGE}`
-to deploy operator to OPERATOR_NAMESPACE
+1. Set OPERATOR_NAMESPACE, i.e, "kueue-operator"
+
+1. Run `oc new-project $OPERATOR_NAMESPACE` to create a namespace for the operaotr 
+
+1. Run `operator-sdk run bundle --namespace $OPERATOR_NAMESPACE ${BUNDLE_IMAGE}`
+to deploy operator to $OPERATOR_NAMESPACE
 
 ### Local Development
 
