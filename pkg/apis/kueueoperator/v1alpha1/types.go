@@ -37,6 +37,15 @@ type KueueOperandSpec struct {
 	Image string `json:"image"`
 }
 
+type ManageJobsWithoutQueueNameOption string
+
+const (
+	// NoQueueName means that all jobs will be gated by Kueue
+	NoQueueName ManageJobsWithoutQueueNameOption = "NoQueueName"
+	// QueueName means that the jobs require a queue label.
+	QueueName ManageJobsWithoutQueueNameOption = "QueueName"
+)
+
 type KueueConfiguration struct {
 	// waitForPodsReady configures gang admission
 	// +optional
@@ -51,6 +60,17 @@ type KueueConfiguration struct {
 	// Supports https://github.com/kubernetes-sigs/kueue/blob/release-0.10/keps/2937-resource-transformer/README.md
 	// +optional
 	Resources *configapi.Resources `json:"resources,omitempty"`
+	// ManageJobsWithoutQueueName controls whether or not Kueue reconciles
+	// jobs that don't set the annotation kueue.x-k8s.io/queue-name.
+	// Allowed values are NoQueueName and QueueName
+	// Default will be QueueName
+	// +optional
+	ManageJobsWithoutQueueName *ManageJobsWithoutQueueNameOption `json:"manageJobsWithoutQueueName,omitempty"`
+	// ManagedJobsNamespaceSelector can be used to omit some namespaces from ManagedJobsWithoutQueueName
+	// +optional
+	ManagedJobsNamespaceSelector *metav1.LabelSelector `json:"managedJobsNamespaceSelector,omitempty"`
+	// FairSharing controls the fair sharing semantics across the cluster.
+	FairSharing *configapi.FairSharing `json:"fairSharing,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue

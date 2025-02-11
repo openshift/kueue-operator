@@ -51,6 +51,38 @@ spec:
                   required:
                     - integrations
                   properties:
+                    fairSharing:
+                      description: FairSharing controls the fair sharing semantics across the cluster.
+                      type: object
+                      required:
+                        - enable
+                      properties:
+                        enable:
+                          description: |-
+                            enable indicates whether to enable fair sharing for all cohorts.
+                            Defaults to false.
+                          type: boolean
+                        preemptionStrategies:
+                          description: |-
+                            preemptionStrategies indicates which constraints should a preemption satisfy.
+                            The preemption algorithm will only use the next strategy in the list if the
+                            incoming workload (preemptor) doesn't fit after using the previous strategies.
+                            Possible values are:
+                            - LessThanOrEqualToFinalShare: Only preempt a workload if the share of the preemptor CQ
+                              with the preemptor workload is less than or equal to the share of the preemptee CQ
+                              without the workload to be preempted.
+                              This strategy might favor preemption of smaller workloads in the preemptee CQ,
+                              regardless of priority or start time, in an effort to keep the share of the CQ
+                              as high as possible.
+                            - LessThanInitialShare: Only preempt a workload if the share of the preemptor CQ
+                              with the incoming workload is strictly less than the share of the preemptee CQ.
+                              This strategy doesn't depend on the share usage of the workload being preempted.
+                              As a result, the strategy chooses to preempt workloads with the lowest priority and
+                              newest start time first.
+                            The default strategy is ["LessThanOrEqualToFinalShare", "LessThanInitialShare"].
+                          type: array
+                          items:
+                            type: string
                     featureGates:
                       description: featureGates are advanced features for Kueue
                       type: object
@@ -193,6 +225,57 @@ spec:
                                   additionalProperties:
                                     type: string
                               x-kubernetes-map-type: atomic
+                    manageJobsWithoutQueueName:
+                      description: |-
+                        ManageJobsWithoutQueueName controls whether or not Kueue reconciles
+                        jobs that don't set the annotation kueue.x-k8s.io/queue-name.
+                        Allowed values are NoQueueName and QueueName
+                        Default will be QueueName
+                      type: string
+                    managedJobsNamespaceSelector:
+                      description: ManagedJobsNamespaceSelector can be used to omit some namespaces from ManagedJobsWithoutQueueName
+                      type: object
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                          type: array
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            type: object
+                            required:
+                              - key
+                              - operator
+                            properties:
+                              key:
+                                description: key is the label key that the selector applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                type: array
+                                items:
+                                  type: string
+                                x-kubernetes-list-type: atomic
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                          additionalProperties:
+                            type: string
+                      x-kubernetes-map-type: atomic
                     resources:
                       description: |-
                         resources provides additional configuration options for handling the resources.
