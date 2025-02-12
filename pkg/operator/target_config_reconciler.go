@@ -68,6 +68,7 @@ type TargetConfigReconciler struct {
 	crdClient                  apiextv1.ApiextensionsV1Interface
 	operatorNamespace          string
 	resourceCache              resourceapply.ResourceCache
+	kueueImage                 string
 }
 
 func NewTargetConfigReconciler(
@@ -82,6 +83,7 @@ func NewTargetConfigReconciler(
 	discoveryClient discovery.DiscoveryInterface,
 	crdClient apiextv1.ApiextensionsV1Interface,
 	eventRecorder events.Recorder,
+	kueueImage string,
 ) (*TargetConfigReconciler, error) {
 	c := &TargetConfigReconciler{
 		ctx:                        ctx,
@@ -97,6 +99,7 @@ func NewTargetConfigReconciler(
 		crdClient:                  crdClient,
 		operatorNamespace:          namespace.GetNamespace(),
 		resourceCache:              resourceapply.NewResourceCache(),
+		kueueImage:                 kueueImage,
 	}
 
 	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
@@ -655,7 +658,7 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.K
 	}
 	controller.EnsureOwnerRef(required, ownerReference)
 
-	required.Spec.Template.Spec.Containers[0].Image = kueueoperator.Spec.Image
+	required.Spec.Template.Spec.Containers[0].Image = c.kueueImage
 	switch kueueoperator.Spec.LogLevel {
 	case operatorv1.Normal:
 		required.Spec.Template.Spec.Containers[0].Args = append(required.Spec.Template.Spec.Containers[0].Args, fmt.Sprintf("--zap-log-level=%d", 2))

@@ -72,7 +72,6 @@ metadata:
   name: cluster
   namespace: openshift-kueue-operator
 spec:
-  image: "RHEL-Released-Image"
   config:
     integrations:
       frameworks:

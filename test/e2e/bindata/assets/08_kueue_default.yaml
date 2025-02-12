@@ -8,7 +8,6 @@ metadata:
   namespace: openshift-kueue-operator
 spec:
   managementState: Managed
-  image: KUEUE_IMAGE
   config:
     integrations:
       frameworks:

@@ -7,7 +7,6 @@ metadata:
   name: cluster
   namespace: openshift-kueue-operator
 spec:
-  image: KUEUE_IMAGE
   config:
     integrations:
       frameworks:
