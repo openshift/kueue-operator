@@ -55,6 +55,7 @@ regen-crd:
 	$(LOCALBIN)/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 	cp manifests/operator.openshift.io_kueues.yaml manifests/kueue-operator.crd.yaml
 	cp manifests/kueue-operator.crd.yaml deploy/crd/kueue-operator.crd.yaml
+	cp deploy/crd/kueue-operator.crd.yaml test/e2e/bindata/assets/00_kueue-operator.crd.yaml
 
 .PHONY: generate
 generate: manifests code-gen generate-clients
