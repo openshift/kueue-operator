@@ -32,9 +32,6 @@ type KueueOperandSpec struct {
 	// config that is persisted to a config map
 	// +required
 	Config KueueConfiguration `json:"config"`
-	// image for the kueue operand
-	// +required
-	Image string `json:"image"`
 }
 
 type ManageJobsWithoutQueueNameOption string

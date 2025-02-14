@@ -390,9 +390,6 @@ spec:
                 required:
                 - integrations
                 type: object
-              image:
-                description: image for the kueue operand
-                type: string
               logLevel:
                 default: Normal
                 description: |-
@@ -447,7 +444,6 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
             required:
             - config
-            - image
             type: object
           status:
             description: status holds observed values from the cluster. They may not

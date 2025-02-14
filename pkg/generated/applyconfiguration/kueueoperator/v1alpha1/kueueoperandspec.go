@@ -28,7 +28,6 @@ import (
 type KueueOperandSpecApplyConfiguration struct {
 	v1.OperatorSpecApplyConfiguration `json:",inline"`
 	Config                            *KueueConfigurationApplyConfiguration `json:"config,omitempty"`
-	Image                             *string                               `json:"image,omitempty"`
 }
 
 // KueueOperandSpecApplyConfiguration constructs a declarative configuration of the KueueOperandSpec type for use with
@@ -82,13 +81,5 @@ func (b *KueueOperandSpecApplyConfiguration) WithObservedConfig(value runtime.Ra
 // If called multiple times, the Config field is set to the value of the last call.
 func (b *KueueOperandSpecApplyConfiguration) WithConfig(value *KueueConfigurationApplyConfiguration) *KueueOperandSpecApplyConfiguration {
 	b.Config = value
-	return b
-}
-
-// WithImage sets the Image field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Image field is set to the value of the last call.
-func (b *KueueOperandSpecApplyConfiguration) WithImage(value string) *KueueOperandSpecApplyConfiguration {
-	b.Image = &value
 	return b
 }

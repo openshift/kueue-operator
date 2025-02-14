@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"os"
 	"time"
 
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
@@ -79,6 +80,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		discoveryClient,
 		crdClient,
 		cc.EventRecorder,
+		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
 	)
 	if err != nil {
 		return err

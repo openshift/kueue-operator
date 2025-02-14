@@ -215,8 +215,10 @@ func deployOperator() error {
 			readerAndApply: func(objBytes []byte) error {
 				required := resourceread.ReadDeploymentV1OrDie(objBytes)
 				operatorImage := os.Getenv("OPERATOR_IMAGE")
+				kueueImage := os.Getenv("KUEUE_IMAGE")
 
 				required.Spec.Template.Spec.Containers[0].Image = operatorImage
+				required.Spec.Template.Spec.Containers[0].Env[2].Value = kueueImage
 				_, _, err := resourceapply.ApplyDeployment(
 					ctx,
 					kubeClient.AppsV1(),
@@ -236,8 +238,6 @@ func deployOperator() error {
 					return err
 				}
 				requiredSS := requiredObj.(*ssv1.Kueue)
-				kueueImage := os.Getenv("KUEUE_IMAGE")
-				requiredSS.Spec.Image = kueueImage
 				_, err = ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
 				return err
 			},
