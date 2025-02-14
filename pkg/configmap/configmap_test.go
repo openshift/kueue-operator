@@ -61,7 +61,7 @@ internalCertManagement:
 kind: Configuration
 manageJobsWithoutQueueName: false
 metrics:
-  bindAddress: :8080
+  bindAddress: :8443
   enableClusterQueueResources: true
 webhook:
   port: 9443
@@ -98,7 +98,7 @@ internalCertManagement:
 kind: Configuration
 manageJobsWithoutQueueName: true
 metrics:
-  bindAddress: :8080
+  bindAddress: :8443
   enableClusterQueueResources: true
 webhook:
   port: 9443
@@ -135,7 +135,48 @@ internalCertManagement:
 kind: Configuration
 manageJobsWithoutQueueName: false
 metrics:
-  bindAddress: :8080
+  bindAddress: :8443
+  enableClusterQueueResources: true
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"feature gates": {
+			configuration: kueue.KueueConfiguration{
+				FeatureGates: map[string]bool{
+					"LocalQueueMetrics": true,
+				},
+				Integrations: configapi.Integrations{
+					Frameworks: []string{"batch.job"},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  LocalQueueMetrics: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch.job
+internalCertManagement:
+  enable: false
+kind: Configuration
+manageJobsWithoutQueueName: false
+metrics:
+  bindAddress: :8443
   enableClusterQueueResources: true
 webhook:
   port: 9443

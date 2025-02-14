@@ -63,7 +63,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				HealthProbeBindAddress: ":8081",
 			},
 			Metrics: configapi.ControllerMetrics{
-				BindAddress:                 ":8080",
+				BindAddress:                 ":8443",
 				EnableClusterQueueResources: true,
 			},
 			Webhook: configapi.ControllerWebhook{
@@ -88,6 +88,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
-		Resources: kueueCfg.Resources,
+		Resources:    kueueCfg.Resources,
+		FeatureGates: kueueCfg.FeatureGates,
 	}
 }
