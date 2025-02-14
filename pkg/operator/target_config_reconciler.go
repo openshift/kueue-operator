@@ -178,74 +178,85 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	resourceVersion := "0"
 	cm, _, err := c.manageConfigMap(kueue)
 	if err != nil {
 		return err
 	}
-	specAnnotations["kueue/configmap"] = cm.ResourceVersion
-
-	crdAnnotations, crdErr := c.manageCustomResources(kueue, ownerReference)
-
-	if crdErr != nil {
-		klog.Error("unable to manage custom resource")
-		return crdErr
+	if cm != nil {
+		resourceVersion = cm.ResourceVersion
 	}
-
-	for key, val := range crdAnnotations {
-		specAnnotations[key] = val
-	}
+	specAnnotations["kueue/configmap"] = resourceVersion
 
 	sa, _, err := c.manageServiceAccount(kueue, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage service account")
 		return err
 	}
-	specAnnotations["serviceaccounts/kueue-operator"] = sa.ResourceVersion
+	if sa != nil {
+		resourceVersion = sa.ResourceVersion
+	}
+	specAnnotations["serviceaccounts/kueue-operator"] = resourceVersion
 
-	if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-leader-election.yaml", ownerReference); err != nil {
+	leaderRole, _, err := c.manageRole(kueue, "assets/kueue-operator/role-leader-election.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to create role leader-election")
 		return err
 	}
+	if leaderRole != nil {
+		resourceVersion = leaderRole.ResourceVersion
+	}
+	specAnnotations["role/role-leader-election"] = resourceVersion
 
-	if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference); err != nil {
+	roleBindingLeader, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to bind role leader-election")
 		return err
 	}
+	if roleBindingLeader != nil {
+		resourceVersion = roleBindingLeader.ResourceVersion
+	}
+	specAnnotations["rolebinding/leader-election"] = resourceVersion
 
-	if _, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference); err != nil {
+	controllerService, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to manage metrics service")
 		return err
 	}
+	if controllerService != nil {
+		resourceVersion = controllerService.ResourceVersion
+	}
+	specAnnotations["service/controller-manager-metrics-service"] = resourceVersion
 
-	if service, _, err := c.manageService(kueue, "assets/kueue-operator/visibility-server.yaml", ownerReference); err != nil {
+	visbilityService, _, err := c.manageService(kueue, "assets/kueue-operator/visibility-server.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to manage visbility service")
 		return err
-	} else {
-		resourceVersion := "0"
-		if service != nil { // SyncConfigMap can return nil
-			resourceVersion = service.ObjectMeta.ResourceVersion
-		}
-		specAnnotations["service/visibility-service"] = resourceVersion
 	}
+	if visbilityService != nil {
+		resourceVersion = visbilityService.ResourceVersion
+	}
+	specAnnotations["service/visibility-service"] = resourceVersion
 
-	if service, _, err := c.manageService(kueue, "assets/kueue-operator/webhook-service.yaml", ownerReference); err != nil {
+	webhookService, _, err := c.manageService(kueue, "assets/kueue-operator/webhook-service.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to manage webhook service")
 		return err
-	} else {
-		resourceVersion := "0"
-		if service != nil { // SyncConfigMap can return nil
-			resourceVersion = service.ObjectMeta.ResourceVersion
-		}
-		specAnnotations["service/webhook-service"] = resourceVersion
 	}
+	if webhookService != nil {
+		resourceVersion = webhookService.ResourceVersion
+	}
+	specAnnotations["service/webhook-service"] = resourceVersion
 
-	annotations, err := c.manageClusterRoles(kueue, ownerReference)
-	if err != nil {
-		klog.Error("unable to manage cluster roles")
+	// From here, we will create our cluster wide resources.
+	if err := c.manageCustomResources(kueue, ownerReference); err != nil {
+		klog.Error("unable to manage custom resource")
 		return err
 	}
-	for key, val := range annotations {
-		specAnnotations[key] = val
+
+	if err := c.manageClusterRoles(kueue, ownerReference); err != nil {
+		klog.Error("unable to manage cluster roles")
+		return err
 	}
 
 	if _, _, err := c.manageOpenshiftClusterRolesForKueue(kueue, ownerReference); err != nil {
@@ -278,6 +289,7 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	// Once everything is deployed, the last thing we should do is create the deployment.
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage deployment")
@@ -406,18 +418,16 @@ func (c *TargetConfigReconciler) manageService(kueue *kueuev1alpha1.Kueue, asset
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageClusterRoles(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (map[string]string, error) {
-	returnMap := make(map[string]string)
+func (c *TargetConfigReconciler) manageClusterRoles(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) error {
 	clusterRoleDir := "assets/kueue-operator/clusterroles"
 
 	files, err := bindata.AssetDir(clusterRoleDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read clusterroles directory: %w", err)
+		return fmt.Errorf("failed to read clusterroles directory: %w", err)
 	}
 
 	for _, file := range files {
 		assetPath := filepath.Join(clusterRoleDir, file)
-		clusterRoleName := fmt.Sprintf("clusterrole/%s", file)
 		required := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset(assetPath))
 		if required.AggregationRule != nil {
 			continue
@@ -426,18 +436,12 @@ func (c *TargetConfigReconciler) manageClusterRoles(kueue *kueuev1alpha1.Kueue, 
 			ownerReference,
 		}
 
-		clusterRole, _, err := resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+		_, _, err := resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
-		resourceVersion := "0"
-		if clusterRole != nil { // SyncConfigMap can return nil
-			resourceVersion = clusterRole.ObjectMeta.ResourceVersion
-		}
-		returnMap[clusterRoleName] = resourceVersion
 	}
-	return returnMap, nil
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageOpenshiftClusterRolesBindingForKueue(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {
@@ -491,35 +495,27 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(kueue *kueu
 	return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, clusterRole)
 }
 
-func (c *TargetConfigReconciler) manageCustomResources(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (map[string]string, error) {
-	returnMap := make(map[string]string)
+func (c *TargetConfigReconciler) manageCustomResources(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) error {
 	crdDir := "assets/kueue-operator/crds"
 
 	files, err := bindata.AssetDir(crdDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read crd directory: %w", err)
+		return fmt.Errorf("failed to read crd directory: %w", err)
 	}
 
 	for _, file := range files {
 		assetPath := filepath.Join(crdDir, file)
-		crdName := fmt.Sprintf("crds/%s", file)
 		required := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
 		required.OwnerReferences = []metav1.OwnerReference{
 			ownerReference,
 		}
 		required.ObjectMeta.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
-		crd, _, err := resourceapply.ApplyCustomResourceDefinitionV1(c.ctx, c.crdClient, c.eventRecorder, required)
+		_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(c.ctx, c.crdClient, c.eventRecorder, required)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
-		resourceVersion := "0"
-		if crd != nil { // SyncConfigMap can return nil
-			resourceVersion = crd.ObjectMeta.ResourceVersion
-		}
-		returnMap[crdName] = resourceVersion
 	}
-	return returnMap, nil
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.Kueue, specAnnotations map[string]string, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
