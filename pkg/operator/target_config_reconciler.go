@@ -249,17 +249,17 @@ func (c TargetConfigReconciler) sync() error {
 	specAnnotations["service/webhook-service"] = resourceVersion
 
 	// From here, we will create our cluster wide resources.
-	if err := c.manageCustomResources(kueue, ownerReference); err != nil {
+	if err := c.manageCustomResources(ownerReference); err != nil {
 		klog.Error("unable to manage custom resource")
 		return err
 	}
 
-	if err := c.manageClusterRoles(kueue, ownerReference); err != nil {
+	if err := c.manageClusterRoles(ownerReference); err != nil {
 		klog.Error("unable to manage cluster roles")
 		return err
 	}
 
-	if _, _, err := c.manageOpenshiftClusterRolesForKueue(kueue, ownerReference); err != nil {
+	if _, _, err := c.manageOpenshiftClusterRolesForKueue(ownerReference); err != nil {
 		klog.Error("unable to manage openshift cluster roles")
 		return err
 	}
@@ -418,7 +418,7 @@ func (c *TargetConfigReconciler) manageService(kueue *kueuev1alpha1.Kueue, asset
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageClusterRoles(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageClusterRoles(ownerReference metav1.OwnerReference) error {
 	clusterRoleDir := "assets/kueue-operator/clusterroles"
 
 	files, err := bindata.AssetDir(clusterRoleDir)
@@ -469,7 +469,7 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesBindingForKueue(kueu
 	return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, clusterRoleBinding)
 }
 
-func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRole, bool, error) {
+func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ownerReference metav1.OwnerReference) (*rbacv1.ClusterRole, bool, error) {
 	clusterRole := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -495,7 +495,7 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(kueue *kueu
 	return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, clusterRole)
 }
 
-func (c *TargetConfigReconciler) manageCustomResources(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.OwnerReference) error {
 	crdDir := "assets/kueue-operator/crds"
 
 	files, err := bindata.AssetDir(crdDir)
