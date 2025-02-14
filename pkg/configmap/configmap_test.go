@@ -176,7 +176,7 @@ internalCertManagement:
 kind: Configuration
 manageJobsWithoutQueueName: false
 metrics:
-  bindAddress: :8080
+  bindAddress: :8443
   enableClusterQueueResources: true
 webhook:
   port: 9443
