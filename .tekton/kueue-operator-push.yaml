@@ -418,6 +418,8 @@ spec:
         - "false"
     - name: sast-coverity-check
       params:
+      - name: image-url
+        value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: IMAGE
         value: $(params.output-image)
       - name: DOCKERFILE
