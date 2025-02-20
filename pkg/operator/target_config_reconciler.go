@@ -216,14 +216,16 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["rolebinding/leader-election"] = resourceVersion
 
-	if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
-		klog.Error("unable to create role prometheus")
-		return err
-	}
+	if !ptr.Deref(kueue.Spec.Config.DisableMetrics, false) {
+		if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
+			klog.Error("unable to create role prometheus")
+			return err
+		}
 
-	if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
-		klog.Error("unable to bind role prometheus")
-		return err
+		if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
+			klog.Error("unable to bind role prometheus")
+			return err
+		}
 	}
 
 	controllerService, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
@@ -287,16 +289,11 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if service, _, err := c.manageClusterRoleBindings(kueue, "assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference); err != nil {
+	if _, _, err := c.manageClusterRoleBindings(kueue, "assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference); err != nil {
 		klog.Error("unable to manage cluster role kueue-manager")
 		return err
-	} else {
-		resourceVersion := "0"
-		if service != nil { // SyncConfigMap can return nil
-			resourceVersion = service.ObjectMeta.ResourceVersion
-		}
-		specAnnotations["clusterrolebinding-metrics.yaml"] = resourceVersion
 	}
+
 	if _, _, err := c.manageMutatingWebhook(kueue, ownerReference); err != nil {
 		klog.Error("unable to manage mutating webhook")
 		return err
@@ -307,9 +304,13 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
-		return err
+	// For microshift we cannot assume monitoring apis exist.
+	if !ptr.Deref(kueue.Spec.Config.DisableMetrics, false) {
+		if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
+			return err
+		}
 	}
+
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage deployment")

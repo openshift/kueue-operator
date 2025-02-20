@@ -68,6 +68,11 @@ type KueueConfiguration struct {
 	ManagedJobsNamespaceSelector *metav1.LabelSelector `json:"managedJobsNamespaceSelector,omitempty"`
 	// FairSharing controls the fair sharing semantics across the cluster.
 	FairSharing *configapi.FairSharing `json:"fairSharing,omitempty"`
+	// Disable Metrics
+	// Microshift does not enable metrics by default
+	// Default will assume metrics are enabled.
+	// +optional
+	DisableMetrics *bool `json:"disableMetrics,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
