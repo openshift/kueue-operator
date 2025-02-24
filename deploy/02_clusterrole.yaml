@@ -8,6 +8,7 @@ rules:
     resources:
       - kueues
       - kueues/status
+      - kueues/finalizers
     verbs:
       - create
       - delete
@@ -142,4 +143,28 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - operators.coreos.com
+    resources:
+      - operatorgroups
+      - subscriptions
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+      - delete
+      - patch
+      - update
 
