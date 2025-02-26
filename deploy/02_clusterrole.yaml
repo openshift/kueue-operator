@@ -144,27 +144,23 @@ rules:
       - update
       - watch
   - apiGroups:
-      - operators.coreos.com
+      - kueue.x-k8s.io
     resources:
-      - operatorgroups
-      - subscriptions
+      - admissionchecks
+      - clusterqueues
+      - cohorts
+      - localqueues
+      - multikueueclusters
+      - multikueueconfigs
+      - provisioningrequestconfigs
+      - resourceflavors
+      - topologies
+      - workloadpriorityclasses
+      - workloads
     verbs:
-      - create
+      - get
+      - list
+      - watch
       - delete
       - deletecollection
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups: [""]
-    resources:
-      - namespaces
-    verbs:
-      - get
-      - list
-      - watch
-      - delete
-      - patch
-      - update
 
