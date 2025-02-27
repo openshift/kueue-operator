@@ -378,13 +378,6 @@ func deployOperator() error {
 					return err
 				}
 				requiredSS := requiredObj.(*ssv1.Kueue)
-				if err := ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Delete(ctx, requiredSS.Name, metav1.DeleteOptions{}); err != nil && !strings.Contains(err.Error(), "not found") {
-					klog.Errorf("Failed to delete existing Kueue resource: %v", err)
-					return err
-				}
-
-				// Wait to ensure deletion is complete
-				time.Sleep(5 * time.Second)
 				_, err = ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
 				return err
 			},

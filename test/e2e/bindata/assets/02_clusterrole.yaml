@@ -142,3 +142,23 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - kueue.x-k8s.io
+    resources:
+      - admissionchecks
+      - clusterqueues
+      - cohorts
+      - localqueues
+      - multikueueclusters
+      - multikueueconfigs
+      - provisioningrequestconfigs
+      - resourceflavors
+      - topologies
+      - workloadpriorityclasses
+      - workloads
+    verbs:
+      - get
+      - list
+      - watch
+      - delete
+      - deletecollection
