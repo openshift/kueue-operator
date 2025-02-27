@@ -50,6 +50,12 @@ spec:
                   required:
                     - integrations
                   properties:
+                    disableMetrics:
+                      description: |-
+                        Disable Metrics
+                        Microshift does not enable metrics by default
+                        Default will assume metrics are enabled.
+                      type: boolean
                     fairSharing:
                       description: FairSharing controls the fair sharing semantics across the cluster.
                       type: object

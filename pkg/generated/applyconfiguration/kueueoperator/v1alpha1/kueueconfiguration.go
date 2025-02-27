@@ -33,6 +33,7 @@ type KueueConfigurationApplyConfiguration struct {
 	ManageJobsWithoutQueueName   *kueueoperatorv1alpha1.ManageJobsWithoutQueueNameOption `json:"manageJobsWithoutQueueName,omitempty"`
 	ManagedJobsNamespaceSelector *v1.LabelSelectorApplyConfiguration                     `json:"managedJobsNamespaceSelector,omitempty"`
 	FairSharing                  *v1beta1.FairSharing                                    `json:"fairSharing,omitempty"`
+	DisableMetrics               *bool                                                   `json:"disableMetrics,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -100,5 +101,13 @@ func (b *KueueConfigurationApplyConfiguration) WithManagedJobsNamespaceSelector(
 // If called multiple times, the FairSharing field is set to the value of the last call.
 func (b *KueueConfigurationApplyConfiguration) WithFairSharing(value v1beta1.FairSharing) *KueueConfigurationApplyConfiguration {
 	b.FairSharing = &value
+	return b
+}
+
+// WithDisableMetrics sets the DisableMetrics field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DisableMetrics field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithDisableMetrics(value bool) *KueueConfigurationApplyConfiguration {
+	b.DisableMetrics = &value
 	return b
 }

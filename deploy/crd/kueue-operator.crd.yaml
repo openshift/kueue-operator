@@ -42,6 +42,12 @@ spec:
               config:
                 description: config that is persisted to a config map
                 properties:
+                  disableMetrics:
+                    description: |-
+                      Disable Metrics
+                      Microshift does not enable metrics by default
+                      Default will assume metrics are enabled.
+                    type: boolean
                   fairSharing:
                     description: FairSharing controls the fair sharing semantics across
                       the cluster.

@@ -90,6 +90,11 @@ func (in *KueueConfiguration) DeepCopyInto(out *KueueConfiguration) {
 		*out = new(v1beta1.FairSharing)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.DisableMetrics != nil {
+		in, out := &in.DisableMetrics, &out.DisableMetrics
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

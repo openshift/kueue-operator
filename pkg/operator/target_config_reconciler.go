@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 
 	"github.com/openshift/library-go/pkg/controller"
@@ -47,11 +49,7 @@ import (
 )
 
 const (
-	PromNamespace       = "openshift-monitoring"
-	KueueConfigMap      = "kueue-manager-config"
-	KueueServiceAccount = "openshift-kueue-operator"
-	PromRouteName       = "prometheus-k8s"
-	PromTokenPrefix     = "prometheus-k8s-token"
+	KueueConfigMap = "kueue-manager-config"
 )
 
 type TargetConfigReconciler struct {
@@ -208,7 +206,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["role/role-leader-election"] = resourceVersion
 
-	roleBindingLeader, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference)
+	roleBindingLeader, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference, true)
 	if err != nil {
 		klog.Error("unable to bind role leader-election")
 		return err
@@ -217,6 +215,18 @@ func (c TargetConfigReconciler) sync() error {
 		resourceVersion = roleBindingLeader.ResourceVersion
 	}
 	specAnnotations["rolebinding/leader-election"] = resourceVersion
+
+	if !ptr.Deref(kueue.Spec.Config.DisableMetrics, false) {
+		if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
+			klog.Error("unable to create role prometheus")
+			return err
+		}
+
+		if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
+			klog.Error("unable to bind role prometheus")
+			return err
+		}
+	}
 
 	controllerService, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
 	if err != nil {
@@ -279,6 +289,11 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	if _, _, err := c.manageClusterRoleBindings(kueue, "assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference); err != nil {
+		klog.Error("unable to manage cluster role kueue-manager")
+		return err
+	}
+
 	if _, _, err := c.manageMutatingWebhook(kueue, ownerReference); err != nil {
 		klog.Error("unable to manage mutating webhook")
 		return err
@@ -289,7 +304,13 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	// Once everything is deployed, the last thing we should do is create the deployment.
+	// For microshift we cannot assume monitoring apis exist.
+	if !ptr.Deref(kueue.Spec.Config.DisableMetrics, false) {
+		if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
+			return err
+		}
+	}
+
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage deployment")
@@ -372,18 +393,20 @@ func (c *TargetConfigReconciler) manageValidatingWebhook(kueue *kueuev1alpha1.Ku
 	return resourceapply.ApplyValidatingWebhookConfigurationImproved(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, newWebhook, c.resourceCache)
 }
 
-func (c *TargetConfigReconciler) manageRoleBindings(kueue *kueuev1alpha1.Kueue, assetPath string, ownerReference metav1.OwnerReference) (*rbacv1.RoleBinding, bool, error) {
+func (c *TargetConfigReconciler) manageRoleBindings(kueue *kueuev1alpha1.Kueue, assetPath string, ownerReference metav1.OwnerReference, setServiceAccountToOperatorNamespace bool) (*rbacv1.RoleBinding, bool, error) {
 	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
 
 	required.Namespace = kueue.Namespace
-	for i := range required.Subjects {
-		if required.Subjects[i].Kind != "ServiceAccount" {
-			continue
+	if setServiceAccountToOperatorNamespace {
+		for i := range required.Subjects {
+			if required.Subjects[i].Kind != "ServiceAccount" {
+				continue
+			}
+			required.Subjects[i].Namespace = kueue.Namespace
 		}
-		required.Subjects[i].Namespace = kueue.Namespace
 	}
 	return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
@@ -661,6 +684,53 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
+func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
+
+	// Create ServiceMonitor object
+	serviceMonitor := monitoringv1.ServiceMonitor{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ServiceMonitor",
+			APIVersion: "monitoring.coreos.com/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kueue-metrics",
+			Namespace: c.operatorNamespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "operator.openshift.io/v1alpha1",
+					Kind:       "Kueue",
+					Name:       kueue.Name,
+					UID:        kueue.UID,
+				},
+			},
+		},
+		Spec: monitoringv1.ServiceMonitorSpec{
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"control-plane": "controller-manager",
+				},
+			},
+			Endpoints: []monitoringv1.Endpoint{
+				{
+					Interval:        "30s",
+					Port:            "metrics", // Name of the port you want to monitor
+					Scheme:          "https",
+					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+					TLSConfig: &monitoringv1.TLSConfig{
+						SafeTLSConfig: monitoringv1.SafeTLSConfig{
+							InsecureSkipVerify: ptr.To(true),
+						},
+					},
+				},
+			},
+		},
+	}
+	required := &unstructured.Unstructured{}
+	convertObj2Unstructured(serviceMonitor, required)
+
+	return resourceapply.ApplyServiceMonitor(ctx, c.dynamicClient, c.eventRecorder, required)
+}
+
 // eventHandler queues the operator to check spec and status
 func (c *TargetConfigReconciler) eventHandler(item queueItem) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
@@ -684,4 +754,20 @@ func isResourceRegistered(discoveryClient discovery.DiscoveryInterface, gvk sche
 		}
 	}
 	return false, nil
+}
+
+// convertObj2Unstructured convert the k8s obj to unstructured obj.
+// for example:
+//
+//	d := appsv1.Deployment{...}
+//	u := new(unstructured.Unstructured)
+//	err := convertObj2Unstructured(d, u)
+func convertObj2Unstructured(k8sObj interface{}, u *unstructured.Unstructured) (err error) {
+	var tmp []byte
+	tmp, err = json.Marshal(k8sObj)
+	if err != nil {
+		return
+	}
+	err = u.UnmarshalJSON(tmp)
+	return
 }
