@@ -373,14 +373,15 @@ func (c TargetConfigReconciler) sync() error {
 }
 
 func (c *TargetConfigReconciler) addFinalizerToKueueInstance(kueue *kueuev1alpha1.Kueue) error {
-	if !controllerutil.ContainsFinalizer(kueue, KueueFinalizer) {
-		patch := []byte(`{"metadata":{"finalizers":["` + KueueFinalizer + `"],"resourceVersion":"` + kueue.ResourceVersion + `"}}`)
-		if _, err := c.operatorClient.Kueues(kueue.Namespace).Patch(c.ctx, kueue.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
-			klog.ErrorS(err, "Failed to add finalizer to Kueue instance", "Kueue", kueue.Name)
-			return err
-		}
-		klog.Infof("Finalizer %s added to Kueue instance %s", KueueFinalizer, kueue.Name)
+	if controllerutil.ContainsFinalizer(kueue, KueueFinalizer) {
+		return nil
 	}
+	patch := []byte(`{"metadata":{"finalizers":["` + KueueFinalizer + `"],"resourceVersion":"` + kueue.ResourceVersion + `"}}`)
+	if _, err := c.operatorClient.Kueues(kueue.Namespace).Patch(c.ctx, kueue.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to add finalizer to Kueue instance", "Kueue", kueue.Name)
+		return err
+	}
+	klog.Infof("Finalizer %s added to Kueue instance %s", KueueFinalizer, kueue.Name)
 	return nil
 }
 
@@ -567,6 +568,7 @@ func (c *TargetConfigReconciler) cleanUpCertificatesAndIssuers(ctx context.Conte
 			}
 		}
 	}
+
 	if len(errorList) > 0 {
 		return utilerror.NewAggregate(errorList)
 	}
