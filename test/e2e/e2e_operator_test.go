@@ -99,6 +99,65 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 		})
 	})
+
+	When("cleaning up Kueue resources", func() {
+		var (
+			kueueName      = "cluster"
+			kueueClientset *kueueclient.Clientset
+			kubeClientset  *kubernetes.Clientset
+		)
+
+		BeforeEach(func() {
+			kueueClientset = getKueueClient()
+			kubeClientset = getKubeClientOrDie()
+		})
+
+		It("should delete Kueue instance and verify cleanup", func() {
+			ctx := context.TODO()
+
+			_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+
+			err = kueueClientset.KueueV1alpha1().Kueues(namespace).Delete(ctx, kueueName, metav1.DeleteOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to delete Kueue instance")
+
+			Eventually(func() error {
+				_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+				if err == nil {
+					return fmt.Errorf("Kueue instance %s still exists", kueueName)
+				}
+
+				clusterRoles, _ := kubeClientset.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
+				for _, role := range clusterRoles.Items {
+					if strings.Contains(role.Name, "kueue") && role.Name != "openshift-kueue-operator" {
+						return fmt.Errorf("ClusterRole %s still exists", role.Name)
+					}
+				}
+
+				clusterRoleBindings, _ := kubeClientset.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+				for _, binding := range clusterRoleBindings.Items {
+					if strings.Contains(binding.Name, "kueue") && binding.Name != "openshift-kueue-operator" {
+						return fmt.Errorf("ClusterRoleBinding %s still exists", binding.Name)
+					}
+				}
+
+				mutatingwebhooks, _ := kubeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+				for _, wh := range mutatingwebhooks.Items {
+					if strings.Contains(wh.Name, "kueue") {
+						return fmt.Errorf("MutatingWebhookConfiguration %s still exists", wh.Name)
+					}
+				}
+
+				validatingwebhooks, _ := kubeClientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+				for _, wh := range validatingwebhooks.Items {
+					if strings.Contains(wh.Name, "kueue") {
+						return fmt.Errorf("ValidatingWebhookConfiguration %s still exists", wh.Name)
+					}
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Resources were not cleaned up properly")
+		})
+	})
 })
 
 func getKubeClientOrDie() *kubernetes.Clientset {
@@ -238,13 +297,6 @@ func deployOperator() error {
 					return err
 				}
 				requiredSS := requiredObj.(*ssv1.Kueue)
-				if err := ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Delete(ctx, requiredSS.Name, metav1.DeleteOptions{}); err != nil && !strings.Contains(err.Error(), "not found") {
-					klog.Errorf("Failed to delete existing Kueue resource: %v", err)
-					return err
-				}
-
-				// Wait to ensure deletion is complete
-				time.Sleep(5 * time.Second)
 				_, err = ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
 				return err
 			},
