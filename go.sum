@@ -360,8 +360,8 @@ sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 h1:/Rv+M11QRah1itp8VhT6HoVx1
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3/go.mod h1:18nIHnGi6636UCz6m8i4DhaJ65T6EruyzmoQqI2BVDo=
 sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 h1:PFWFSkpArPNJxFX4ZKWAk9NSeRoZaXschn+ULa4xVek=
 sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96/go.mod h1:EOBQyBowOUsd7U4CJnMHNE0ri+zCXyouGdLwC/jZU+I=
-sigs.k8s.io/kueue v0.10.0 h1:GDQlZbMLCyImRMIdlCO9yyI1JWoX+Ab6x9fodcJBva4=
-sigs.k8s.io/kueue v0.10.0/go.mod h1:mE9yoJMkIl7i0afQZsO7cnfOUawTHnESJAYqxp9nJy8=
+sigs.k8s.io/kueue v0.10.2 h1:p0C2zZiSCb6Dt77jCU/DMx2LFujN4etIGjjj7q+Ylao=
+sigs.k8s.io/kueue v0.10.2/go.mod h1:3yzOvGI0sPOC3VL1ihVIrzc8mkSyCVTL+SrouewwRWw=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.3 h1:sCP7Vv3xx/CWIuTPVN38lUPx0uw0lcLfzaiDa8Ja01A=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.3/go.mod h1:N8f93tFZh9U6vpxwRArLiikrE5/2tiu1w1AGfACIGE4=
 sigs.k8s.io/yaml v1.4.0 h1:Mk1wCc2gy/F0THH0TAp1QYyJNzRm2KCLy3o5ASXVI5E=
