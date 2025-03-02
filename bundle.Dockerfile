@@ -10,6 +10,17 @@ LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.37.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
+LABEL io.k8s.display-name="OpenShift Kueue Bundle" \
+      io.k8s.description="This is a bundle for the kueue operator" \
+      com.redhat.component="kueue-operator-bundle" \
+      name="kueue-operator-rhel9-operator-bundle" \
+      summary="kueue-operator-bundle" \
+      io.openshift.expose-services="" \
+      io.openshift.tags="openshift,kueue-operator-bundle" \
+      description="kueue-operator-bundle" \
+      maintainer="Node team, <aos-node@redhat.com>"
+
+
 # Copy files to locations specified by labels.
 COPY bundle/manifests /manifests/
 COPY bundle/metadata /metadata/
