@@ -10,20 +10,20 @@ LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.37.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
-LABEL io.k8s.display-name="OpenShift Kueue Bundle" \
-      io.k8s.description="This is a bundle for the kueue operator" \
-      com.redhat.component="kueue-operator-bundle" \
-      com.redhat.openshift.versions="v4.17-v4.18" \
-      name="kueue-operator-rhel9-operator-bundle" \
-      summary="kueue-operator-bundle" \
-      url="https://github.com/openshift/kueue-operator" \
-      vendor="Red Hat, Inc." \
-      io.openshift.expose-services="" \
-      io.openshift.tags="openshift,kueue-operator-bundle" \
-      description="kueue-operator-bundle" \
-      distribution-scope="public" \
-      release=0.0.1 \
-      maintainer="Node team, <aos-node@redhat.com>"
+LABEL io.k8s.display-name="OpenShift Kueue Bundle"
+LABEL io.k8s.description="This is a bundle for the kueue operator"
+LABEL com.redhat.component="kueue-operator-bundle"
+LABEL com.redhat.openshift.versions="v4.17-v4.18"
+LABEL name="kueue-operator-rhel9-operator-bundle"
+LABEL summary="kueue-operator-bundle"
+LABEL url="https://github.com/openshift/kueue-operator"
+LABEL vendor="Red Hat, Inc."
+LABEL io.openshift.expose-services=""
+LABEL io.openshift.tags="openshift,kueue-operator-bundle"
+LABEL description="kueue-operator-bundle"
+LABEL distribution-scope="public"
+LABEL release="0.0.1"
+LABEL maintainer="Node team, <aos-node@redhat.com>"
 
 
 # Copy files to locations specified by labels.

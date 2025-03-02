@@ -8,19 +8,19 @@ COPY --from=builder /go/src/github.com/openshift/kueue-operator/kueue-operator /
 RUN mkdir /licenses
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/LICENSE /licenses/.
 
-LABEL io.k8s.display-name="OpenShift Kueue Operator based on RHEL 9" \
-      io.k8s.description="This is a component of OpenShift and manages kueue based on RHEL 9" \
-      com.redhat.component="kueue-operator-container" \
-      com.redhat.openshift.versions="v4.17-v4.18" \
-      name="kueue-operator-rhel9-operator" \
-      summary="kueue-operator" \
-      url="https://github.com/openshift/kueue-operator" \
-      vendor="Red Hat, Inc." \
-      io.openshift.expose-services="" \
-      io.openshift.tags="openshift,kueue-operator" \
-      description="kueue-operator-container" \
-      distribution-scope="public" \
-      version="0.0.1" \
-      maintainer="Node team, <aos-node@redhat.com>"
+LABEL io.k8s.display-name="OpenShift Kueue Operator based on RHEL 9"
+LABEL io.k8s.description="This is a component of OpenShift and manages kueue based on RHEL 9"
+LABEL com.redhat.component="kueue-operator-container"
+LABEL com.redhat.openshift.versions="v4.17-v4.18"
+LABEL name="kueue-operator-rhel9-operator"
+LABEL summary="kueue-operator"
+LABEL url="https://github.com/openshift/kueue-operator"
+LABEL vendor="Red Hat, Inc."
+LABEL io.openshift.expose-services=""
+LABEL io.openshift.tags="openshift,kueue-operator"
+LABEL description="kueue-operator-container"
+LABEL distribution-scope="public"
+LABEL version="0.0.1"
+LABEL maintainer="Node team, <aos-node@redhat.com>"
 
 USER 1001
