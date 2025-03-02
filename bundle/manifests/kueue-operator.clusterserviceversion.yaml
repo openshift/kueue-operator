@@ -22,8 +22,7 @@ metadata:
                   "batch/job"
                 ]
               }
-            },
-            "image": "quay.io/kevin-oss/kueue:feb10-1248"
+            }
           }
         },
         {
@@ -56,13 +55,12 @@ metadata:
                   "kubeflow.org/xgboostjob"
                 ]
               }
-            },
-            "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:9d1a04972e2a26a9cd761a7bb33ef8b5b459ba0939421b242565d845a1445129"
+            }
           }
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-02-13T21:53:36Z"
+    createdAt: "2025-03-02T17:37:57Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: kueue-operator.v0.0.1
@@ -249,8 +247,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:9d1a04972e2a26a9cd761a7bb33ef8b5b459ba0939421b242565d845a1445129
-                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:1a53d9d948321330995d1c71781b7999f2637f79a0dfe381a301ce6179b278d4
+                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:8fa0a889ee461ebd6b5e2aaa1972a1cfccb7ab5b96e17a5ab8bc7a48714d2b27
+                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:c675b15b873f26e890784c9fc40ffc2e3dbee701f8b6b719a1d4247f8d127d32
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -297,6 +295,6 @@ spec:
     name: Provider Name
     url: https://your.domain
   relatedImages:
-  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:9d1a04972e2a26a9cd761a7bb33ef8b5b459ba0939421b242565d845a1445129
+  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:8fa0a889ee461ebd6b5e2aaa1972a1cfccb7ab5b96e17a5ab8bc7a48714d2b27
     name: operand-image
   version: 0.0.1
