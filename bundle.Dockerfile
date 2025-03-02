@@ -22,9 +22,10 @@ LABEL io.openshift.expose-services=""
 LABEL io.openshift.tags="openshift,kueue-operator-bundle"
 LABEL description="kueue-operator-bundle"
 LABEL distribution-scope="public"
-LABEL release="0.0.1"
-LABEL maintainer="Node team, <aos-node@redhat.com>"
+LABEL release=0.0.1
+LABEL version=0.0.1
 
+LABEL maintainer="Node team, <aos-node@redhat.com>"
 
 # Copy files to locations specified by labels.
 COPY bundle/manifests /manifests/
@@ -33,3 +34,5 @@ COPY bundle/metadata /metadata/
 # licenses required by Red Hat certification policy
 # refer to https://docs.redhat.com/en/documentation/red_hat_software_certification/2024/html-single/red_hat_openshift_software_certification_policy_guide/index#con-image-content-requirements_openshift-sw-cert-policy-container-images
 COPY LICENSE /licenses/
+
+USER 1001
