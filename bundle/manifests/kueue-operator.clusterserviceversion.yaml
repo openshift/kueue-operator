@@ -302,15 +302,13 @@ spec:
   - kueue-operator
   links:
   - name: Kueue Operator
-    url: https://kueue-operator.domain
-  maintainers:
-  - email: your@email.com
-    name: Maintainer Name
+    url: https://github.com/openshift/kueue-operator
   maturity: alpha
   provider:
-    name: Provider Name
-    url: https://your.domain
+    name: Red Hat, Inc
+    url: https://github.com/openshift/kueue-operator
   relatedImages:
   - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:8fa0a889ee461ebd6b5e2aaa1972a1cfccb7ab5b96e17a5ab8bc7a48714d2b27
     name: operand-image
   version: 0.0.1
+  minKubeVersion: 1.28.0
