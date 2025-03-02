@@ -63,6 +63,22 @@ metadata:
     createdAt: "2025-03-02T17:37:57Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    console.openshift.io/operator-monitoring-default: "true"
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "false"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "true"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    operatorframework.io/cluster-monitoring: "true"
+    operatorframework.io/suggested-namespace: openshift-kueue-operator
+    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
+    operators.operatorframework.io/builder: operator-sdk-v1.33.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: kueue-operator.v0.0.1
   namespace: placeholder
 spec:
