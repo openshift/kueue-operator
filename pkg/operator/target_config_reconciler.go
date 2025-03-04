@@ -40,10 +40,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/types"
 	utilerror "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -178,35 +179,28 @@ func (c TargetConfigReconciler) sync() error {
 	if kueue.DeletionTimestamp != nil {
 		klog.Infof("Kueue instance %s is being deleted. Initiating cleanup...", kueue.Name)
 
-		defer func() {
-			if err := c.removeFinalizerFromKueueInstance(kueue); err != nil {
-				klog.Errorf("Failed to remove finalizer from Kueue instance %s: %v", kueue.Name, err)
-			} else {
-				klog.Infof("Finalizer successfully removed from Kueue instance %s", kueue.Name)
-			}
-		}()
+		cleanupResources := []func(context.Context) error{
+			c.cleanUpWebhooks,
+			c.cleanUpCertificatesAndIssuers,
+			c.cleanUpClusterRoles,
+			c.cleanUpClusterRoleBindings,
+		}
 
-		if err := c.cleanUpWebhooks(c.ctx); err != nil {
-			klog.Errorf("Failed to clean up weebhooks before deleting Kueue instance: %v", err)
-			return err
+		for _, step := range cleanupResources {
+			if err := step(c.ctx); err != nil {
+				return err
+			}
 		}
-		if err := c.cleanUpCustomResources(c.ctx); err != nil {
-			klog.Errorf("Failed to clean up CRDs before deleting Kueue instance: %v", err)
-			return err
-		}
-		if err := c.cleanUpCertificatesAndIssuers(c.ctx); err != nil {
-			klog.Errorf("Failed to clean up cluster role bindings before deleting Kueue instance: %v", err)
-			return err
-		}
-		if err := c.cleanUpClusterRoles(c.ctx); err != nil {
-			klog.Errorf("Failed to clean up cluster roles before deleting Kueue instance: %v", err)
-			return err
-		}
-		if err := c.cleanUpClusterRoleBindings(c.ctx); err != nil {
-			klog.Errorf("Failed to clean up cluster role bindings before deleting Kueue instance: %v", err)
-			return err
-		}
+
 		klog.Info("Finished cleanup. Proceeding with finalizer removal.")
+
+		if err := c.removeFinalizerFromKueueInstance(kueue); err != nil {
+			klog.Errorf("Failed to remove finalizer from Kueue instance %s: %v", kueue.Name, err)
+		} else {
+			klog.Infof("Finalizer successfully removed from Kueue instance %s", kueue.Name)
+		}
+
+		return nil
 	}
 
 	_, _, err = c.manageIssuerCR(c.ctx, kueue)
@@ -372,40 +366,73 @@ func (c TargetConfigReconciler) sync() error {
 	return nil
 }
 
-func (c *TargetConfigReconciler) addFinalizerToKueueInstance(kueue *kueuev1alpha1.Kueue) error {
-	if controllerutil.ContainsFinalizer(kueue, KueueFinalizer) {
-		return nil
+func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1alpha1.Kueue, add bool) error {
+	finalizerOp := "added"
+	mutator := controllerutil.AddFinalizer
+	if !add {
+		finalizerOp = "removed"
+		mutator = controllerutil.RemoveFinalizer
 	}
-	patch := []byte(`{"metadata":{"finalizers":["` + KueueFinalizer + `"],"resourceVersion":"` + kueue.ResourceVersion + `"}}`)
-	if _, err := c.operatorClient.Kueues(kueue.Namespace).Patch(c.ctx, kueue.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
-		klog.ErrorS(err, "Failed to add finalizer to Kueue instance", "Kueue", kueue.Name)
-		return err
-	}
-	klog.Infof("Finalizer %s added to Kueue instance %s", KueueFinalizer, kueue.Name)
-	return nil
-}
 
-func (c *TargetConfigReconciler) removeFinalizerFromKueueInstance(kueue *kueuev1alpha1.Kueue) error {
-	if !controllerutil.ContainsFinalizer(kueue, KueueFinalizer) {
+	if add == controllerutil.ContainsFinalizer(kueue, KueueFinalizer) {
 		return nil
 	}
 
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		latest, err := c.operatorClient.Kueues(kueue.Namespace).Get(c.ctx, kueue.Name, metav1.GetOptions{})
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		original, err := c.operatorClient.Kueues(kueue.Namespace).Get(c.ctx, kueue.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
-		controllerutil.RemoveFinalizer(latest, KueueFinalizer)
-		_, err = c.operatorClient.Kueues(latest.Namespace).Update(c.ctx, latest, metav1.UpdateOptions{})
-		return err
-	})
 
-	if err != nil {
-		klog.ErrorS(err, "Failed to remove finalizer from Kueue instance", "Kueue", kueue.Name)
-		return err
-	}
-	klog.Infof("Finalizer %s removed from Kueue instance %s", KueueFinalizer, kueue.Name)
-	return nil
+		if add == controllerutil.ContainsFinalizer(original, KueueFinalizer) {
+			return nil
+		}
+
+		modified := original.DeepCopy()
+		mutator(modified, KueueFinalizer)
+
+		originalData, err := json.Marshal(original)
+		if err != nil {
+			return fmt.Errorf("failed to marshal original object: %w", err)
+		}
+
+		modifiedData, err := json.Marshal(modified)
+		if err != nil {
+			return fmt.Errorf("failed to marshal modified object: %w", err)
+		}
+
+		patch, err := strategicpatch.CreateTwoWayMergePatch(
+			originalData,
+			modifiedData,
+			kueuev1alpha1.Kueue{},
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create patch: %w", err)
+		}
+
+		patched, err := c.operatorClient.Kueues(original.Namespace).Patch(
+			c.ctx,
+			original.Name,
+			types.MergePatchType,
+			patch,
+			metav1.PatchOptions{},
+		)
+		if err != nil {
+			return err
+		}
+
+		*kueue = *patched
+		klog.Infof("Finalizer %s %s on Kueue %s", KueueFinalizer, finalizerOp, kueue.Name)
+		return nil
+	})
+}
+
+func (c *TargetConfigReconciler) addFinalizerToKueueInstance(kueue *kueuev1alpha1.Kueue) error {
+	return c.updateFinalizer(kueue, true)
+}
+
+func (c *TargetConfigReconciler) removeFinalizerFromKueueInstance(kueue *kueuev1alpha1.Kueue) error {
+	return c.updateFinalizer(kueue, false)
 }
 
 func (c *TargetConfigReconciler) cleanUpWebhooks(ctx context.Context) error {
@@ -466,61 +493,8 @@ func (c *TargetConfigReconciler) cleanUpWebhooks(ctx context.Context) error {
 			if err != nil {
 				klog.Errorf("Failed to delete %s %s: %v", webhook.name, name, err)
 				errorList = append(errorList, err)
-			} else {
-				klog.Infof("%s %s deleted successfully.", webhook.name, name)
 			}
-		}
-	}
-
-	if len(errorList) > 0 {
-		return utilerror.NewAggregate(errorList)
-	}
-	return nil
-}
-
-func (c *TargetConfigReconciler) cleanUpCustomResources(ctx context.Context) error {
-	var errorList []error
-	crdList, err := c.crdClient.CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		klog.Errorf("Failed to list CRDs: %v", err)
-		return err
-	}
-
-	for _, crd := range crdList.Items {
-
-		if !strings.Contains(crd.Name, "kueue") || crd.Name == "kueues.operator.openshift.io" {
-			continue
-		}
-
-		gvr := schema.GroupVersionResource{
-			Group:    crd.Spec.Group,
-			Version:  crd.Spec.Versions[0].Name,
-			Resource: crd.Spec.Names.Plural,
-		}
-
-		klog.Infof("Fetching instances of CR type: %s", crd.Name)
-
-		crList, err := c.dynamicClient.Resource(gvr).Namespace("").List(ctx, metav1.ListOptions{})
-		if err != nil {
-			klog.Errorf("Failed to list instances of %s: %v", crd.Name, err)
-			errorList = append(errorList, err)
-			continue
-		}
-
-		for _, cr := range crList.Items {
-			klog.Infof("Deleting Custom Resource: %s/%s", cr.GetNamespace(), cr.GetName())
-
-			err := retry.OnError(retry.DefaultBackoff, errors.IsTooManyRequests, func() error {
-				return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-					return c.dynamicClient.Resource(gvr).Namespace(cr.GetNamespace()).Delete(ctx, cr.GetName(), metav1.DeleteOptions{})
-				})
-			})
-			if err != nil {
-				klog.Errorf("Failed to delete CR %s/%s: %v", cr.GetNamespace(), cr.GetName(), err)
-				errorList = append(errorList, err)
-			} else {
-				klog.Infof("Successfully deleted CR: %s/%s", cr.GetNamespace(), cr.GetName())
-			}
+			klog.Infof("%s %s deleted successfully.", webhook.name, name)
 		}
 	}
 
@@ -544,7 +518,7 @@ func (c *TargetConfigReconciler) cleanUpCertificatesAndIssuers(ctx context.Conte
 			Resource: resource,
 		}
 
-		crList, err := c.dynamicClient.Resource(gvr).Namespace("").List(ctx, metav1.ListOptions{})
+		crList, err := c.dynamicClient.Resource(gvr).Namespace(c.operatorNamespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			klog.Errorf("Failed to list instances of %s: %v", resource, err)
 			errorList = append(errorList, err)
