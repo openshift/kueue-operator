@@ -59,6 +59,14 @@ integrations:
 internalCertManagement:
   enable: false
 kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
 manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
@@ -96,6 +104,14 @@ integrations:
 internalCertManagement:
   enable: false
 kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
 manageJobsWithoutQueueName: true
 metrics:
   bindAddress: :8443
@@ -133,6 +149,14 @@ integrations:
 internalCertManagement:
   enable: false
 kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
 manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
@@ -174,6 +198,14 @@ integrations:
 internalCertManagement:
   enable: false
 kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
 manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
