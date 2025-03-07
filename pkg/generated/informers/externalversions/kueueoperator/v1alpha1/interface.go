@@ -40,5 +40,5 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // Kueues returns a KueueInformer.
 func (v *version) Kueues() KueueInformer {
-	return &kueueInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &kueueInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

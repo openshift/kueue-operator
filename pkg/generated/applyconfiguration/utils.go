@@ -31,6 +31,10 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=operator.openshift.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithKind("FairSharing"):
+		return &kueueoperatorv1alpha1.FairSharingApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("Integrations"):
+		return &kueueoperatorv1alpha1.IntegrationsApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Kueue"):
 		return &kueueoperatorv1alpha1.KueueApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueConfiguration"):
@@ -39,6 +43,14 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1alpha1.KueueOperandSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueStatus"):
 		return &kueueoperatorv1alpha1.KueueStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("RequeuingStrategy"):
+		return &kueueoperatorv1alpha1.RequeuingStrategyApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("Resources"):
+		return &kueueoperatorv1alpha1.ResourcesApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ResourceTransformation"):
+		return &kueueoperatorv1alpha1.ResourceTransformationApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("WaitForPodsReady"):
+		return &kueueoperatorv1alpha1.WaitForPodsReadyApplyConfiguration{}
 
 	}
 	return nil

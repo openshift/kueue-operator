@@ -35,8 +35,8 @@ type KueueV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *KueueV1alpha1Client) Kueues(namespace string) KueueInterface {
-	return newKueues(c, namespace)
+func (c *KueueV1alpha1Client) Kueues() KueueInterface {
+	return newKueues(c)
 }
 
 // NewForConfig creates a new KueueV1alpha1Client for the given config.
