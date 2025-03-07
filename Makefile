@@ -135,7 +135,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.17.1
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+	GOBIN=$(LOCALBIN) go install -mod=mod sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
@@ -179,4 +179,4 @@ sync-manifests:
 GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	GOBIN=$(LOCALBIN) GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
+	GOBIN=$(LOCALBIN) GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
