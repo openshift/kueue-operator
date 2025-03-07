@@ -60,24 +60,8 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-03-02T17:37:57Z"
+    createdAt: "2025-03-07T19:51:36Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
-    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
-    console.openshift.io/operator-monitoring-default: "true"
-    features.operators.openshift.io/cnf: "false"
-    features.operators.openshift.io/cni: "false"
-    features.operators.openshift.io/csi: "false"
-    features.operators.openshift.io/disconnected: "true"
-    features.operators.openshift.io/fips-compliant: "true"
-    features.operators.openshift.io/proxy-aware: "false"
-    features.operators.openshift.io/tls-profiles: "false"
-    features.operators.openshift.io/token-auth-aws: "false"
-    features.operators.openshift.io/token-auth-azure: "false"
-    features.operators.openshift.io/token-auth-gcp: "false"
-    operatorframework.io/cluster-monitoring: "true"
-    operatorframework.io/suggested-namespace: openshift-kueue-operator
-    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.33.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: kueue-operator.v0.0.1
   namespace: placeholder
@@ -240,7 +224,7 @@ spec:
       deployments:
       - name: openshift-kueue-operator
         spec:
-          replicas: 1
+          replicas: 2
           selector:
             matchLabels:
               name: openshift-kueue-operator
@@ -263,8 +247,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:8fa0a889ee461ebd6b5e2aaa1972a1cfccb7ab5b96e17a5ab8bc7a48714d2b27
-                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:c675b15b873f26e890784c9fc40ffc2e3dbee701f8b6b719a1d4247f8d127d32
+                  value: quay.io/kevin-oss/kueue:mar7-1232
+                image: quay.io/kevin-oss/kueue-operator:mar7-1230
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -302,13 +286,15 @@ spec:
   - kueue-operator
   links:
   - name: Kueue Operator
-    url: https://github.com/openshift/kueue-operator
+    url: https://kueue-operator.domain
+  maintainers:
+  - email: your@email.com
+    name: Maintainer Name
   maturity: alpha
   provider:
-    name: Red Hat, Inc
-    url: https://github.com/openshift/kueue-operator
+    name: Provider Name
+    url: https://your.domain
   relatedImages:
-  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:8fa0a889ee461ebd6b5e2aaa1972a1cfccb7ab5b96e17a5ab8bc7a48714d2b27
+  - image: quay.io/kevin-oss/kueue:mar7-1232
     name: operand-image
   version: 0.0.1
-  minKubeVersion: 1.28.0
