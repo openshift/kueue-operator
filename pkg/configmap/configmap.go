@@ -19,6 +19,7 @@ package configmap
 import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/component-base/config/v1alpha1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
@@ -78,6 +79,9 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 					"ClusterQueue.kueue.x-k8s.io":   1,
 					"ResourceFlavor.kueue.x-k8s.io": 1,
 				},
+			},
+			LeaderElection: &v1alpha1.LeaderElectionConfiguration{
+				LeaderElect: ptr.To(true),
 			},
 		},
 		WaitForPodsReady:             kueueCfg.WaitForPodsReady,
