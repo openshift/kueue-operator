@@ -3,15 +3,15 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: kueues.operator.openshift.io
+  name: kueue.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
     kind: Kueue
     listKind: KueueList
-    plural: kueues
+    plural: kueue
     singular: kueue
-  scope: Namespaced
+  scope: Cluster
   versions:
     - name: v1alpha1
       schema:
