@@ -542,7 +542,6 @@ func (c *TargetConfigReconciler) cleanUpCertificatesAndIssuers(ctx context.Conte
 			}
 		}
 	}
-
 	if len(errorList) > 0 {
 		return utilerror.NewAggregate(errorList)
 	}
