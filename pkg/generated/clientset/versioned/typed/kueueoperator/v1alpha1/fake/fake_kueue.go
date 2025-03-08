@@ -30,11 +30,11 @@ type fakeKueues struct {
 	Fake *FakeKueueV1alpha1
 }
 
-func newFakeKueues(fake *FakeKueueV1alpha1, namespace string) typedkueueoperatorv1alpha1.KueueInterface {
+func newFakeKueues(fake *FakeKueueV1alpha1) typedkueueoperatorv1alpha1.KueueInterface {
 	return &fakeKueues{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.Kueue, *v1alpha1.KueueList, *kueueoperatorv1alpha1.KueueApplyConfiguration](
 			fake.Fake,
-			namespace,
+			"",
 			v1alpha1.SchemeGroupVersion.WithResource("kueues"),
 			v1alpha1.SchemeGroupVersion.WithKind("Kueue"),
 			func() *v1alpha1.Kueue { return &v1alpha1.Kueue{} },
