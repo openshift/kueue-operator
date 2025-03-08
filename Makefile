@@ -51,8 +51,7 @@ test-e2e: ginkgo
 	${GINKGO} -v ./test/e2e/...
 
 regen-crd:
-	go build -o $(LOCALBIN)/controller-gen ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
-	$(LOCALBIN)/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 	cp manifests/operator.openshift.io_kueues.yaml manifests/kueue-operator.crd.yaml
 	cp manifests/kueue-operator.crd.yaml deploy/crd/kueue-operator.crd.yaml
 	cp deploy/crd/kueue-operator.crd.yaml test/e2e/bindata/assets/00_kueue-operator.crd.yaml
@@ -61,12 +60,12 @@ regen-crd:
 generate: manifests code-gen generate-clients
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+manifests: ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 
 .PHONY: code-gen
-code-gen: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: generate-clients
 generate-clients:
@@ -125,17 +124,8 @@ lint: golangci-lint ## Run golangci-lint linter
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix --timeout 30m
 
-## Tool Binaries
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
-
 ## Tool Versions
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
-
-.PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install -mod=mod sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.61.0
