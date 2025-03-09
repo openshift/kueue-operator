@@ -38,6 +38,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -99,7 +101,145 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 		})
 	})
+
+	When("cleaning up Kueue resources", func() {
+		var (
+			kueueName      = "cluster"
+			kueueClientset *kueueclient.Clientset
+			kubeClientset  *kubernetes.Clientset
+			dynamicClient  dynamic.Interface
+		)
+
+		BeforeEach(func() {
+			kueueClientset = getKueueClient()
+			kubeClientset = getKubeClientOrDie()
+			dynamicClient = getDynamicClient()
+		})
+
+		It("should delete Kueue instance and verify cleanup", func() {
+			ctx := context.TODO()
+
+			_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+
+			err = kueueClientset.KueueV1alpha1().Kueues(namespace).Delete(ctx, kueueName, metav1.DeleteOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to delete Kueue instance")
+
+			Eventually(func() error {
+				_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+				if err == nil {
+					return fmt.Errorf("Kueue instance %s still exists", kueueName)
+				}
+
+				clusterRoles, _ := kubeClientset.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
+				klog.Infof("Verifying removal of Cluster Roles")
+				for _, role := range clusterRoles.Items {
+					if strings.Contains(role.Name, "kueue") && role.Name != "openshift-kueue-operator" {
+						return fmt.Errorf("ClusterRole %s still exists", role.Name)
+					}
+				}
+
+				clusterRoleBindings, _ := kubeClientset.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+				klog.Infof("Verifying removal of Cluster Role Bindings")
+				for _, binding := range clusterRoleBindings.Items {
+					if strings.Contains(binding.Name, "kueue") && binding.Name != "openshift-kueue-operator" {
+						return fmt.Errorf("ClusterRoleBinding %s still exists", binding.Name)
+					}
+				}
+
+				mutatingwebhooks, _ := kubeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+				klog.Infof("Verifying removal of Mutating Webhooks")
+				for _, wh := range mutatingwebhooks.Items {
+					if strings.Contains(wh.Name, "kueue") {
+						return fmt.Errorf("MutatingWebhookConfiguration %s still exists", wh.Name)
+					}
+				}
+
+				validatingwebhooks, _ := kubeClientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+				klog.Infof("Verifying removal of Validating Webhooks")
+				for _, wh := range validatingwebhooks.Items {
+					if strings.Contains(wh.Name, "kueue") {
+						return fmt.Errorf("ValidatingWebhookConfiguration %s still exists", wh.Name)
+					}
+				}
+
+				certManagerResources := []string{"certificates", "issuers"}
+				for _, resource := range certManagerResources {
+					gvr := schema.GroupVersionResource{
+						Group:    "cert-manager.io",
+						Version:  "v1",
+						Resource: resource,
+					}
+
+					klog.Infof("Verifying removal of %s instances", resource)
+
+					crList, err := dynamicClient.Resource(gvr).Namespace("").List(ctx, metav1.ListOptions{})
+					if err != nil {
+						return fmt.Errorf("Failed to list instances of %s: %v", resource, err)
+					}
+
+					if len(crList.Items) > 0 {
+						return fmt.Errorf("%s instances still exist", resource)
+					}
+				}
+
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Resources were not cleaned up properly")
+		})
+
+		It("should redeploy Kueue instance and verify pod is ready", func() {
+			ctx := context.TODO()
+
+			klog.Infof("Redeploying Kueue instance by applying 08_kueue_default.yaml")
+			requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(ssv1.SchemeGroupVersion), bindata.MustAsset("assets/08_kueue_default.yaml"))
+			Expect(err).ToNot(HaveOccurred(), "Failed to decode 08_kueue_default.yaml")
+
+			requiredSS := requiredObj.(*ssv1.Kueue)
+			_, err = kueueClientset.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to create Kueue instance")
+
+			Eventually(func() error {
+				_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+				return err
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Kueue instance was not created successfully")
+
+			Eventually(func() error {
+				podItems, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					klog.Errorf("Unable to list pods: %v", err)
+					return nil
+				}
+				for _, pod := range podItems.Items {
+					if !strings.HasPrefix(pod.Name, "kueue-") {
+						continue
+					}
+					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
+					if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil {
+						return nil
+					}
+				}
+				return fmt.Errorf("pod is not ready")
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "kueue pod failed to be ready")
+		})
+	})
 })
+
+func getDynamicClient() dynamic.Interface {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		klog.Errorf("Unable to build config: %v", err)
+		os.Exit(1)
+	}
+
+	client, err := dynamic.NewForConfig(config)
+	if err != nil {
+		klog.Errorf("Unable to build dynamic client: %v", err)
+		os.Exit(1)
+	}
+
+	return client
+}
 
 func getKubeClientOrDie() *kubernetes.Clientset {
 	kubeconfig := os.Getenv("KUBECONFIG")
