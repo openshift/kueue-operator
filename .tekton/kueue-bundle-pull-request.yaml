@@ -18,6 +18,15 @@ metadata:
   name: kueue-bundle-on-pull-request
   namespace: kueue-operator-tenant
 spec:
+  taskRunSpecs:
+    - pipelineTaskName: sast-coverity-check
+      stepSpecs:
+        - name: postprocess
+          computeResources:
+            requests:
+              memory: 16Gi
+            limits:
+              memory: 16Gi
   params:
   - name: git-url
     value: '{{source_url}}'

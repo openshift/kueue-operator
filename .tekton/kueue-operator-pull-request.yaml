@@ -29,6 +29,15 @@ spec:
     value: 5d
   - name: dockerfile
     value: /Dockerfile
+  taskRunSpecs:
+    - pipelineTaskName: sast-coverity-check
+      stepSpecs:
+        - name: postprocess
+          computeResources:
+            requests:
+              memory: 16Gi
+            limits:
+              memory: 16Gi
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while reducing network traffic.
