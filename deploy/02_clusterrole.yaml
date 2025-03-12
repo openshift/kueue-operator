@@ -8,6 +8,7 @@ rules:
     resources:
       - kueues
       - kueues/status
+      - kueues/finalizers
     verbs:
       - create
       - delete
