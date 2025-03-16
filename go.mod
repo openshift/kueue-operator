@@ -8,7 +8,7 @@ replace sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0
 
 require (
 	github.com/google/go-cmp v0.6.0
-	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20250305225826-b8da3bfeaf77
 	github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2
