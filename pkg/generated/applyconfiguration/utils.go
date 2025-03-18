@@ -31,6 +31,13 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=operator.openshift.io, Version=v1alpha1
+<<<<<<< HEAD
+=======
+	case v1alpha1.SchemeGroupVersion.WithKind("ExternalFramework"):
+		return &kueueoperatorv1alpha1.ExternalFrameworkApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("Integrations"):
+		return &kueueoperatorv1alpha1.IntegrationsApplyConfiguration{}
+>>>>>>> 507d954 (auto generated code)
 	case v1alpha1.SchemeGroupVersion.WithKind("Kueue"):
 		return &kueueoperatorv1alpha1.KueueApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueConfiguration"):
@@ -39,6 +46,11 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1alpha1.KueueOperandSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueStatus"):
 		return &kueueoperatorv1alpha1.KueueStatusApplyConfiguration{}
+<<<<<<< HEAD
+=======
+	case v1alpha1.SchemeGroupVersion.WithKind("LabelKeys"):
+		return &kueueoperatorv1alpha1.LabelKeysApplyConfiguration{}
+>>>>>>> 507d954 (auto generated code)
 
 	}
 	return nil

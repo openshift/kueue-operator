@@ -52,7 +52,7 @@ test-e2e: ginkgo
 
 regen-crd:
 	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
-	cp manifests/operator.openshift.io_kueues.yaml manifests/kueue-operator.crd.yaml
+	cp manifests/operator.openshift.io_kueue.yaml manifests/kueue-operator.crd.yaml
 	cp manifests/kueue-operator.crd.yaml deploy/crd/kueue-operator.crd.yaml
 	cp deploy/crd/kueue-operator.crd.yaml test/e2e/bindata/assets/00_kueue-operator.crd.yaml
 

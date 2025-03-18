@@ -9,10 +9,8 @@ import (
 
 // Kueue is the CRD to represent the Kueue operator
 // This CRD defines the configuration that the Kueue
-// Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
-// +openshift:compatibility-gen:level=4
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=kueue,scope=Cluster
+// +kubebuilder:resource:scope=Cluster
 // +k8s:openapi-gen=true
 // +genclient
 // +genclient:nonNamespaced

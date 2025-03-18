@@ -17,6 +17,7 @@ limitations under the License.
 
 package v1alpha1
 
+<<<<<<< HEAD
 import (
 	kueueoperatorv1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -34,6 +35,12 @@ type KueueConfigurationApplyConfiguration struct {
 	ManagedJobsNamespaceSelector *v1.LabelSelectorApplyConfiguration                     `json:"managedJobsNamespaceSelector,omitempty"`
 	FairSharing                  *v1beta1.FairSharing                                    `json:"fairSharing,omitempty"`
 	DisableMetrics               *bool                                                   `json:"disableMetrics,omitempty"`
+=======
+// KueueConfigurationApplyConfiguration represents a declarative configuration of the KueueConfiguration type for use
+// with apply.
+type KueueConfigurationApplyConfiguration struct {
+	Integrations *IntegrationsApplyConfiguration `json:"integrations,omitempty"`
+>>>>>>> 507d954 (auto generated code)
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -42,6 +49,7 @@ func KueueConfiguration() *KueueConfigurationApplyConfiguration {
 	return &KueueConfigurationApplyConfiguration{}
 }
 
+<<<<<<< HEAD
 // WithWaitForPodsReady sets the WaitForPodsReady field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the WaitForPodsReady field is set to the value of the last call.
@@ -50,6 +58,8 @@ func (b *KueueConfigurationApplyConfiguration) WithWaitForPodsReady(value v1beta
 	return b
 }
 
+=======
+>>>>>>> 507d954 (auto generated code)
 // WithIntegrations sets the Integrations field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Integrations field is set to the value of the last call.
@@ -57,6 +67,7 @@ func (b *KueueConfigurationApplyConfiguration) WithIntegrations(value v1beta1.In
 	b.Integrations = &value
 	return b
 }
+<<<<<<< HEAD
 
 // WithFeatureGates puts the entries into the FeatureGates field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
@@ -111,3 +122,5 @@ func (b *KueueConfigurationApplyConfiguration) WithDisableMetrics(value bool) *K
 	b.DisableMetrics = &value
 	return b
 }
+=======
+>>>>>>> 507d954 (auto generated code)

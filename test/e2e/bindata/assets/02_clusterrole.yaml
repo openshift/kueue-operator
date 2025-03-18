@@ -6,8 +6,8 @@ rules:
   - apiGroups:
       - operator.openshift.io
     resources:
-      - kueues
-      - kueues/status
+      - kueue
+      - kueue/status
     verbs:
       - create
       - delete
