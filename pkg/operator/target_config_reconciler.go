@@ -818,6 +818,20 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 	for _, file := range files {
 		assetPath := filepath.Join(crdDir, file)
 		required := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
+
+		isAlphaVersion := false
+		for _, version := range required.Spec.Versions {
+			if strings.HasPrefix(version.Name, "v1alpha") {
+				isAlphaVersion = true
+				break
+			}
+		}
+
+		if isAlphaVersion {
+			klog.Infof("Skipping installation of alpha CRD: %s", required.Name)
+			continue
+		}
+
 		required.OwnerReferences = []metav1.OwnerReference{
 			ownerReference,
 		}

@@ -34,6 +34,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -99,6 +100,40 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				return fmt.Errorf("pod is not ready")
 			}, operatorReadyTime, operatorPoll).Should(Succeed(), "kueue pod failed to be ready")
 
+		})
+
+		It("Verifying that no v1alpha Kueue CRDs are installed", func() {
+			Eventually(func() error {
+				ctx := context.TODO()
+				crdList, err := getApiExtensionKubeClient().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
+				if err != nil {
+					klog.Errorf("Failed to list CRDs: %v", err)
+					return err
+				}
+
+				var kueueCRDs []apiextensionsv1.CustomResourceDefinition
+
+				for _, crd := range crdList.Items {
+					if strings.Contains(crd.Name, "kueue") {
+						if crd.Name != "kueues.operator.openshift.io" {
+							kueueCRDs = append(kueueCRDs, crd)
+						}
+					}
+				}
+
+				if len(kueueCRDs) == 0 {
+					return fmt.Errorf("no kueue CRDs found")
+				}
+
+				for _, crd := range kueueCRDs {
+					for _, version := range crd.Spec.Versions {
+						if strings.HasPrefix(version.Name, "v1alpha") {
+							return fmt.Errorf("unexpected v1alpha CRD installed: %s", crd.Name)
+						}
+					}
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Unexpected v1alpha CRD is installed")
 		})
 	})
 
