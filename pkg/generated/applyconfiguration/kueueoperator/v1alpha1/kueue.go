@@ -37,10 +37,9 @@ type KueueApplyConfiguration struct {
 
 // Kueue constructs a declarative configuration of the Kueue type for use with
 // apply.
-func Kueue(name, namespace string) *KueueApplyConfiguration {
+func Kueue(name string) *KueueApplyConfiguration {
 	b := &KueueApplyConfiguration{}
 	b.WithName(name)
-	b.WithNamespace(namespace)
 	b.WithKind("Kueue")
 	b.WithAPIVersion("operator.openshift.io/v1alpha1")
 	return b
@@ -75,7 +74,6 @@ func extractKueue(kueue *kueueoperatorv1alpha1.Kueue, fieldManager string, subre
 		return nil, err
 	}
 	b.WithName(kueue.Name)
-	b.WithNamespace(kueue.Namespace)
 
 	b.WithKind("Kueue")
 	b.WithAPIVersion("operator.openshift.io/v1alpha1")

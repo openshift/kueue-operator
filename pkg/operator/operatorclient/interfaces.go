@@ -18,7 +18,6 @@ import (
 	applyconfiguration "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	kueueapplyconfiguration "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration/kueueoperator/v1alpha1"
 	operatorconfigclientv1alpha1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1alpha1"
-	"github.com/openshift/kueue-operator/pkg/namespace"
 )
 
 const (
@@ -39,7 +38,7 @@ func (c KueueClient) Informer() cache.SharedIndexInformer {
 }
 
 func (c KueueClient) GetOperatorState() (spec *operatorv1.OperatorSpec, status *operatorv1.OperatorStatus, resourceVersion string, err error) {
-	instance, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.Kueues().Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -55,7 +54,7 @@ func (c KueueClient) GetOperatorStateWithQuorum(ctx context.Context) (*operatorv
 }
 
 func (c *KueueClient) UpdateOperatorSpec(ctx context.Context, resourceVersion string, spec *operatorv1.OperatorSpec) (out *operatorv1.OperatorSpec, newResourceVersion string, err error) {
-	original, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	original, err := c.OperatorClient.Kueues().Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -63,7 +62,7 @@ func (c *KueueClient) UpdateOperatorSpec(ctx context.Context, resourceVersion st
 	copy.ResourceVersion = resourceVersion
 	copy.Spec.OperatorSpec = *spec
 
-	ret, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Update(ctx, copy, v1.UpdateOptions{})
+	ret, err := c.OperatorClient.Kueues().Update(ctx, copy, v1.UpdateOptions{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -72,7 +71,7 @@ func (c *KueueClient) UpdateOperatorSpec(ctx context.Context, resourceVersion st
 }
 
 func (c *KueueClient) UpdateOperatorStatus(ctx context.Context, resourceVersion string, status *operatorv1.OperatorStatus) (out *operatorv1.OperatorStatus, err error) {
-	original, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	original, err := c.OperatorClient.Kueues().Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +79,7 @@ func (c *KueueClient) UpdateOperatorStatus(ctx context.Context, resourceVersion 
 	copy.ResourceVersion = resourceVersion
 	copy.Status.OperatorStatus = *status
 
-	ret, err := c.OperatorClient.Kueues(namespace.GetNamespace()).UpdateStatus(ctx, copy, v1.UpdateOptions{})
+	ret, err := c.OperatorClient.Kueues().UpdateStatus(ctx, copy, v1.UpdateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +87,7 @@ func (c *KueueClient) UpdateOperatorStatus(ctx context.Context, resourceVersion 
 }
 
 func (c *KueueClient) GetObjectMeta() (meta *metav1.ObjectMeta, err error) {
-	instance, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.Kueues().Get(c.Ctx, OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -103,10 +102,10 @@ func (c *KueueClient) ApplyOperatorSpec(ctx context.Context, fieldManager string
 	desiredSpec := &kueueapplyconfiguration.KueueOperandSpecApplyConfiguration{
 		OperatorSpecApplyConfiguration: *desiredConfiguration,
 	}
-	desired := kueueapplyconfiguration.Kueue(OperatorConfigName, namespace.GetNamespace())
+	desired := kueueapplyconfiguration.Kueue(OperatorConfigName)
 	desired.WithSpec(desiredSpec)
 
-	instance, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.Kueues().Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 	// do nothing and proceed with the apply
@@ -122,7 +121,7 @@ func (c *KueueClient) ApplyOperatorSpec(ctx context.Context, fieldManager string
 		}
 	}
 
-	_, err = c.OperatorClient.Kueues(namespace.GetNamespace()).Apply(ctx, desired, v1.ApplyOptions{
+	_, err = c.OperatorClient.Kueues().Apply(ctx, desired, v1.ApplyOptions{
 		Force:        true,
 		FieldManager: fieldManager,
 	})
@@ -141,10 +140,10 @@ func (c *KueueClient) ApplyOperatorStatus(ctx context.Context, fieldManager stri
 	desiredStatus := &kueueapplyconfiguration.KueueStatusApplyConfiguration{
 		OperatorStatusApplyConfiguration: *desiredConfiguration,
 	}
-	desired := kueueapplyconfiguration.Kueue(OperatorConfigName, namespace.GetNamespace())
+	desired := kueueapplyconfiguration.Kueue(OperatorConfigName)
 	desired.WithStatus(desiredStatus)
 
-	instance, err := c.OperatorClient.Kueues(namespace.GetNamespace()).Get(ctx, OperatorConfigName, metav1.GetOptions{})
+	instance, err := c.OperatorClient.Kueues().Get(ctx, OperatorConfigName, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 		// do nothing and proceed with the apply
@@ -166,7 +165,7 @@ func (c *KueueClient) ApplyOperatorStatus(ctx context.Context, fieldManager stri
 		}
 	}
 
-	_, err = c.OperatorClient.Kueues(namespace.GetNamespace()).ApplyStatus(ctx, desired, v1.ApplyOptions{
+	_, err = c.OperatorClient.Kueues().ApplyStatus(ctx, desired, v1.ApplyOptions{
 		Force:        true,
 		FieldManager: fieldManager,
 	})
