@@ -32,6 +32,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
+	batchv1 "k8s.io/api/batch/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -257,7 +258,126 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, operatorReadyTime, operatorPoll).Should(Succeed(), "kueue pod failed to be ready")
 		})
 	})
+
+	When("enable webhook via opt-in namespaces", func() {
+		var (
+			testNamespaceWithLabel    = "kueue-managed-test"
+			testNamespaceWithoutLabel = "kueue-unmanaged-test"
+			labelKey                  = "kueue.openshift.io/managed"
+			labelValue                = "true"
+			kubeClientset             *kubernetes.Clientset
+		)
+
+		BeforeAll(func() {
+			kubeClientset = getKubeClientOrDie()
+			var err error
+			// Create namespaces
+			_, err = kubeClientset.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespaceWithLabel,
+					Labels: map[string]string{
+						labelKey: labelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = kubeClientset.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespaceWithoutLabel,
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterAll(func() {
+			_ = kubeClientset.CoreV1().Namespaces().Delete(context.TODO(), testNamespaceWithLabel, metav1.DeleteOptions{})
+			_ = kubeClientset.CoreV1().Namespaces().Delete(context.TODO(), testNamespaceWithoutLabel, metav1.DeleteOptions{})
+		})
+
+		It("should apply webhooks only to labeled namespaces", func() {
+			Eventually(func() error {
+				validatingWebhooks, err := kubeClientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(context.TODO(), metav1.ListOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to list validating webhooks")
+				for _, vwhlist := range validatingWebhooks.Items {
+					for _, wh := range vwhlist.Webhooks {
+						if strings.HasPrefix(wh.Name, "v") && strings.Contains(wh.Name, ".kb.io") {
+							Expect(wh.NamespaceSelector).NotTo(BeNil(), "validating webhook %s has nil namespace selector", wh.Name)
+							Expect(wh.NamespaceSelector.MatchExpressions).To(
+								ContainElement(metav1.LabelSelectorRequirement{
+									Key:      labelKey,
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{labelValue},
+								}),
+								"validating webhook %s missing required selector", wh.Name,
+							)
+						}
+					}
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			Eventually(func() error {
+				mutatingWebhooks, err := kubeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(context.TODO(), metav1.ListOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to list mutating webhooks")
+				for _, mwhlist := range mutatingWebhooks.Items {
+					for _, wh := range mwhlist.Webhooks {
+						if strings.HasPrefix(wh.Name, "m") && strings.Contains(wh.Name, ".kb.io") {
+							Expect(wh.NamespaceSelector).NotTo(BeNil(), "mutating webhook %s has nil namespace selector", wh.Name)
+							Expect(wh.NamespaceSelector.MatchExpressions).To(
+								ContainElement(metav1.LabelSelectorRequirement{
+									Key:      labelKey,
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{labelValue},
+								}),
+								"mutating webhook %s missing required selector", wh.Name,
+							)
+						}
+					}
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+			jobWithLabel := createTestJob(testNamespaceWithLabel)
+			createdJob, err := kubeClientset.BatchV1().Jobs(testNamespaceWithLabel).Create(context.TODO(), jobWithLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdJob.Annotations).To(
+				HaveKey(labelKey),
+				"Job in labeled namespace should have Kueue annotation",
+			)
+
+			// Test unlabeled namespace
+			jobWithoutLabel := createTestJob(testNamespaceWithoutLabel)
+			createdJob, err = kubeClientset.BatchV1().Jobs(testNamespaceWithoutLabel).Create(context.TODO(), jobWithoutLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdJob.Annotations).NotTo(
+				HaveKey(labelKey),
+				"Job in unlabeled namespace should NOT have Kueue annotation",
+			)
+		})
+	})
 })
+
+func createTestJob(namespace string) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-job-",
+			Namespace:    namespace,
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test-container",
+							Image: "nginx",
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
+}
 
 func getDynamicClient() dynamic.Interface {
 	kubeconfig := os.Getenv("KUBECONFIG")

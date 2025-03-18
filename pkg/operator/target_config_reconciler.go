@@ -160,6 +160,8 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	c.defaultKueueSpec(kueue)
+
 	ownerReference := metav1.OwnerReference{
 		APIVersion: "operator.openshift.io/v1alpha1",
 		Kind:       "Kueue",
@@ -617,6 +619,19 @@ func (c *TargetConfigReconciler) cleanUpClusterRoleBindings(ctx context.Context)
 	return nil
 }
 
+func (c *TargetConfigReconciler) defaultKueueSpec(kueue *kueuev1alpha1.Kueue) {
+	if kueue.Spec.Config.ManagedJobsNamespaceSelector == nil {
+		kueue.Spec.Config.ManagedJobsNamespaceSelector = &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      "kueue.openshift.io/managed",
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"true"},
+				},
+			},
+		}
+	}
+}
 func (c *TargetConfigReconciler) manageConfigMap(kueue *kueuev1alpha1.Kueue) (*v1.ConfigMap, bool, error) {
 	required, err := c.kubeClient.CoreV1().ConfigMaps(c.operatorNamespace).Get(context.TODO(), KueueConfigMap, metav1.GetOptions{})
 
