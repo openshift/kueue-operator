@@ -33,7 +33,7 @@ func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentW
 	// if there is a pod based webhook, we need to safely enabled it
 	// For now we will not modify this
 	for _, val := range kueueCfg.Integrations.Frameworks {
-		if val == "pod" || val == "deployment" || val == "statefulset" {
+		if val == kueue.KueueIntegrationPod || val == kueue.KueueIntegrationDeployment || val == kueue.KueueIntegrationStatefulSet {
 			return currentWebhook
 		}
 	}
@@ -53,7 +53,7 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 	// if there is a pod based webhook, we need to safely enabled it
 	// For now we will not modify this
 	for _, val := range kueueCfg.Integrations.Frameworks {
-		if val == "pod" || val == "deployment" || val == "statefulset" {
+		if val == kueue.KueueIntegrationPod || val == kueue.KueueIntegrationDeployment || val == kueue.KueueIntegrationStatefulSet {
 			return currentWebhook
 		}
 	}

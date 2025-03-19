@@ -24,9 +24,9 @@ import (
 // IntegrationsApplyConfiguration represents a declarative configuration of the Integrations type for use
 // with apply.
 type IntegrationsApplyConfiguration struct {
-	Frameworks         []kueueoperatorv1alpha1.KueueIntegrations `json:"frameworks,omitempty"`
-	ExternalFrameworks []ExternalFrameworkApplyConfiguration     `json:"externalFrameworks,omitempty"`
-	LabelKeysToCopy    []LabelKeysApplyConfiguration             `json:"labelKeysToCopy,omitempty"`
+	Frameworks         []kueueoperatorv1alpha1.KueueIntegration `json:"frameworks,omitempty"`
+	ExternalFrameworks []ExternalFrameworkApplyConfiguration    `json:"externalFrameworks,omitempty"`
+	LabelKeysToCopy    []LabelKeysApplyConfiguration            `json:"labelKeysToCopy,omitempty"`
 }
 
 // IntegrationsApplyConfiguration constructs a declarative configuration of the Integrations type for use with
@@ -38,7 +38,7 @@ func Integrations() *IntegrationsApplyConfiguration {
 // WithFrameworks adds the given value to the Frameworks field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Frameworks field.
-func (b *IntegrationsApplyConfiguration) WithFrameworks(values ...kueueoperatorv1alpha1.KueueIntegrations) *IntegrationsApplyConfiguration {
+func (b *IntegrationsApplyConfiguration) WithFrameworks(values ...kueueoperatorv1alpha1.KueueIntegration) *IntegrationsApplyConfiguration {
 	for i := range values {
 		b.Frameworks = append(b.Frameworks, values[i])
 	}

@@ -20,7 +20,3 @@ package v1alpha1
 // KueueListerExpansion allows custom methods to be added to
 // KueueLister.
 type KueueListerExpansion interface{}
-
-// KueueNamespaceListerExpansion allows custom methods to be added to
-// KueueNamespaceLister.
-type KueueNamespaceListerExpansion interface{}
