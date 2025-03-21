@@ -17,6 +17,8 @@ limitations under the License.
 package configmap
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/config/v1alpha1"
@@ -44,16 +46,59 @@ func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev
 	return cfgMap, nil
 }
 
-func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
-	managedJobsConversion := ptr.Deref(kueueCfg.ManageJobsWithoutQueueName, kueue.QueueName)
-	managedJobsBool := false
-	if managedJobsConversion == kueue.QueueName {
-		managedJobsBool = false
-	} else if managedJobsConversion == kueue.NoQueueName {
-		managedJobsBool = true
-	} else {
-		managedJobsBool = false
+func mapOperatorIntegrationsToKueue(integrations *kueue.Integrations) *configapi.Integrations {
+
+	return &configapi.Integrations{
+		Frameworks:         buildFrameworkList(integrations.Frameworks),
+		ExternalFrameworks: buildExternalFrameworkList(integrations.ExternalFrameworks),
+		LabelKeysToCopy:    buildLabelKeysCopy(integrations.LabelKeysToCopy),
 	}
+}
+
+func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
+	// Upstream kueue uses lowercase names for these.
+	// This does not fit our api review so we are converted before building it into
+	// the configmap.
+	conversionMap := map[string]string{}
+	conversionMap[string(kueue.KueueIntegrationBatchJob)] = "batchv1/job"
+	conversionMap[string(kueue.KueueIntegrationMPIJob)] = "kubeflow.org/mpijob"
+	conversionMap[string(kueue.KueueIntegrationRayJob)] = "ray.io/rayjob"
+	conversionMap[string(kueue.KueueIntegrationRayCluster)] = "ray.io/raycluster"
+	conversionMap[string(kueue.KueueIntegrationJobSet)] = "jobset.x-k8s.io/jobset"
+	conversionMap[string(kueue.KueueIntegrationPaddeJob)] = "kubeflow.org/paddlejob"
+	conversionMap[string(kueue.KueueIntegrationPyTorchJob)] = "kubeflow.org/pytorchjob"
+	conversionMap[string(kueue.KueueIntegrationTFJob)] = "kubeflow.org/tfjob"
+	conversionMap[string(kueue.KueueIntegrationXGBoostJob)] = "kubeflow.org/xgboostjob"
+	conversionMap[string(kueue.KueueIntegrationAppWrapper)] = "workload.codeflare.dev/appwrapper"
+	conversionMap[string(kueue.KueueIntegrationPod)] = "pod"
+	conversionMap[string(kueue.KueueIntegrationDeployment)] = "deployment"
+	conversionMap[string(kueue.KueueIntegrationLeaderWorkerSet)] = "leaderworkerset.x-k8s.io/leaderworkerset"
+	conversionMap[string(kueue.KueueIntegrationStatefulSet)] = "statefulset"
+
+	ret := []string{}
+	for _, val := range kueuelist {
+		ret = append(ret, conversionMap[string(val)])
+	}
+	return ret
+}
+
+func buildExternalFrameworkList(kueuelist []kueue.ExternalFramework) []string {
+	ret := []string{}
+	for _, val := range kueuelist {
+		ret = append(ret, fmt.Sprintf("%s.%s.%s", val.Resource, val.Version, val.Group))
+	}
+	return ret
+}
+
+func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
+	ret := []string{}
+	for _, val := range labelKeys {
+		ret = append(ret, val.Key)
+	}
+	return ret
+}
+
+func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -84,15 +129,9 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				LeaderElect: ptr.To(true),
 			},
 		},
-		WaitForPodsReady:             kueueCfg.WaitForPodsReady,
-		ManageJobsWithoutQueueName:   managedJobsBool,
-		FairSharing:                  kueueCfg.FairSharing,
-		ManagedJobsNamespaceSelector: kueueCfg.ManagedJobsNamespaceSelector,
-		Integrations:                 &kueueCfg.Integrations,
+		Integrations: mapOperatorIntegrationsToKueue(&kueueCfg.Integrations),
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
-		Resources:    kueueCfg.Resources,
-		FeatureGates: kueueCfg.FeatureGates,
 	}
 }

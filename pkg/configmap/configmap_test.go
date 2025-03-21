@@ -22,8 +22,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
-	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
@@ -34,10 +32,10 @@ func TestBuildConfigMap(t *testing.T) {
 		wantCfgMap    *corev1.ConfigMap
 		wantErr       error
 	}{
-		"simple configuration": {
+		"batch job example": {
 			configuration: kueue.KueueConfiguration{
-				Integrations: configapi.Integrations{
-					Frameworks: []string{"batch.job"},
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
 				},
 			},
 			wantCfgMap: &corev1.ConfigMap{
@@ -55,7 +53,7 @@ health:
   healthProbeBindAddress: :8081
 integrations:
   frameworks:
-  - batch.job
+  - batchv1/job
 internalCertManagement:
   enable: false
 kind: Configuration
@@ -78,11 +76,10 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"managed jobs without queue name": {
+		"rhoai example": {
 			configuration: kueue.KueueConfiguration{
-				ManageJobsWithoutQueueName: ptr.To(kueue.NoQueueName),
-				Integrations: configapi.Integrations{
-					Frameworks: []string{"batch.job"},
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayJob, kueue.KueueIntegrationRayCluster, kueue.KueueIntegrationPyTorchJob},
 				},
 			},
 			wantCfgMap: &corev1.ConfigMap{
@@ -100,52 +97,9 @@ health:
   healthProbeBindAddress: :8081
 integrations:
   frameworks:
-  - batch.job
-internalCertManagement:
-  enable: false
-kind: Configuration
-leaderElection:
-  leaderElect: true
-  leaseDuration: 0s
-  renewDeadline: 0s
-  resourceLock: ""
-  resourceName: ""
-  resourceNamespace: ""
-  retryPeriod: 0s
-manageJobsWithoutQueueName: true
-metrics:
-  bindAddress: :8443
-  enableClusterQueueResources: true
-webhook:
-  port: 9443
-`,
-				},
-			},
-			wantErr: nil,
-		},
-		"managed jobs with queue name": {
-			configuration: kueue.KueueConfiguration{
-				ManageJobsWithoutQueueName: ptr.To(kueue.QueueName),
-				Integrations: configapi.Integrations{
-					Frameworks: []string{"batch.job"},
-				},
-			},
-			wantCfgMap: &corev1.ConfigMap{
-				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
-controller:
-  groupKindConcurrency:
-    ClusterQueue.kueue.x-k8s.io: 1
-    Job.batch: 5
-    LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
-    ResourceFlavor.kueue.x-k8s.io: 1
-    Workload.kueue.x-k8s.io: 5
-health:
-  healthProbeBindAddress: :8081
-integrations:
-  frameworks:
-  - batch.job
+  - ray.io/rayjob
+  - ray.io/raycluster
+  - kubeflow.org/pytorchjob
 internalCertManagement:
   enable: false
 kind: Configuration
@@ -168,13 +122,11 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"feature gates": {
+
+		"serving workloads": {
 			configuration: kueue.KueueConfiguration{
-				FeatureGates: map[string]bool{
-					"LocalQueueMetrics": true,
-				},
-				Integrations: configapi.Integrations{
-					Frameworks: []string{"batch.job"},
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationDeployment, kueue.KueueIntegrationPod, kueue.KueueIntegrationStatefulSet, kueue.KueueIntegrationAppWrapper, kueue.KueueIntegrationLeaderWorkerSet},
 				},
 			},
 			wantCfgMap: &corev1.ConfigMap{
@@ -188,13 +140,15 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  LocalQueueMetrics: true
 health:
   healthProbeBindAddress: :8081
 integrations:
   frameworks:
-  - batch.job
+  - deployment
+  - pod
+  - statefulset
+  - workload.codeflare.dev/appwrapper
+  - leaderworkerset.x-k8s.io/leaderworkerset
 internalCertManagement:
   enable: false
 kind: Configuration

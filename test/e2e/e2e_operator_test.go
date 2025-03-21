@@ -154,14 +154,14 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		It("should delete Kueue instance and verify cleanup", func() {
 			ctx := context.TODO()
 
-			_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+			_, err := kueueClientset.KueueV1alpha1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 
-			err = kueueClientset.KueueV1alpha1().Kueues(namespace).Delete(ctx, kueueName, metav1.DeleteOptions{})
+			err = kueueClientset.KueueV1alpha1().Kueues().Delete(ctx, kueueName, metav1.DeleteOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to delete Kueue instance")
 
 			Eventually(func() error {
-				_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+				_, err := kueueClientset.KueueV1alpha1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
 				if err == nil {
 					return fmt.Errorf("Kueue instance %s still exists", kueueName)
 				}
@@ -230,11 +230,11 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to decode 08_kueue_default.yaml")
 
 			requiredSS := requiredObj.(*ssv1.Kueue)
-			_, err = kueueClientset.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
+			_, err = kueueClientset.KueueV1alpha1().Kueues().Create(ctx, requiredSS, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to create Kueue instance")
 
 			Eventually(func() error {
-				_, err := kueueClientset.KueueV1alpha1().Kueues(namespace).Get(ctx, kueueName, metav1.GetOptions{})
+				_, err := kueueClientset.KueueV1alpha1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
 				return err
 			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Kueue instance was not created successfully")
 
@@ -413,7 +413,7 @@ func deployOperator() error {
 					return err
 				}
 				requiredSS := requiredObj.(*ssv1.Kueue)
-				_, err = ssClient.KueueV1alpha1().Kueues(requiredSS.Namespace).Create(ctx, requiredSS, metav1.CreateOptions{})
+				_, err = ssClient.KueueV1alpha1().Kueues().Create(ctx, requiredSS, metav1.CreateOptions{})
 				return err
 			},
 		},

@@ -27,8 +27,8 @@ type FakeKueueV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeKueueV1alpha1) Kueues(namespace string) v1alpha1.KueueInterface {
-	return newFakeKueues(c, namespace)
+func (c *FakeKueueV1alpha1) Kueues() v1alpha1.KueueInterface {
+	return newFakeKueues(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
