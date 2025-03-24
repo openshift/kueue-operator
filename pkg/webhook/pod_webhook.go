@@ -63,10 +63,7 @@ func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentW
 
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForWebhook(wh.Name, "v")
-		if isCoreKueueWebhook(framework) {
-			// Always include core Kueue objects.
-			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
-		} else if enabledFrameworks[framework] {
+		if isCoreKueueWebhook(framework) || enabledFrameworks[framework] {
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -91,10 +88,7 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForWebhook(wh.Name, "m")
-		if isCoreKueueWebhook(framework) {
-			// Always include core Kueue objects.
-			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
-		} else if enabledFrameworks[framework] {
+		if isCoreKueueWebhook(framework) || enabledFrameworks[framework] {
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -110,6 +104,14 @@ func isCoreKueueWebhook(framework string) bool {
 func isPodBased(framework string) bool {
 	switch framework {
 	case "pod", "deployment", "statefulset":
+		return true
+	}
+	return false
+}
+
+func isClusterScopedFramework(framework string) bool {
+	switch framework {
+	case "kueue.x-k8s.io/clusterqueue", "kueue.x-k8s.io/resourceflavor", "kueue.x-k8s.io/cohort":
 		return true
 	}
 	return false
@@ -160,17 +162,23 @@ func mergeNamespaceSelectors(webhook interface{}, podSelector *metav1.LabelSelec
 	switch wh := webhook.(type) {
 	case *admissionregistrationv1.ValidatingWebhookConfiguration:
 		for i := range wh.Webhooks {
-			wh.Webhooks[i].NamespaceSelector = mergeSelectors(
-				podSelector,
-				wh.Webhooks[i].NamespaceSelector,
-			)
+			framework := getFrameworkForWebhook(wh.Webhooks[i].Name, "v")
+			if !isClusterScopedFramework(framework) {
+				wh.Webhooks[i].NamespaceSelector = mergeSelectors(
+					podSelector,
+					wh.Webhooks[i].NamespaceSelector,
+				)
+			}
 		}
 	case *admissionregistrationv1.MutatingWebhookConfiguration:
 		for i := range wh.Webhooks {
-			wh.Webhooks[i].NamespaceSelector = mergeSelectors(
-				podSelector,
-				wh.Webhooks[i].NamespaceSelector,
-			)
+			framework := getFrameworkForWebhook(wh.Webhooks[i].Name, "m")
+			if !isClusterScopedFramework(framework) {
+				wh.Webhooks[i].NamespaceSelector = mergeSelectors(
+					podSelector,
+					wh.Webhooks[i].NamespaceSelector,
+				)
+			}
 		}
 	}
 }

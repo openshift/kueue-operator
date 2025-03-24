@@ -1533,6 +1533,17 @@ sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset/typed/migration/
 # sigs.k8s.io/kueue v0.10.2
 ## explicit; go 1.23.0
 sigs.k8s.io/kueue/apis/config/v1beta1
+sigs.k8s.io/kueue/apis/kueue/v1alpha1
+sigs.k8s.io/kueue/apis/kueue/v1beta1
+sigs.k8s.io/kueue/apis/visibility/v1beta1
+sigs.k8s.io/kueue/client-go/applyconfiguration/kueue/v1alpha1
+sigs.k8s.io/kueue/client-go/applyconfiguration/kueue/v1beta1
+sigs.k8s.io/kueue/client-go/applyconfiguration/visibility/v1beta1
+sigs.k8s.io/kueue/client-go/clientset/versioned
+sigs.k8s.io/kueue/client-go/clientset/versioned/scheme
+sigs.k8s.io/kueue/client-go/clientset/versioned/typed/kueue/v1alpha1
+sigs.k8s.io/kueue/client-go/clientset/versioned/typed/kueue/v1beta1
+sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta1
 # sigs.k8s.io/structured-merge-diff/v4 v4.4.3
 ## explicit; go 1.13
 sigs.k8s.io/structured-merge-diff/v4/fieldpath
