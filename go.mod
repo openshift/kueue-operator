@@ -10,9 +10,9 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
-	github.com/openshift/api v0.0.0-20250313134101-8a7efbfb5316
+	github.com/openshift/api v0.0.0-20250320115527-3aa9dd5b9002
 	github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2
-	github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a
+	github.com/openshift/client-go v0.0.0-20250324153519-f0faeb0f2f2e
 	github.com/openshift/library-go v0.0.0-20250228164547-bad2d1bf3a37
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.74.0
 	github.com/prometheus/client_golang v1.20.5
@@ -28,7 +28,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.19.3
 	sigs.k8s.io/controller-tools v0.4.1
 	sigs.k8s.io/kueue v0.10.2
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.3
+	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
 	sigs.k8s.io/yaml v1.4.0
 )
 
