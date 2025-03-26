@@ -66,7 +66,33 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 				},
 			},
 			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
-				Webhooks: []admissionregistrationv1.ValidatingWebhook{},
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{
+						Name: "vpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"env": "prod"},
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
+					{
+						Name: "vdeployment.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		"pod integration disabled (no selector)": {
@@ -82,7 +108,10 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 				},
 			},
 			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
-				Webhooks: []admissionregistrationv1.ValidatingWebhook{},
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vpod.kb.io"},
+					{Name: "vdeployment.kb.io"},
+				},
 			},
 		},
 		"non-pod framework with selector": {
@@ -175,7 +204,33 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 				},
 			},
 			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
-				Webhooks: []admissionregistrationv1.MutatingWebhook{},
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name: "mpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"env": "staging"},
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
+					{
+						Name: "mstatefulset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		"mixed framework types": {
@@ -201,6 +256,18 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 			},
 			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
 				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name: "mpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
 					{
 						Name: "mrayjob.kb.io",
 						NamespaceSelector: &metav1.LabelSelector{

@@ -55,15 +55,12 @@ func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentW
 	podSelector := kueueCfg.ManagedJobsNamespaceSelector
 
 	for _, fw := range kueueCfg.Integrations.Frameworks {
-		if isPodBased(fw) {
-			continue
-		}
 		enabledFrameworks[fw] = true
 	}
 
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForWebhook(wh.Name, "v")
-		if isCoreKueueWebhook(framework) || enabledFrameworks[framework] {
+		if enabledFrameworks[framework] {
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -80,15 +77,12 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 	podSelector := kueueCfg.ManagedJobsNamespaceSelector
 
 	for _, fw := range kueueCfg.Integrations.Frameworks {
-		if isPodBased(fw) {
-			continue
-		}
 		enabledFrameworks[fw] = true
 	}
 
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForWebhook(wh.Name, "m")
-		if isCoreKueueWebhook(framework) || enabledFrameworks[framework] {
+		if enabledFrameworks[framework] {
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -99,14 +93,6 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 
 func isCoreKueueWebhook(framework string) bool {
 	return strings.HasPrefix(framework, "kueue.x-k8s.io/")
-}
-
-func isPodBased(framework string) bool {
-	switch framework {
-	case "pod", "deployment", "statefulset":
-		return true
-	}
-	return false
 }
 
 func isClusterScopedFramework(framework string) bool {

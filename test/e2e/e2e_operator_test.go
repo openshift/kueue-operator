@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	batchv1 "k8s.io/api/batch/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/types"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -44,6 +46,7 @@ import (
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -51,11 +54,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
+	"k8s.io/utils/ptr"
 	//+kubebuilder:scaffold:imports
 )
 
 const (
-	operatorReadyTime time.Duration = 2 * time.Minute
+	// sometimes kueue deployment takes a while
+	operatorReadyTime time.Duration = 3 * time.Minute
 	operatorPoll                    = 10 * time.Second
 	operatorNamespace               = "openshift-kueue-operator"
 )
@@ -274,6 +279,34 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}
 			_, err = kueueClient.KueueV1beta1().LocalQueues(testNamespaceWithLabel).Create(context.TODO(), lq, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+
+			nodes, err := kubeClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, node := range nodes.Items {
+				nodeCopy := node.DeepCopy()
+				if nodeCopy.Labels == nil {
+					nodeCopy.Labels = make(map[string]string)
+				}
+				nodeCopy.Labels["kueue.x-k8s.io/default-flavor"] = "true"
+
+				patchData := map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": nodeCopy.Labels,
+					},
+				}
+				patchBytes, _ := json.Marshal(patchData)
+
+				_, err = kubeClientset.CoreV1().Nodes().Patch(
+					context.TODO(),
+					node.Name,
+					types.StrategicMergePatchType,
+					patchBytes,
+					metav1.PatchOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred(), "failed to label node %s", node.Name)
+			}
+
 			rf := &kueuev1beta1.ResourceFlavor{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
@@ -344,6 +377,171 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				job, _ := kubeClientset.BatchV1().Jobs(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledJob.Name, metav1.GetOptions{})
 				return &job.Status
 			}, operatorReadyTime, operatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not started in unlabeled namespace")
+		})
+		It("should manage pods only in labeled namespaces", func() {
+			// Verify webhook configuration
+			Eventually(func() error {
+				validateWebhookConfig(kubeClientset, labelKey, labelValue)
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			// Test labeled namespace
+			By("creating pod in labeled namespace")
+			podWithLabel := createTestPod(testNamespaceWithLabel, testQueue)
+			createdPod, err := kubeClientset.CoreV1().Pods(testNamespaceWithLabel).Create(context.TODO(), podWithLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify Kueue creates a Workload
+			var workload *kueuev1beta1.Workload
+			Eventually(func() error {
+				workloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdPod.UID)),
+				})
+				if err != nil {
+					return err
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("no workload found")
+				}
+				workload = &workloads.Items[0]
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			// Verify workload gets admitted
+			Eventually(func() bool {
+				updatedWorkload, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).Get(context.TODO(), workload.Name, metav1.GetOptions{})
+				if err != nil {
+					return false
+				}
+				return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted)
+			}, operatorReadyTime, operatorPoll).Should(BeTrue(), "Workload not admitted")
+
+			By("creating pod in unlabeled namespace")
+			podWithoutLabel := createTestPod(testNamespaceWithoutLabel, testQueue)
+			createdUnlabeledPod, err := kubeClientset.CoreV1().Pods(testNamespaceWithoutLabel).Create(context.TODO(), podWithoutLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify pod starts normally (no Kueue interference)
+			Eventually(func() corev1.PodPhase {
+				pod, _ := kubeClientset.CoreV1().Pods(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledPod.Name, metav1.GetOptions{})
+				return pod.Status.Phase
+			}, operatorReadyTime, operatorPoll).Should(Equal(corev1.PodRunning), "Pod not running in unlabeled namespace")
+		})
+		It("should manage deployments only in labeled namespaces", func() {
+			// Verify webhook configuration
+			Eventually(func() error {
+				validateWebhookConfig(kubeClientset, labelKey, labelValue)
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			By("creating deployment in labeled namespace")
+			deployWithLabel := createTestDeployment(testNamespaceWithLabel, testQueue)
+			createdDeploy, err := kubeClientset.AppsV1().Deployments(testNamespaceWithLabel).Create(context.TODO(), deployWithLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get the deployment's pod
+			var deploymentPod *corev1.Pod
+			Eventually(func() error {
+				pods, err := kubeClientset.CoreV1().Pods(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
+					LabelSelector: "app=test",
+				})
+				if err != nil || len(pods.Items) == 0 {
+					return fmt.Errorf("no pods found for deployment")
+				}
+				deploymentPod = &pods.Items[0]
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			var workload *kueuev1beta1.Workload
+			Eventually(func() error {
+				workloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(deploymentPod.UID)),
+				})
+				if err != nil {
+					return err
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("no workload found")
+				}
+				workload = &workloads.Items[0]
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			Eventually(func() bool {
+				updatedWorkload, _ := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).Get(context.TODO(), workload.Name, metav1.GetOptions{})
+				return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted)
+			}, operatorReadyTime, operatorPoll).Should(BeTrue(), "Workload not admitted")
+
+			By("verifying deployment pods are available")
+			Eventually(func() int32 {
+				deploy, _ := kubeClientset.AppsV1().Deployments(testNamespaceWithLabel).Get(context.TODO(), createdDeploy.Name, metav1.GetOptions{})
+				return deploy.Status.AvailableReplicas
+			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "Deployment not available")
+
+			By("creating deployment in unlabeled namespace")
+			deployWithoutLabel := createTestDeployment(testNamespaceWithoutLabel, testQueue)
+			createdUnlabeledDeploy, err := kubeClientset.AppsV1().Deployments(testNamespaceWithoutLabel).Create(context.TODO(), deployWithoutLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() int32 {
+				deploy, _ := kubeClientset.AppsV1().Deployments(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledDeploy.Name, metav1.GetOptions{})
+				return deploy.Status.AvailableReplicas
+			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "Deployment in unlabeled namespace not available")
+		})
+		It("should manage statefulsets only in labeled namespaces", func() {
+			By("creating statefulset in labeled namespace")
+			ssWithLabel := createTestStatefulSet(testNamespaceWithLabel, testQueue)
+			createdSS, err := kubeClientset.AppsV1().StatefulSets(testNamespaceWithLabel).Create(context.TODO(), ssWithLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Wait for StatefulSet to create pod
+			var ssPod *corev1.Pod
+			Eventually(func() error {
+				pods, err := kubeClientset.CoreV1().Pods(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
+					LabelSelector: "app=test",
+				})
+				if err != nil || len(pods.Items) == 0 {
+					return fmt.Errorf("no pods found for statefulset")
+				}
+				ssPod = &pods.Items[0]
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			var workload *kueuev1beta1.Workload
+			Eventually(func() error {
+				workloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(ssPod.UID)),
+				})
+				if err != nil {
+					return err
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("no workload found")
+				}
+				workload = &workloads.Items[0]
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			Eventually(func() bool {
+				updatedWorkload, _ := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).Get(context.TODO(), workload.Name, metav1.GetOptions{})
+				return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted)
+			}, operatorReadyTime, operatorPoll).Should(BeTrue(), "Workload not admitted")
+
+			By("verifying statefulset pods are running")
+			Eventually(func() int32 {
+				ss, _ := kubeClientset.AppsV1().StatefulSets(testNamespaceWithLabel).Get(context.TODO(), createdSS.Name, metav1.GetOptions{})
+				return ss.Status.ReadyReplicas
+			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "StatefulSet not ready")
+
+			By("creating statefulset in unlabeled namespace")
+			ssWithoutLabel := createTestStatefulSet(testNamespaceWithoutLabel, testQueue)
+			createdUnlabeledSS, err := kubeClientset.AppsV1().StatefulSets(testNamespaceWithoutLabel).Create(context.TODO(), ssWithoutLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() int32 {
+				ss, _ := kubeClientset.AppsV1().StatefulSets(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledSS.Name, metav1.GetOptions{})
+				return ss.Status.ReadyReplicas
+			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "StatefulSet in unlabeled namespace not ready")
 		})
 	})
 
@@ -469,6 +667,47 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 	})
 })
 
+func createTestPod(namespace, queue string) *corev1.Pod {
+	allowPrivilegeEscalation := false
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-pod-",
+			Namespace:    namespace,
+			Annotations: map[string]string{
+				"kueue.x-k8s.io/queue-name": queue,
+			},
+		},
+		Spec: corev1.PodSpec{
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(true),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyNever,
+			Containers: []corev1.Container{
+				{
+					Name:    "test-container",
+					Image:   "busybox",
+					Command: []string{"sh", "-c", "echo Hello Kueue; sleep 3600"},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &allowPrivilegeEscalation,
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func createTestJob(namespace, queueName string) *batchv1.Job {
 	labels := map[string]string{}
 	if namespace == "kueue-managed-test" {
@@ -497,6 +736,84 @@ func createTestJob(namespace, queueName string) *batchv1.Job {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
+}
+
+func createTestStatefulSet(namespace, queue string) *appsv1.StatefulSet {
+	var replicas int32 = 1
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-ss-",
+			Namespace:    namespace,
+			Annotations: map[string]string{
+				"kueue.x-k8s.io/queue-name": queue,
+			},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: ptr.To(replicas),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "test"},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "test"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "test-container",
+							Image:   "busybox",
+							Command: []string{"sh", "-c", "sleep 3600"},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("1"),
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createTestDeployment(namespace, queue string) *appsv1.Deployment {
+	var replicas int32 = 1
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-deploy-",
+			Namespace:    namespace,
+			Annotations: map[string]string{
+				"kueue.x-k8s.io/queue-name": queue,
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(replicas),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "test"},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "test"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "test-container",
+							Image:   "busybox",
+							Command: []string{"sh", "-c", "sleep 3600"},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("1"),
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+						},
+					},
 				},
 			},
 		},
