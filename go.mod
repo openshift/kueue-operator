@@ -2,7 +2,7 @@ module github.com/openshift/kueue-operator
 
 go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.24.1
 
 replace sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
 
