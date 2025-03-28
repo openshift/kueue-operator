@@ -4,7 +4,6 @@ all: build
 # Include the library makefile
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
-	targets/openshift/images.mk \
 	targets/openshift/deps.mk \
 )
 
@@ -33,14 +32,6 @@ CODEGEN_GROUPS_VERSION :=kueue:v1alpha1
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
-
-# This will call a macro called "build-image" which will generate image specific targets based on the parameters:
-# $0 - macro name
-# $1 - target name
-# $2 - image ref
-# $3 - Dockerfile path
-# $4 - context directory for image build
-$(call build-image,ocp-kueue-operator,$(IMAGE_REGISTRY)/ocp/4.19:kueue-operator, ./Dockerfile,.)
 
 $(call verify-golang-versions,Dockerfile)
 
@@ -92,6 +83,10 @@ undeploy-ocp:
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
 	oc apply -f hack/manifests/cert-manager-rh.yaml
+
+.PHONY: deploy-upstream-cert-manager
+deploy-upstream-cert-manager:
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.17.0/cert-manager.yaml
 
 # Below targets require you to login to your registry
 .PHONY: operator-build
