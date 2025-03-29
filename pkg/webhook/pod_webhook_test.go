@@ -22,7 +22,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 
 	"github.com/google/go-cmp/cmp"
-	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
@@ -36,7 +35,7 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 	}{
 		"all kinds of pod integration": {
 			configuration: kueue.KueueConfiguration{
-				Integrations: configapi.Integrations{Frameworks: []string{"pod", "deployment", "statefulset"}},
+				Integrations: kueue.Integrations{Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod, kueue.KueueIntegrationDeployment, kueue.KueueIntegrationStatefulSet}},
 			},
 			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
 				Webhooks: []admissionregistrationv1.ValidatingWebhook{
@@ -67,7 +66,7 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 		},
 		"job integration; drop all pod integrations": {
 			configuration: kueue.KueueConfiguration{
-				Integrations: configapi.Integrations{Frameworks: []string{"batch/job"}},
+				Integrations: kueue.Integrations{Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob}},
 			},
 			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
 				Webhooks: []admissionregistrationv1.ValidatingWebhook{
@@ -113,7 +112,7 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 	}{
 		"all kinds of pod integration": {
 			configuration: kueue.KueueConfiguration{
-				Integrations: configapi.Integrations{Frameworks: []string{"pod", "deployment", "statefulset"}},
+				Integrations: kueue.Integrations{Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod, kueue.KueueIntegrationDeployment, kueue.KueueIntegrationStatefulSet}},
 			},
 			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
 				Webhooks: []admissionregistrationv1.MutatingWebhook{
@@ -144,7 +143,7 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 		},
 		"job integration; drop all pod integration webhook": {
 			configuration: kueue.KueueConfiguration{
-				Integrations: configapi.Integrations{Frameworks: []string{"batch/job"}},
+				Integrations: kueue.Integrations{Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob}},
 			},
 			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
 				Webhooks: []admissionregistrationv1.MutatingWebhook{
