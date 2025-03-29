@@ -102,14 +102,6 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 	return newWebhook
 }
 
-func isPodBased(framework string) bool {
-	switch framework {
-	case "pod", "deployment", "statefulset":
-		return true
-	}
-	return false
-}
-
 func isClusterScopedFramework(framework string) bool {
 	switch framework {
 	case annotationClusterQueue, annotationResourceFlavor, annotationCohort:
