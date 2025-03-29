@@ -215,6 +215,12 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	_, _, err = c.manageMetricsCertificateCR(c.ctx, kueue)
+	if err != nil {
+		klog.Errorf("unable to manage metrics certificate err: %v", err)
+		return err
+	}
+
 	resourceVersion := "0"
 	cm, _, err := c.manageConfigMap(kueue)
 	if err != nil {
@@ -851,6 +857,28 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.K
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
+
+	// Add metrics certificate volume.
+	metricsCertVolume := v1.Volume{
+		Name: "metrics-certs",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: "metrics-server-cert",
+			},
+		},
+	}
+	required.Spec.Template.Spec.Volumes = append(required.Spec.Template.Spec.Volumes, metricsCertVolume)
+
+	// Add volume mount to the container.
+	metricsCertVolumeMount := v1.VolumeMount{
+		Name:      "metrics-certs",
+		MountPath: "/etc/kueue/metrics/certs",
+		ReadOnly:  true,
+	}
+	required.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+		required.Spec.Template.Spec.Containers[0].VolumeMounts,
+		metricsCertVolumeMount,
+	)
 	// Add HA configuration for Kueue deployment.
 	var replicas int32 = 2
 	required.Spec.Replicas = ptr.To(replicas)
@@ -1008,6 +1036,46 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 				"issuerRef": map[string]interface{}{
 					"name": "selfsigned",
 				},
+			},
+		},
+	}
+
+	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
+}
+
+func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
+	gvr := schema.GroupVersionResource{
+		Group:    "cert-manager.io",
+		Version:  "v1",
+		Resource: "certificates",
+	}
+
+	metricsServiceName := fmt.Sprintf("kueue-controller-manager.%s.svc", c.operatorNamespace)
+	required := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "cert-manager.io/v1",
+			"kind":       "Certificate",
+			"metadata": map[string]interface{}{
+				"ownerReferences": []interface{}{
+					map[string]interface{}{
+						"apiVersion": "operator.openshift.io/v1alpha1",
+						"kind":       "Kueue",
+						"name":       kueue.Name,
+						"uid":        string(kueue.UID),
+					},
+				},
+				"name":      "metrics-certs",
+				"namespace": c.operatorNamespace,
+			},
+			"spec": map[string]interface{}{
+				"dnsNames": []interface{}{
+					metricsServiceName,
+				},
+				"issuerRef": map[string]interface{}{
+					"kind": "Issuer",
+					"name": "selfsigned",
+				},
+				"secretName": "metrics-server-cert",
 			},
 		},
 	}
