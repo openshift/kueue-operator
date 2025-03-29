@@ -154,9 +154,9 @@ func (c TargetConfigReconciler) sync() error {
 		return fmt.Errorf("please make sure that cert-manager is installed on your cluster")
 	}
 
-	kueue, err := c.operatorClient.Kueues(c.operatorNamespace).Get(c.ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
+	kueue, err := c.operatorClient.Kueues().Get(c.ctx, operatorclient.OperatorConfigName, metav1.GetOptions{})
 	if err != nil {
-		klog.ErrorS(err, "unable to get operator configuration", "namespace", c.operatorNamespace, "kueue", operatorclient.OperatorConfigName)
+		klog.ErrorS(err, "unable to get operator configuration", "kueue", operatorclient.OperatorConfigName)
 		return err
 	}
 
@@ -261,16 +261,18 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["rolebinding/leader-election"] = resourceVersion
 
-	if !ptr.Deref(kueue.Spec.Config.DisableMetrics, false) {
-		if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
-			klog.Error("unable to create role prometheus")
-			return err
-		}
+	// TODO: We need to detect if openshift-monitoring exists
+	// If it does then we should create these objects.
+	// Otherwise we skip emitting metrics for microshift or other
+	// services that do not have openshift-monitoring
+	if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
+		klog.Error("unable to create role prometheus")
+		return err
+	}
 
-		if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
-			klog.Error("unable to bind role prometheus")
-			return err
-		}
+	if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
+		klog.Error("unable to bind role prometheus")
+		return err
 	}
 
 	controllerService, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
@@ -349,11 +351,10 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
+	// TODO: metrics should autodetected if openshift-monitoring exists
 	// For microshift we cannot assume monitoring apis exist.
-	if !ptr.Deref(kueue.Spec.Config.DisableMetrics, false) {
-		if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
-			return err
-		}
+	if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
+		return err
 	}
 
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
@@ -385,7 +386,7 @@ func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1alpha1.Kueue, add
 	}
 
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		original, err := c.operatorClient.Kueues(kueue.Namespace).Get(c.ctx, kueue.Name, metav1.GetOptions{})
+		original, err := c.operatorClient.Kueues().Get(c.ctx, kueue.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -416,7 +417,7 @@ func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1alpha1.Kueue, add
 			return fmt.Errorf("failed to create patch: %w", err)
 		}
 
-		patched, err := c.operatorClient.Kueues(original.Namespace).Patch(
+		patched, err := c.operatorClient.Kueues().Patch(
 			c.ctx,
 			original.Name,
 			types.MergePatchType,

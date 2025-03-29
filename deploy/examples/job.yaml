@@ -11,4 +11,4 @@ spec:
   config:
     integrations:
       frameworks:
-      - "batch/job" 
+      - BatchJob 
