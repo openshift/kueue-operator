@@ -24,6 +24,7 @@ spec:
       containers:
       - args:
         - --config=/controller_manager_config.yaml
+        - --zap-log-level=2
         command:
         - /manager
         image: ${IMAGE}
@@ -36,14 +37,14 @@ spec:
           periodSeconds: 20
         name: manager
         ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
         - containerPort: 8082
           name: visibility
           protocol: TCP
         - containerPort: 9443
           name: webhook-server
-          protocol: TCP
-        - name: metrics
-          containerPort: 8443
           protocol: TCP
         readinessProbe:
           httpGet:
@@ -53,13 +54,16 @@ spec:
           periodSeconds: 10
         resources:
           limits:
-            cpu: 500m
+            cpu: '2'
             memory: 512Mi
           requests:
             cpu: 500m
             memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         volumeMounts:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
@@ -67,10 +71,10 @@ spec:
         - mountPath: /controller_manager_config.yaml
           name: manager-config
           subPath: controller_manager_config.yaml
-        - mountPath: /etc/secrets
-          name: kueue-metrics
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: kueue-controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
@@ -81,6 +85,3 @@ spec:
       - configMap:
           name: kueue-manager-config
         name: manager-config
-      - name: kueue-metrics
-        secret:
-          secretName: kueue-metrics

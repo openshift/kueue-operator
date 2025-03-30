@@ -67,6 +67,53 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: kueue-system
+      path: /validate-apps-v1-statefulset
+  failurePolicy: Fail
+  name: vstatefulset.kb.io
+  namespaceSelector:
+    matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - kube-system
+      - kueue-system
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - statefulsets
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: kueue-system
+      path: /validate-workload-codeflare-dev-v1beta2-appwrapper
+  failurePolicy: Fail
+  name: vappwrapper.kb.io
+  rules:
+  - apiGroups:
+    - workload.codeflare.dev
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - appwrappers
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: kueue-system
       path: /validate-batch-v1-job
   failurePolicy: Fail
   name: vjob.kb.io
@@ -100,26 +147,6 @@ webhooks:
     - UPDATE
     resources:
     - jobsets
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: kueue-system
-      path: /validate-kubeflow-org-v1-mxjob
-  failurePolicy: Fail
-  name: vmxjob.kb.io
-  rules:
-  - apiGroups:
-    - kubeflow.org
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - mxjobs
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -207,6 +234,26 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: kueue-system
+      path: /validate-leaderworkerset-x-k8s-io-v1-leaderworkerset
+  failurePolicy: Fail
+  name: vleaderworkerset.kb.io
+  rules:
+  - apiGroups:
+    - leaderworkerset.x-k8s.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - leaderworkersets
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: kueue-system
       path: /validate-kubeflow-org-v2beta1-mpijob
   failurePolicy: Fail
   name: vmpijob.kb.io
@@ -260,26 +307,6 @@ webhooks:
     - UPDATE
     resources:
     - rayjobs
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: kueue-system
-      path: /validate-apps-v1-statefulset
-  failurePolicy: Fail
-  name: vstatefulset.kb.io
-  rules:
-  - apiGroups:
-    - apps
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - statefulsets
   sideEffects: None
 - admissionReviewVersions:
   - v1
