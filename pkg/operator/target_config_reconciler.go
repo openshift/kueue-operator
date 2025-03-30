@@ -231,7 +231,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["kueue/configmap"] = resourceVersion
 
-	sa, _, err := c.manageServiceAccount(kueue, ownerReference)
+	sa, _, err := c.manageServiceAccount(ownerReference)
 	if err != nil {
 		klog.Error("unable to manage service account")
 		return err
@@ -241,7 +241,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["serviceaccounts/kueue-operator"] = resourceVersion
 
-	leaderRole, _, err := c.manageRole(kueue, "assets/kueue-operator/role-leader-election.yaml", ownerReference)
+	leaderRole, _, err := c.manageRole("assets/kueue-operator/role-leader-election.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to create role leader-election")
 		return err
@@ -251,7 +251,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["role/role-leader-election"] = resourceVersion
 
-	roleBindingLeader, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference, true)
+	roleBindingLeader, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference, true)
 	if err != nil {
 		klog.Error("unable to bind role leader-election")
 		return err
@@ -265,17 +265,17 @@ func (c TargetConfigReconciler) sync() error {
 	// If it does then we should create these objects.
 	// Otherwise we skip emitting metrics for microshift or other
 	// services that do not have openshift-monitoring
-	if _, _, err := c.manageRole(kueue, "assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
+	if _, _, err := c.manageRole("assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
 		klog.Error("unable to create role prometheus")
 		return err
 	}
 
-	if _, _, err := c.manageRoleBindings(kueue, "assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
+	if _, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
 		klog.Error("unable to bind role prometheus")
 		return err
 	}
 
-	controllerService, _, err := c.manageService(kueue, "assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
+	controllerService, _, err := c.manageService("assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage metrics service")
 		return err
@@ -285,7 +285,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["service/controller-manager-metrics-service"] = resourceVersion
 
-	visbilityService, _, err := c.manageService(kueue, "assets/kueue-operator/visibility-server.yaml", ownerReference)
+	visbilityService, _, err := c.manageService("assets/kueue-operator/visibility-server.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage visbility service")
 		return err
@@ -295,7 +295,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["service/visibility-service"] = resourceVersion
 
-	webhookService, _, err := c.manageService(kueue, "assets/kueue-operator/webhook-service.yaml", ownerReference)
+	webhookService, _, err := c.manageService("assets/kueue-operator/webhook-service.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage webhook service")
 		return err
@@ -321,22 +321,22 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if _, _, err := c.manageOpenshiftClusterRolesBindingForKueue(kueue, ownerReference); err != nil {
+	if _, _, err := c.manageOpenshiftClusterRolesBindingForKueue(ownerReference); err != nil {
 		klog.Error("unable to manage openshift cluster roles binding")
 		return err
 	}
 
-	if _, _, err := c.manageClusterRoleBindings(kueue, "assets/kueue-operator/clusterrolebinding-proxy.yaml", ownerReference); err != nil {
+	if _, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-proxy.yaml", ownerReference); err != nil {
 		klog.Error("unable to manage kube proxy cluster roles")
 		return err
 	}
 
-	if _, _, err := c.manageClusterRoleBindings(kueue, "assets/kueue-operator/clusterrolebinding-manager.yaml", ownerReference); err != nil {
+	if _, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-manager.yaml", ownerReference); err != nil {
 		klog.Error("unable to manage cluster role kueue-manager")
 		return err
 	}
 
-	if _, _, err := c.manageClusterRoleBindings(kueue, "assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference); err != nil {
+	if _, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference); err != nil {
 		klog.Error("unable to manage cluster role kueue-manager")
 		return err
 	}
@@ -649,9 +649,9 @@ func (c *TargetConfigReconciler) buildAndApplyConfigMap(oldCfgMap *v1.ConfigMap,
 	return resourceapply.ApplyConfigMap(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, cfgMap)
 }
 
-func (c *TargetConfigReconciler) manageServiceAccount(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (*v1.ServiceAccount, bool, error) {
+func (c *TargetConfigReconciler) manageServiceAccount(ownerReference metav1.OwnerReference) (*v1.ServiceAccount, bool, error) {
 	required := resourceread.ReadServiceAccountV1OrDie(bindata.MustAsset("assets/kueue-operator/serviceaccount.yaml"))
-	required.Namespace = kueue.Namespace
+	required.Namespace = c.operatorNamespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
@@ -668,7 +668,7 @@ func (c *TargetConfigReconciler) manageMutatingWebhook(kueue *kueuev1alpha1.Kueu
 
 	newWebhook := webhook.ModifyPodBasedMutatingWebhook(kueue.Spec.Config, required)
 	for i := range newWebhook.Webhooks {
-		newWebhook.Webhooks[i].ClientConfig.Service.Namespace = kueue.Namespace
+		newWebhook.Webhooks[i].ClientConfig.Service.Namespace = c.operatorNamespace
 	}
 	newWebhook.ObjectMeta.Annotations = cert.InjectCertAnnotation(newWebhook.ObjectMeta.Annotations, c.operatorNamespace)
 	return resourceapply.ApplyMutatingWebhookConfigurationImproved(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, newWebhook, c.resourceCache)
@@ -683,57 +683,57 @@ func (c *TargetConfigReconciler) manageValidatingWebhook(kueue *kueuev1alpha1.Ku
 
 	newWebhook := webhook.ModifyPodBasedValidatingWebhook(kueue.Spec.Config, required)
 	for i := range newWebhook.Webhooks {
-		newWebhook.Webhooks[i].ClientConfig.Service.Namespace = kueue.Namespace
+		newWebhook.Webhooks[i].ClientConfig.Service.Namespace = c.operatorNamespace
 	}
 	newWebhook.ObjectMeta.Annotations = cert.InjectCertAnnotation(newWebhook.ObjectMeta.Annotations, c.operatorNamespace)
 	return resourceapply.ApplyValidatingWebhookConfigurationImproved(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, newWebhook, c.resourceCache)
 }
 
-func (c *TargetConfigReconciler) manageRoleBindings(kueue *kueuev1alpha1.Kueue, assetPath string, ownerReference metav1.OwnerReference, setServiceAccountToOperatorNamespace bool) (*rbacv1.RoleBinding, bool, error) {
+func (c *TargetConfigReconciler) manageRoleBindings(assetPath string, ownerReference metav1.OwnerReference, setServiceAccountToOperatorNamespace bool) (*rbacv1.RoleBinding, bool, error) {
 	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
 
-	required.Namespace = kueue.Namespace
+	required.Namespace = c.operatorNamespace
 	if setServiceAccountToOperatorNamespace {
 		for i := range required.Subjects {
 			if required.Subjects[i].Kind != "ServiceAccount" {
 				continue
 			}
-			required.Subjects[i].Namespace = kueue.Namespace
+			required.Subjects[i].Namespace = c.operatorNamespace
 		}
 	}
 	return resourceapply.ApplyRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageClusterRoleBindings(kueue *kueuev1alpha1.Kueue, assetDir string, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {
+func (c *TargetConfigReconciler) manageClusterRoleBindings(assetDir string, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {
 	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset(assetDir))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
-	required.Namespace = kueue.Namespace
+	required.Namespace = c.operatorNamespace
 	for i := range required.Subjects {
-		required.Subjects[i].Namespace = kueue.Namespace
+		required.Subjects[i].Namespace = c.operatorNamespace
 	}
 	return resourceapply.ApplyClusterRoleBinding(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageRole(kueue *kueuev1alpha1.Kueue, assetPath string, ownerReference metav1.OwnerReference) (*rbacv1.Role, bool, error) {
+func (c *TargetConfigReconciler) manageRole(assetPath string, ownerReference metav1.OwnerReference) (*rbacv1.Role, bool, error) {
 	required := resourceread.ReadRoleV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
-	required.Namespace = kueue.Namespace
+	required.Namespace = c.operatorNamespace
 	return resourceapply.ApplyRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageService(kueue *kueuev1alpha1.Kueue, assetPath string, ownerReference metav1.OwnerReference) (*v1.Service, bool, error) {
+func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference metav1.OwnerReference) (*v1.Service, bool, error) {
 	required := resourceread.ReadServiceV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
-	required.Namespace = kueue.Namespace
+	required.Namespace = c.operatorNamespace
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
@@ -763,7 +763,7 @@ func (c *TargetConfigReconciler) manageClusterRoles(ownerReference metav1.OwnerR
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageOpenshiftClusterRolesBindingForKueue(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {
+func (c *TargetConfigReconciler) manageOpenshiftClusterRolesBindingForKueue(ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "kueue-openshift-cluster-role-binding",
@@ -772,7 +772,7 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesBindingForKueue(kueu
 			{
 				Kind:      "ServiceAccount",
 				Name:      "kueue-controller-manager",
-				Namespace: kueue.Namespace,
+				Namespace: c.operatorNamespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -854,7 +854,7 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.Kueue, specAnnotations map[string]string, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kueue-operator/deployment.yaml"))
 	required.Name = operatorclient.OperandName
-	required.Namespace = kueueoperator.Namespace
+	required.Namespace = c.operatorNamespace
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
