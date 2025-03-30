@@ -332,7 +332,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		It("should manage jobs only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
-				validateWebhookConfig(kubeClientset, labelKey, labelValue)
+				validateWebhookConfig(kubeClientset, labelKey, labelValue, "job")
 				return nil
 			}, operatorReadyTime, operatorPoll).Should(Succeed())
 
@@ -381,7 +381,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		It("should manage pods only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
-				validateWebhookConfig(kubeClientset, labelKey, labelValue)
+				validateWebhookConfig(kubeClientset, labelKey, labelValue, "pod")
 				return nil
 			}, operatorReadyTime, operatorPoll).Should(Succeed())
 
@@ -430,7 +430,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		It("should manage deployments only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
-				validateWebhookConfig(kubeClientset, labelKey, labelValue)
+				validateWebhookConfig(kubeClientset, labelKey, labelValue, "deployment")
 				return nil
 			}, operatorReadyTime, operatorPoll).Should(Succeed())
 
@@ -489,6 +489,12 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "Deployment in unlabeled namespace not available")
 		})
 		It("should manage statefulsets only in labeled namespaces", func() {
+			// Verify webhook configuration
+			Eventually(func() error {
+				validateWebhookConfig(kubeClientset, labelKey, labelValue, "statefulset")
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
 			By("creating statefulset in labeled namespace")
 			ssWithLabel := createTestStatefulSet(testNamespaceWithLabel, testQueue)
 			createdSS, err := kubeClientset.AppsV1().StatefulSets(testNamespaceWithLabel).Create(context.TODO(), ssWithLabel, metav1.CreateOptions{})
@@ -820,10 +826,10 @@ func createTestDeployment(namespace, queue string) *appsv1.Deployment {
 	}
 }
 
-func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue string) {
+func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue, framework string) {
 	validateWebhook := func(webhooks []admissionregistrationv1.ValidatingWebhookConfiguration) {
 		for i, wh := range webhooks {
-			if strings.HasPrefix(wh.Name, "v") && strings.Contains(wh.Name, ".kb.io") {
+			if strings.HasPrefix(wh.Name, "v"+framework) && strings.Contains(wh.Name, ".kb.io") {
 				Expect(wh.Webhooks[i].NamespaceSelector).NotTo(BeNil())
 				Expect(wh.Webhooks[i].NamespaceSelector.MatchExpressions).To(
 					ContainElement(metav1.LabelSelectorRequirement{
@@ -838,7 +844,7 @@ func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValu
 
 	mutatingWebhook := func(webhooks []admissionregistrationv1.MutatingWebhookConfiguration) {
 		for i, wh := range webhooks {
-			if strings.HasPrefix(wh.Name, "m") && strings.Contains(wh.Name, ".kb.io") {
+			if strings.HasPrefix(wh.Name, "m"+framework) && strings.Contains(wh.Name, ".kb.io") {
 				Expect(wh.Webhooks[i].NamespaceSelector).NotTo(BeNil())
 				Expect(wh.Webhooks[i].NamespaceSelector.MatchExpressions).To(
 					ContainElement(metav1.LabelSelectorRequirement{
