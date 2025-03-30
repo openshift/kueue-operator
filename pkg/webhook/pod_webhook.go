@@ -55,6 +55,7 @@ var (
 		annotationWorkload:                            "workload",
 		annotationResourceFlavor:                      "resourceflavor",
 		annotationCohort:                              "cohort",
+		string(kueue.KueueIntegrationAppWrapper):      "appwrapper",
 	}
 )
 
