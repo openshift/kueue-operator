@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo/v2/reporters"
+	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	"k8s.io/client-go/kubernetes"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,8 +32,8 @@ var (
 	namespace     = ""
 	operatorImage = ""
 	kueueImage    = ""
-	kubeConfig    = ""
 	kubeClient    *kubernetes.Clientset
+	clients       *testutils.TestClients
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -49,8 +50,8 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	kubeConfig = os.Getenv("KUBECONFIG")
+	clients = testutils.NewTestClients()
 	operatorImage = os.Getenv("OPERATOR_IMAGE")
 	kueueImage = os.Getenv("KUEUE_IMAGE")
-	kubeClient = getKubeClientOrDie()
+	kubeClient = clients.KubeClient
 })
