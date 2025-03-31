@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
@@ -51,6 +52,8 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   HierarchialCohorts: false
+fairSharing:
+  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -71,6 +74,7 @@ manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -83,6 +87,8 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayJob, kueue.KueueIntegrationRayCluster, kueue.KueueIntegrationPyTorchJob},
 				},
+				GangSchedulingPolicy: &kueue.GangSchedulingPolicy{Policy: ptr.To(kueue.GangSchedulingPolicyEvictByWorkload), ByWorkload: ptr.To(kueue.GangSchedulingAdmissionOptionsParallel)},
+				Preemption:           &kueue.Preemption{PreemptionStrategy: ptr.To(kueue.PreemeptionStrategyClassical)},
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
@@ -97,6 +103,8 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   HierarchialCohorts: false
+fairSharing:
+  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -119,6 +127,62 @@ manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+waitForPodsReady:
+  blockAdmission: false
+  enable: true
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"ibm example": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationAppWrapper},
+				},
+				GangSchedulingPolicy: &kueue.GangSchedulingPolicy{Policy: ptr.To(kueue.GangSchedulingPolicyDisabled)},
+				QueueLabelPolicy:     &kueue.QueueLabelPolicy{Policy: ptr.To(kueue.QueueLabelNamePolicyOptional)},
+				Preemption:           &kueue.Preemption{PreemptionStrategy: ptr.To(kueue.PreemeptionStrategyFairsharing)},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: true
+  preemptionStrategies:
+  - LessThanOrEqualToFinalShare
+  - LessThanInitialShare
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - workload.codeflare.dev/appwrapper
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
+manageJobsWithoutQueueName: true
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -146,6 +210,8 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   HierarchialCohorts: false
+fairSharing:
+  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -170,6 +236,7 @@ manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+waitForPodsReady: {}
 webhook:
   port: 9443
 `,
