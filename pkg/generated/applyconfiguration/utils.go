@@ -39,12 +39,18 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1alpha1.KueueApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueConfiguration"):
 		return &kueueoperatorv1alpha1.KueueConfigurationApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("KueueGangSchedulingPolicy"):
+		return &kueueoperatorv1alpha1.KueueGangSchedulingPolicyApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueOperandSpec"):
 		return &kueueoperatorv1alpha1.KueueOperandSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueStatus"):
 		return &kueueoperatorv1alpha1.KueueStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("LabelKeys"):
 		return &kueueoperatorv1alpha1.LabelKeysApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("Premption"):
+		return &kueueoperatorv1alpha1.PremptionApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("QueueLabelPolicy"):
+		return &kueueoperatorv1alpha1.QueueLabelPolicyApplyConfiguration{}
 
 	}
 	return nil
