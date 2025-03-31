@@ -3,13 +3,13 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
-  name: kueues.operator.openshift.io
+  name: kueue.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
     kind: Kueue
     listKind: KueueList
-    plural: kueues
+    plural: kueue
     singular: kueue
   scope: Cluster
   versions:
@@ -57,8 +57,7 @@ spec:
                     integrations:
                       description: |-
                         integrations is a required field that configures the Kueue's workload integrations.
-                        Kueue has both standard integrations, known as job frameworks, and external integrations
-                        known as external frameworks.
+                        Kueue has both standard integrations, known as job frameworks, and external integrations known as external frameworks.
                         Kueue will only manage workloads that correspond to the specified integrations.
                       type: object
                       required:
@@ -93,7 +92,8 @@ spec:
                                 maxLength: 253
                                 minLength: 1
                                 x-kubernetes-validations:
-                                  - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$') && self.size() <= 253
+                                  - rule: self.size() == 0 || !format.dns1123Label().validate(self).hasValue()
+                                    message: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
                               resource:
                                 description: |-
                                   resource is the Resource type of the external framework.
@@ -105,7 +105,8 @@ spec:
                                 maxLength: 63
                                 minLength: 1
                                 x-kubernetes-validations:
-                                  - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') && self.size() <= 63
+                                  - rule: self.size() == 0 || !format.dns1123Label().validate(self).hasValue()
+                                    message: a lowercase RFC 1123 label must consist of lower case alphanumeric characters and '-', and must start and end with an alphanumeric character.
                               version:
                                 description: |-
                                   version is the version of the api (e.g. v1alpha1, v1beta1, v1).
@@ -116,7 +117,8 @@ spec:
                                 maxLength: 63
                                 minLength: 1
                                 x-kubernetes-validations:
-                                  - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') && self.size() <= 63
+                                  - rule: self.size() == 0 || !format.dns1035Label().validate(self).hasValue()
+                                    message: a lowercase RFC 1035 label must consist of lower case alphanumeric characters, '-' or '.', and must start with an alphabetic character and end with an alphanumeric character.
                           x-kubernetes-list-type: atomic
                         frameworks:
                           description: |-
@@ -173,10 +175,9 @@ spec:
                                 maxLength: 317
                                 minLength: 1
                                 x-kubernetes-validations:
-                                  - rule: self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$') && self.size() <= 317
+                                  - rule: '!format.qualifiedName().validate(self).hasValue()'
+                                    message: a qualified name must consist of a lower-case alphanumeric and hyphenated string of at most 63 characters in length, starting and ending with alphanumeric chracters. The name may be optionally prefixed with a subdomain consisting of lower-case alphanumeric characters, hyphens and periods, of at most 253 characters in length. Each period separated segment within the subdomain must start and end with an alphanumeric character.
                           x-kubernetes-list-type: atomic
-<<<<<<< HEAD
-=======
                     kueueGangSchedulingPolicy:
                       description: |-
                         kueueGangSchedulingPolicy controls how Kueue admits workloads.
@@ -249,7 +250,6 @@ spec:
                           enum:
                             - QueueNameRequired
                             - QueueNameOptional
->>>>>>> 22bc930 (add FairSharing, QueueLabelPolicy and GangScheduling)
                 logLevel:
                   description: |-
                     logLevel is an intent based logging for an overall component.  It does not give fine grained control, but it is a
