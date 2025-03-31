@@ -98,6 +98,44 @@ func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
 	return ret
 }
 
+func buildManagedJobsWithoutQueueName(queueLabelPolicy *kueue.QueueLabelPolicy) bool {
+	if queueLabelPolicy == nil {
+		return false
+	}
+	policy := ptr.Deref(queueLabelPolicy.Policy, kueue.QueueLabelNamePolicyRequired)
+	return policy == kueue.QueueLabelNamePolicyOptional
+}
+
+func buildWaitForPodsReady(gangSchedulingPolicy *kueue.GangSchedulingPolicy) *configapi.WaitForPodsReady {
+	if gangSchedulingPolicy == nil {
+		return &configapi.WaitForPodsReady{Enable: false}
+	}
+	policy := ptr.Deref(gangSchedulingPolicy.Policy, kueue.GangSchedulingPolicyDisabled)
+	switch policy {
+	case kueue.GangSchedulingPolicyDisabled:
+		return &configapi.WaitForPodsReady{Enable: false}
+	case kueue.GangSchedulingPolicyEvictByWorkload:
+		return &configapi.WaitForPodsReady{Enable: true, BlockAdmission: ptr.To(false)}
+	default:
+		return &configapi.WaitForPodsReady{Enable: false}
+	}
+}
+
+func buildFairSharing(preemption *kueue.Preemption) *configapi.FairSharing {
+	if preemption == nil {
+		return &configapi.FairSharing{Enable: false}
+	}
+	policy := ptr.Deref(preemption.PreemptionStrategy, kueue.PreemeptionStrategyClassical)
+	switch policy {
+	case kueue.PreemeptionStrategyClassical:
+		return &configapi.FairSharing{Enable: false}
+	case kueue.PreemeptionStrategyFairsharing:
+		return &configapi.FairSharing{Enable: true, PreemptionStrategies: []configapi.PreemptionStrategy{"LessThanOrEqualToFinalShare", "LessThanInitialShare"}}
+	default:
+		return &configapi.FairSharing{Enable: false}
+	}
+}
+
 func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
@@ -133,5 +171,8 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
+		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.QueueLabelPolicy),
+		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangSchedulingPolicy),
+		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 	}
 }
