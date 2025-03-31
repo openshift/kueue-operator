@@ -175,6 +175,81 @@ spec:
                                 x-kubernetes-validations:
                                   - rule: self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$') && self.size() <= 317
                           x-kubernetes-list-type: atomic
+<<<<<<< HEAD
+=======
+                    kueueGangSchedulingPolicy:
+                      description: |-
+                        kueueGangSchedulingPolicy controls how Kueue admits workloads.
+                        Gang Scheduling is the act of all or nothing scheduling.
+                        Kueue provides this ability.
+                        This field is optional.
+                      type: object
+                      properties:
+                        byWorkload:
+                          description: |-
+                            byWorkload controls how admission is done.
+                            When admission is set to Sequential, only pods from the currently processing workload will be admitted.
+                            Once all pods from the current workload are admitted, and ready, Kueue will process the next workload.
+                            Sequential processing may slow down admission when the cluster has sufficient capacity for multiple workloads,
+                            but provides a higher guarantee of workloads scheduling all pods together successfully.
+                            When set to Parallel, pods from any workload will be admitted at any time.
+                            This may lead to a deadlock where workloads are in contention for cluster capacity and
+                            pods from another workload having successfully scheduled prevent pods from the current workload scheduling.
+                          type: string
+                          enum:
+                            - Parallel
+                            - Sequential
+                          x-kubernetes-validations:
+                            - rule: self.policy==ByWorkload
+                              message: byWorkload is only valid if policy equals ByWorkload
+                        policy:
+                          description: |-
+                            policy allows for changing the kinds of gang scheduling Kueue does.
+                            This is an optional field.
+                            The allowed values are ByWorkload and Disabled.
+                            The default value will be Disabled.
+                            ByWorkload allows for configuration how admission is performed
+                            for Kueue.
+                          type: string
+                          enum:
+                            - ByWorkload
+                            - Disabled
+                    preemption:
+                      description: |-
+                        preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
+                        Kueue has classical preemption and preemption via fair sharing.
+                      type: object
+                      properties:
+                        preemptionStrategy:
+                          description: |-
+                            preemptionStrategy are the types of preemption kueue allows.
+                            Kueue has two types of preemption: classical and fair sharing.
+                          type: string
+                          enum:
+                            - Classical
+                            - FairSharing
+                    queueLabelPolicy:
+                      description: |-
+                        queueLabelPolicy controls how kueue manages workloads
+                        The default behavior of Kueue will manage workloads that have a queue-name label.
+                        This field is optional.
+                      type: object
+                      properties:
+                        queueLabelPolicy:
+                          description: |-
+                            queueLabelPolicy controls whether or not Kueue reconciles
+                            jobs that don't set the label kueue.x-k8s.io/queue-name.
+                            The allowed values are QueueNameRequired and QueueNameOptional.
+                            If set to QueueNameRequired, then those jobs will be suspended and never started unless
+                            they are assigned a queue and eventually admitted. This also applies to
+                            jobs created before starting the kueue controller.
+                            Defaults to QueueNameRequired; therefore, those jobs are not managed and if they are created
+                            unsuspended, they will start immediately.
+                          type: string
+                          enum:
+                            - QueueNameRequired
+                            - QueueNameOptional
+>>>>>>> 22bc930 (add FairSharing, QueueLabelPolicy and GangScheduling)
                 logLevel:
                   description: |-
                     logLevel is an intent based logging for an overall component.  It does not give fine grained control, but it is a
