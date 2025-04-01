@@ -21,14 +21,15 @@ import (
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="Kueue is a singleton, .metadata.name must be 'cluster'"
 type Kueue struct {
 	metav1.TypeMeta `json:",inline"`
-	// metadata for kueue
+	// metadata for Kueue.
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// spec holds user settable values for configuration
 	// +required
 	Spec KueueOperandSpec `json:"spec"`
-	// status holds observed values from the cluster. They may not be overridden.
+	// status holds observed values from the cluster.
+	// They may not be overridden.
 	// +optional
 	Status KueueStatus `json:"status,omitempty"`
 }
@@ -48,27 +49,30 @@ type KueueConfiguration struct {
 	// Kueue will only manage workloads that correspond to the specified integrations.
 	// +required
 	Integrations Integrations `json:"integrations"`
-	// workloadManagement controls how kueue manages workloads.
+	// workloadManagement controls how Kueue manages workloads.
 	// By default Kueue will manage workloads that have a queue-name label.
 	// Workloads that are missing the queue-name will be ignored by Kueue.
+	// If workloadManagement is not specified, the operator will decide the
+	// default.
+	// This default could change over time.
 	// This field is optional.
-	// If this field is not specified, Kueue will only manage workloads
-	// that have the queue-name label.
 	// +optional
-	WorkloadManagement *WorkloadManagement `json:"workloadManagement,omitempty"`
+	WorkloadManagement WorkloadManagement `json:"workloadManagement"`
 	// gangScheduling controls how Kueue admits workloads.
 	// Gang Scheduling is the act of all or nothing scheduling,
 	// where workloads do not become ready within a certain period, they may be evicted and later retried.
 	// This field is optional.
-	// If this field is not specified, gang scheduling will be disabled.
+	// If gangScheduling is not specified, the operator will decide the default.
+	// This default could change over time.
 	// +optional
-	GangScheduling *GangScheduling `json:"gangScheduling,omitempty"`
+	GangScheduling GangScheduling `json:"gangScheduling"`
 	// preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
 	// Kueue has classical premption and preemption via fair sharing.
-	// This field is optional.
-	// If this field is not specified, preemption will be set to Classical.
+	// preemption is optional.
+	// If preemption is not specified, the operator will decide the default.
+	// This default could change over time.
 	// +optional
-	Preemption *Preemption `json:"preemption,omitempty"`
+	Preemption Preemption `json:"preemption"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -122,10 +126,10 @@ type ExternalFramework struct {
 	// Must be a valid DNS 1123 subdomain consisting of of lower-case alphanumeric characters,
 	// hyphens and periods, of at most 253 characters in length.
 	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
-	// We are using matches and not cel functions to allow for use on 4.17.
+	// +group uses matches and not cel functions to allow for use on 4.17.
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$') && self.size() <= 253"
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$')"
 	// +required
 	Group string `json:"group"`
 	// resource is the Resource type of the external framework.
@@ -133,20 +137,20 @@ type ExternalFramework struct {
 	// Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
 	// and hyphens of at most 63 characters in length.
 	// The value must start and end with an alphanumeric character.
-	// We are using matches and not cel functions to allow for use on 4.17.
+	// +resource uses matches and not cel functions to allow for use on 4.17.
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') && self.size() <= 63"
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
 	// +required
 	Resource string `json:"resource"`
 	// version is the version of the api (e.g. v1alpha1, v1beta1, v1).
 	// Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
 	// and hyphens of at most 63 characters in length.
 	// The value must start with an alphabetic character and end with an alphanumeric character.
-	// We are using matches and not cel functions to allow for use on 4.17.
+	// +version uses matches and not cel functions to allow for use on 4.17.
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') && self.size() <= 63"
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
 	// +required
 	Version string `json:"version"`
 }
@@ -155,61 +159,65 @@ type ExternalFramework struct {
 // Kueue uses these apis to determine
 // which jobs will be managed by Kueue.
 type Integrations struct {
-	// frameworks are a unique list of names to be enabled.
-	// This is required and must have at least one element.
+	// frameworks are a list of frameworks that Kueue has support for.
+	// The allowed values are BatchJob, RayJob, RayCluster, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
+	// frameworks are required and must have at least one element.
+	// frameworks can not have more than 14 elements.
 	// Each framework represents a type of job that Kueue will manage.
-	// Frameworks are a list of frameworks that Kueue has support for.
-	// The allowed values are BatchJob, RayJob, RayCluster, JobSet, MPIJob, PaddleJob, PytorchJob, TFJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
 	// +kubebuilder:validation:MaxItems=14
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, x == y))",message="each item in frameworks must be unique"
-	// +listType=atomic
+	// +listType=set
 	// +required
 	Frameworks []KueueIntegration `json:"frameworks"`
 	// externalFrameworks are a list of GroupVersionResources
 	// that are managed for Kueue by external controllers.
-	// These are optional and should only be used if you have an external controller
+	// externalFrameworks are optional and should only be used if you have an external controller
 	// that integrates with Kueue.
-	// +listType=atomic
+	// externalFrameworks, if specified, can not have more than 32 items.
+	// +listType=map
+	// +listMapKey=group
 	// +kubebuilder:validation:MaxItems=32
 	// +optional
-	ExternalFrameworks []ExternalFramework `json:"externalFrameworks,omitempty"`
+	ExternalFrameworks []ExternalFramework `json:"externalFrameworks"`
 	// labelKeysToCopy are a list of label keys that are copied once a workload is created.
 	// These keys are persisted to the internal Kueue workload object.
 	// If not specified, only the Kueue labels will be copied.
+	// labelKeysToCopy, if specified, is limited to a maximum of 64 items.
 	// +kubebuilder:validation:MaxItems=64
-	// +listType=set
-	// +listMapType=key
+	// +listType=map
+	// +listMapKey=key
 	// +optional
-	LabelKeysToCopy []LabelKeys `json:"labelKeysToCopy,omitempty"`
+	LabelKeysToCopy []LabelKeys `json:"labelKeysToCopy"`
 }
 
 type LabelKeys struct {
 	// key is the label key.
 	// A label key must be a valid qualified name consisting of a lower-case alphanumeric string,
 	// and hyphens of at most 63 characters in length.
-	// We are using matches and not cel functions to allow for use on 4.17.
+	// To support older openshift versions, matches is used instead of CEL validation.
 	// The name must start and end with an alphanumeric character.
 	// The name may be optionally prefixed with a subdomain consisting of lower-case alphanumeric characters,
 	// hyphens and periods, of at most 253 characters in length.
 	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
 	// The optional prefix and the name are separate by a forward slash (/).
+	// +key uses matches and not cel functions to allow for use on 4.17.
 	// +kubebuilder:validation:MaxLength=317
 	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:XValidation:rule="self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$') && self.size() <= 317"
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$')"
 	// +required
 	Key string `json:"key"`
 }
 
-// +kubebuilder:validation:Enum=ByWorkload;Disabled
+// +kubebuilder:validation:Enum=ByWorkload;None;""
 type GangSchedulingPolicy string
 
 const (
 	GangSchedulingPolicyByWorkload GangSchedulingPolicy = "ByWorkload"
-	GangSchedulingPolicyDisabled   GangSchedulingPolicy = "Disabled"
+	GangSchedulingPolicyNone       GangSchedulingPolicy = "None"
 )
 
-// +kubebuilder:validation:Enum=Parallel;Sequential
+// +kubebuilder:validation:Enum="";Parallel;Sequential
 type GangSchedulingWorkloadAdmission string
 
 const (
@@ -223,24 +231,29 @@ const (
 // +union
 type GangScheduling struct {
 	// policy allows you to enable and configure gang scheduling.
-	// This is an optional field.
-	// The allowed values are ByWorkload and Disabled.
-	// The default value will be Disabled.
+	// The allowed values are ByWorkload, None and "".
 	// When set to ByWorkload, this means each workload is processed and considered
 	// for admission as a single unit.
 	// Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
+	// None means gang scheduling is disabled.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is None.
+	// policy is a required field.
 	// +required
 	// +unionDiscriminator
 	Policy GangSchedulingPolicy `json:"policy"`
-	// byWorkload controls how admission is done.
-	// byWorkload is only required if policy is equal to ByWorkload.
+	// byWorkload configures how Kueue will process workloads for admission.
+	// byWorkload is required when policy is ByWorkload, and forbidden otherwise.
 	// +optional
 	ByWorkload *ByWorkload `json:"byWorkload,omitempty"`
 }
 
 // ByWorkload controls how admission is done
 type ByWorkload struct {
-	// admission controls how kueue will process workloads.
+	// admission controls how Kueue will process workloads.
+	// admission is required.
+	// Allowed values are Sequential, Parallel and "".
 	// When admission is set to Sequential, only pods from the currently processing workload will be admitted.
 	// Once all pods from the current workload are admitted, and ready, Kueue will process the next workload.
 	// Sequential processing may slow down admission when the cluster has sufficient capacity for multiple workloads,
@@ -248,11 +261,14 @@ type ByWorkload struct {
 	// When set to Parallel, pods from any workload will be admitted at any time.
 	// This may lead to a deadlock where workloads are in contention for cluster capacity and
 	// pods from another workload having successfully scheduled prevent pods from the current workload scheduling.
-	// +optional
-	Admission *GangSchedulingWorkloadAdmission `json:"admission,omitempty"`
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Parallel.
+	// +required
+	Admission GangSchedulingWorkloadAdmission `json:"admission"`
 }
 
-// +kubebuilder:validation:Enum=QueueName;None
+// +kubebuilder:validation:Enum="";QueueName;None
 type LabelPolicy string
 
 const (
@@ -263,7 +279,8 @@ const (
 type WorkloadManagement struct {
 	// labelPolicy controls whether or not Kueue reconciles
 	// jobs that don't set the label kueue.x-k8s.io/queue-name.
-	// The allowed values are QueueName and None.
+	// labelPolicy is a required field.
+	// The allowed values are QueueName, None and "".
 	// None means that workloads will be suspended on
 	// creation and a label will be added via a mutating webhook.
 	// This will be applied for all integrations that Kueue manages.
@@ -271,11 +288,14 @@ type WorkloadManagement struct {
 	// by Kueue must have a label kueue.x-k8s.io/queue-name.
 	// If this label is not present on the workload, then Kueue will
 	// ignore this workload.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is QueueName.
 	// +required
 	LabelPolicy LabelPolicy `json:"labelPolicy"`
 }
 
-// +kubebuilder:validation:Enum=Classical;FairSharing
+// +kubebuilder:validation:Enum="";Classical;FairSharing
 type PreemptionPolicy string
 
 const (
@@ -284,8 +304,9 @@ const (
 )
 
 type Preemption struct {
-	// preemptionPolicy are the types of preemption kueue allows.
-	// Kueue has two types of preemption: Classical and FairSharing.
+	// preemptionPolicy are the types of preemption Kueue allows.
+	// preemptionPolicy is an optional field.
+	// The allowed values are Classical, FairSharing and "".
 	// Classical means that an incoming workload, which does
 	// not fit within the unusued quota, is eligible to issue preemptions
 	// when the requests of the workload are below the
@@ -297,7 +318,9 @@ type Preemption struct {
 	// The borrowable resources are the unused nominal quota
 	// of all the ClusterQueues in the cohort.
 	// FairSharing is a more heavy weight algorithm.
-	// The default is Classical.
-	// +optional
-	PreemptionPolicy *PreemptionPolicy `json:"preemptionPolicy,omitempty"`
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Classical.
+	// +required
+	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy"`
 }
