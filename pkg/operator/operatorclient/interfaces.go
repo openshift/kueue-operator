@@ -22,7 +22,7 @@ import (
 
 const (
 	OperatorConfigName = "cluster"
-	OperandName        = "kueue"
+	OperandName        = "kueue-controller-manager"
 )
 
 var _ v1helpers.OperatorClient = &KueueClient{}

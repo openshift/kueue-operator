@@ -98,7 +98,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					return nil
 				}
 				for _, pod := range podItems.Items {
-					if !strings.HasPrefix(pod.Name, "kueue-") {
+					if !strings.HasPrefix(pod.Name, "kueue-controller-manager") {
 						continue
 					}
 					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
