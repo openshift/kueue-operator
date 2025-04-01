@@ -98,38 +98,29 @@ func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
 	return ret
 }
 
-func buildManagedJobsWithoutQueueName(queueLabelPolicy *kueue.QueueLabelPolicy) bool {
-	if queueLabelPolicy == nil {
+func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagement) bool {
+	if workloadManagement.LabelPolicy == "" {
 		return false
 	}
-	policy := ptr.Deref(queueLabelPolicy.Policy, kueue.QueueLabelNamePolicyRequired)
-	return policy == kueue.QueueLabelNamePolicyOptional
+	return workloadManagement.LabelPolicy == kueue.LabelPolicyNone
 }
 
-func buildWaitForPodsReady(gangSchedulingPolicy *kueue.GangSchedulingPolicy) *configapi.WaitForPodsReady {
-	if gangSchedulingPolicy == nil {
+func buildWaitForPodsReady(gangSchedulingPolicy kueue.GangScheduling) *configapi.WaitForPodsReady {
+	switch gangSchedulingPolicy.Policy {
+	case kueue.GangSchedulingPolicyNone:
 		return &configapi.WaitForPodsReady{Enable: false}
-	}
-	policy := ptr.Deref(gangSchedulingPolicy.Policy, kueue.GangSchedulingPolicyDisabled)
-	switch policy {
-	case kueue.GangSchedulingPolicyDisabled:
-		return &configapi.WaitForPodsReady{Enable: false}
-	case kueue.GangSchedulingPolicyEvictByWorkload:
+	case kueue.GangSchedulingPolicyByWorkload:
 		return &configapi.WaitForPodsReady{Enable: true, BlockAdmission: ptr.To(false)}
 	default:
 		return &configapi.WaitForPodsReady{Enable: false}
 	}
 }
 
-func buildFairSharing(preemption *kueue.Preemption) *configapi.FairSharing {
-	if preemption == nil {
+func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
+	switch preemption.PreemptionPolicy {
+	case kueue.PreemptionStrategyClassical:
 		return &configapi.FairSharing{Enable: false}
-	}
-	policy := ptr.Deref(preemption.PreemptionStrategy, kueue.PreemeptionStrategyClassical)
-	switch policy {
-	case kueue.PreemeptionStrategyClassical:
-		return &configapi.FairSharing{Enable: false}
-	case kueue.PreemeptionStrategyFairsharing:
+	case kueue.PreemptionStrategyFairsharing:
 		return &configapi.FairSharing{Enable: true, PreemptionStrategies: []configapi.PreemptionStrategy{"LessThanOrEqualToFinalShare", "LessThanInitialShare"}}
 	default:
 		return &configapi.FairSharing{Enable: false}
@@ -151,7 +142,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				EnableClusterQueueResources: true,
 			},
 			Webhook: configapi.ControllerWebhook{
-				Port: ptr.To[int](9443),
+				Port: ptr.To(9443),
 			},
 			Controller: &configapi.ControllerConfigurationSpec{
 				GroupKindConcurrency: map[string]int{
@@ -176,8 +167,8 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		FeatureGates: map[string]bool{
 			"HierarchialCohorts": false,
 		},
-		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.QueueLabelPolicy),
-		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangSchedulingPolicy),
+		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
+		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 	}
 }

@@ -31,26 +31,28 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=operator.openshift.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithKind("ByWorkload"):
+		return &kueueoperatorv1alpha1.ByWorkloadApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ExternalFramework"):
 		return &kueueoperatorv1alpha1.ExternalFrameworkApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("GangScheduling"):
+		return &kueueoperatorv1alpha1.GangSchedulingApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Integrations"):
 		return &kueueoperatorv1alpha1.IntegrationsApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Kueue"):
 		return &kueueoperatorv1alpha1.KueueApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueConfiguration"):
 		return &kueueoperatorv1alpha1.KueueConfigurationApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("KueueGangSchedulingPolicy"):
-		return &kueueoperatorv1alpha1.KueueGangSchedulingPolicyApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueOperandSpec"):
 		return &kueueoperatorv1alpha1.KueueOperandSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KueueStatus"):
 		return &kueueoperatorv1alpha1.KueueStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("LabelKeys"):
 		return &kueueoperatorv1alpha1.LabelKeysApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Premption"):
-		return &kueueoperatorv1alpha1.PremptionApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("QueueLabelPolicy"):
-		return &kueueoperatorv1alpha1.QueueLabelPolicyApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("Preemption"):
+		return &kueueoperatorv1alpha1.PreemptionApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadManagement"):
+		return &kueueoperatorv1alpha1.WorkloadManagementApplyConfiguration{}
 
 	}
 	return nil
