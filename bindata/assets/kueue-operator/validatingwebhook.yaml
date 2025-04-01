@@ -12,7 +12,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate--v1-pod
   failurePolicy: Fail
   name: vpod.kb.io
@@ -22,7 +22,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
-      - kueue-system
+      - openshift-kueue-operator
   rules:
   - apiGroups:
     - ""
@@ -39,7 +39,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-apps-v1-deployment
   failurePolicy: Fail
   name: vdeployment.kb.io
@@ -49,7 +49,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
-      - kueue-system
+      - openshift-kueue-operator
   rules:
   - apiGroups:
     - apps
@@ -66,7 +66,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-apps-v1-statefulset
   failurePolicy: Fail
   name: vstatefulset.kb.io
@@ -76,7 +76,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
-      - kueue-system
+      - openshift-kueue-operator
   rules:
   - apiGroups:
     - apps
@@ -93,7 +93,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-workload-codeflare-dev-v1beta2-appwrapper
   failurePolicy: Fail
   name: vappwrapper.kb.io
@@ -113,7 +113,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-batch-v1-job
   failurePolicy: Fail
   name: vjob.kb.io
@@ -133,7 +133,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-jobset-x-k8s-io-v1alpha2-jobset
   failurePolicy: Fail
   name: vjobset.kb.io
@@ -153,7 +153,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kubeflow-org-v1-paddlejob
   failurePolicy: Fail
   name: vpaddlejob.kb.io
@@ -173,7 +173,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kubeflow-org-v1-pytorchjob
   failurePolicy: Fail
   name: vpytorchjob.kb.io
@@ -193,7 +193,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kubeflow-org-v1-tfjob
   failurePolicy: Fail
   name: vtfjob.kb.io
@@ -213,7 +213,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kubeflow-org-v1-xgboostjob
   failurePolicy: Fail
   name: vxgboostjob.kb.io
@@ -233,7 +233,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-leaderworkerset-x-k8s-io-v1-leaderworkerset
   failurePolicy: Fail
   name: vleaderworkerset.kb.io
@@ -253,7 +253,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kubeflow-org-v2beta1-mpijob
   failurePolicy: Fail
   name: vmpijob.kb.io
@@ -273,7 +273,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-ray-io-v1-raycluster
   failurePolicy: Fail
   name: vraycluster.kb.io
@@ -293,7 +293,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-ray-io-v1-rayjob
   failurePolicy: Fail
   name: vrayjob.kb.io
@@ -313,7 +313,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kueue-x-k8s-io-v1beta1-clusterqueue
   failurePolicy: Fail
   name: vclusterqueue.kb.io
@@ -333,7 +333,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kueue-x-k8s-io-v1alpha1-cohort
   failurePolicy: Fail
   name: vcohort.kb.io
@@ -353,7 +353,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kueue-x-k8s-io-v1beta1-resourceflavor
   failurePolicy: Fail
   name: vresourceflavor.kb.io
@@ -373,7 +373,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /validate-kueue-x-k8s-io-v1beta1-workload
   failurePolicy: Fail
   name: vworkload.kb.io

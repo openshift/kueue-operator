@@ -143,7 +143,7 @@ func getFrameworkForMutatingWebhook(name string) string {
 //			  operator: NotIn
 //			  values:
 //			  - kube-system
-//			  - kueue-system
+//			  - openshift-kueue-operator
 //
 //		Pod integration selector:
 //		  matchExpressions:
@@ -162,7 +162,7 @@ func getFrameworkForMutatingWebhook(name string) string {
 //		      operator: NotIn
 //			  values:
 //			  - kube-system
-//			  - kueue-system
+//			  - openshift-kueue-operator
 func mergeNamespaceSelectors(webhook interface{}, podSelector *metav1.LabelSelector) {
 	switch wh := webhook.(type) {
 	case *admissionregistrationv1.ValidatingWebhookConfiguration:

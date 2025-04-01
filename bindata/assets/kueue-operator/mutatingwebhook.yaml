@@ -12,7 +12,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate--v1-pod
   failurePolicy: Fail
   name: mpod.kb.io
@@ -22,7 +22,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
-      - kueue-system
+      - openshift-kueue-operator
   rules:
   - apiGroups:
     - ""
@@ -38,7 +38,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-apps-v1-deployment
   failurePolicy: Fail
   name: mdeployment.kb.io
@@ -48,7 +48,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
-      - kueue-system
+      - openshift-kueue-operator
   rules:
   - apiGroups:
     - apps
@@ -65,7 +65,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-apps-v1-statefulset
   failurePolicy: Fail
   name: mstatefulset.kb.io
@@ -75,7 +75,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
-      - kueue-system
+      - openshift-kueue-operator
   rules:
   - apiGroups:
     - apps
@@ -92,7 +92,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-workload-codeflare-dev-v1beta2-appwrapper
   failurePolicy: Fail
   name: mappwrapper.kb.io
@@ -111,7 +111,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-batch-v1-job
   failurePolicy: Fail
   name: mjob.kb.io
@@ -130,7 +130,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-jobset-x-k8s-io-v1alpha2-jobset
   failurePolicy: Fail
   name: mjobset.kb.io
@@ -149,7 +149,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-paddlejob
   failurePolicy: Fail
   name: mpaddlejob.kb.io
@@ -168,7 +168,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-pytorchjob
   failurePolicy: Fail
   name: mpytorchjob.kb.io
@@ -187,7 +187,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-tfjob
   failurePolicy: Fail
   name: mtfjob.kb.io
@@ -206,7 +206,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-xgboostjob
   failurePolicy: Fail
   name: mxgboostjob.kb.io
@@ -225,7 +225,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-leaderworkerset-x-k8s-io-v1-leaderworkerset
   failurePolicy: Fail
   name: mleaderworkerset.kb.io
@@ -245,7 +245,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v2beta1-mpijob
   failurePolicy: Fail
   name: mmpijob.kb.io
@@ -264,7 +264,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-ray-io-v1-raycluster
   failurePolicy: Fail
   name: mraycluster.kb.io
@@ -283,7 +283,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-ray-io-v1-rayjob
   failurePolicy: Fail
   name: mrayjob.kb.io
@@ -302,7 +302,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kueue-x-k8s-io-v1beta1-clusterqueue
   failurePolicy: Fail
   name: mclusterqueue.kb.io
@@ -321,7 +321,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kueue-x-k8s-io-v1beta1-resourceflavor
   failurePolicy: Fail
   name: mresourceflavor.kb.io
@@ -340,7 +340,7 @@ webhooks:
   clientConfig:
     service:
       name: kueue-webhook-service
-      namespace: kueue-system
+      namespace: openshift-kueue-operator
       path: /mutate-kueue-x-k8s-io-v1beta1-workload
   failurePolicy: Fail
   name: mworkload.kb.io
