@@ -5,9 +5,9 @@ go 1.23.0
 toolchain go1.23.4
 
 replace (
- 	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
- 	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
- )
+	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
+	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
+)
 
 require (
 	github.com/google/go-cmp v0.7.0
@@ -77,7 +77,7 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
