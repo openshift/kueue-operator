@@ -30,8 +30,9 @@ type KueueLister interface {
 	// List lists all Kueues in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*kueueoperatorv1alpha1.Kueue, err error)
-	// Kueues returns an object that can list and get Kueues.
-	Kueues(namespace string) KueueNamespaceLister
+	// Get retrieves the Kueue from the index for a given name.
+	// Objects returned here must be treated as read-only.
+	Get(name string) (*kueueoperatorv1alpha1.Kueue, error)
 	KueueListerExpansion
 }
 
@@ -43,27 +44,4 @@ type kueueLister struct {
 // NewKueueLister returns a new KueueLister.
 func NewKueueLister(indexer cache.Indexer) KueueLister {
 	return &kueueLister{listers.New[*kueueoperatorv1alpha1.Kueue](indexer, kueueoperatorv1alpha1.Resource("kueue"))}
-}
-
-// Kueues returns an object that can list and get Kueues.
-func (s *kueueLister) Kueues(namespace string) KueueNamespaceLister {
-	return kueueNamespaceLister{listers.NewNamespaced[*kueueoperatorv1alpha1.Kueue](s.ResourceIndexer, namespace)}
-}
-
-// KueueNamespaceLister helps list and get Kueues.
-// All objects returned here must be treated as read-only.
-type KueueNamespaceLister interface {
-	// List lists all Kueues in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*kueueoperatorv1alpha1.Kueue, err error)
-	// Get retrieves the Kueue from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
-	Get(name string) (*kueueoperatorv1alpha1.Kueue, error)
-	KueueNamespaceListerExpansion
-}
-
-// kueueNamespaceLister implements the KueueNamespaceLister
-// interface.
-type kueueNamespaceLister struct {
-	listers.ResourceIndexer[*kueueoperatorv1alpha1.Kueue]
 }

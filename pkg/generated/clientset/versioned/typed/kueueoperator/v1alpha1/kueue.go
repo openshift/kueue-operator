@@ -32,7 +32,7 @@ import (
 // KueuesGetter has a method to return a KueueInterface.
 // A group's client should implement this interface.
 type KueuesGetter interface {
-	Kueues(namespace string) KueueInterface
+	Kueues() KueueInterface
 }
 
 // KueueInterface has methods to work with Kueue resources.
@@ -59,13 +59,13 @@ type kueues struct {
 }
 
 // newKueues returns a Kueues
-func newKueues(c *KueueV1alpha1Client, namespace string) *kueues {
+func newKueues(c *KueueV1alpha1Client) *kueues {
 	return &kueues{
 		gentype.NewClientWithListAndApply[*kueueoperatorv1alpha1.Kueue, *kueueoperatorv1alpha1.KueueList, *applyconfigurationkueueoperatorv1alpha1.KueueApplyConfiguration](
 			"kueues",
 			c.RESTClient(),
 			scheme.ParameterCodec,
-			namespace,
+			"",
 			func() *kueueoperatorv1alpha1.Kueue { return &kueueoperatorv1alpha1.Kueue{} },
 			func() *kueueoperatorv1alpha1.KueueList { return &kueueoperatorv1alpha1.KueueList{} },
 		),

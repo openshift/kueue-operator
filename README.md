@@ -96,3 +96,14 @@ spec:
 1. Set OPERATOR_IMAGE to point to your operator image
 1. Set KUEUE_IMAGE to point to your kueue image you want to test
 1. make deploy-cert-manager test-e2e
+
+
+### Enable Webhooks on Opt-In Namespaces
+
+The Kueue Operator implements an opt-in webhook mechanism to ensure targeted enforcement of Kueue policies. To enable the validating and mutating webhooks for a specific namespace, use the following label:
+
+```sh
+oc label namespace <namespace> kueue.openshift.io/managed=true
+```
+
+This label instructs the Kueue Operator that the namespace should be managed by its webhook admission controllers. As a result, any Kueue resources within that namespace will be properly validated and mutated.
