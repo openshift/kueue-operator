@@ -85,8 +85,9 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayJob, kueue.KueueIntegrationRayCluster, kueue.KueueIntegrationPyTorchJob},
 				},
-				GangSchedulingPolicy: &kueue.GangSchedulingPolicy{Policy: ptr.To(kueue.GangSchedulingPolicyEvictByWorkload), ByWorkload: ptr.To(kueue.GangSchedulingAdmissionOptionsParallel)},
-				Preemption:           &kueue.Preemption{PreemptionStrategy: ptr.To(kueue.PreemeptionStrategyClassical)},
+				GangScheduling: &kueue.GangScheduling{Policy: ptr.To(kueue.GangSchedulingPolicyByWorkload),
+					ByWorkload: &kueue.ByWorkload{Admission: ptr.To(kueue.GangSchedulingWorkloadAdmissionParallel)}},
+				Preemption: &kueue.Preemption{PreemptionPolicy: ptr.To(kueue.PreemptionStrategyClassical)},
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
@@ -138,9 +139,9 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationAppWrapper},
 				},
-				GangSchedulingPolicy: &kueue.GangSchedulingPolicy{Policy: ptr.To(kueue.GangSchedulingPolicyDisabled)},
-				QueueLabelPolicy:     &kueue.QueueLabelPolicy{Policy: ptr.To(kueue.QueueLabelNamePolicyOptional)},
-				Preemption:           &kueue.Preemption{PreemptionStrategy: ptr.To(kueue.PreemeptionStrategyFairsharing)},
+				GangScheduling:     &kueue.GangScheduling{Policy: ptr.To(kueue.GangSchedulingPolicyDisabled)},
+				WorkloadManagement: &kueue.WorkloadManagement{LabelPolicy: ptr.To(kueue.QueueLabelNamePolicyOptional)},
+				Preemption:         &kueue.Preemption{PreemptionPolicy: ptr.To(kueue.PreemptionStrategyFairsharing)},
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{

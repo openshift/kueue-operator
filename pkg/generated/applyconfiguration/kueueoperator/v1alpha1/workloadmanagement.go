@@ -21,22 +21,22 @@ import (
 	kueueoperatorv1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
 
-// PremptionApplyConfiguration represents a declarative configuration of the Premption type for use
+// WorkloadManagementApplyConfiguration represents a declarative configuration of the WorkloadManagement type for use
 // with apply.
-type PremptionApplyConfiguration struct {
-	PreemptionStrategy *kueueoperatorv1alpha1.PreemptionStrategy `json:"preemptionStrategy,omitempty"`
+type WorkloadManagementApplyConfiguration struct {
+	LabelPolicy *kueueoperatorv1alpha1.LabelPolicy `json:"labelPolicy,omitempty"`
 }
 
-// PremptionApplyConfiguration constructs a declarative configuration of the Premption type for use with
+// WorkloadManagementApplyConfiguration constructs a declarative configuration of the WorkloadManagement type for use with
 // apply.
-func Premption() *PremptionApplyConfiguration {
-	return &PremptionApplyConfiguration{}
+func WorkloadManagement() *WorkloadManagementApplyConfiguration {
+	return &WorkloadManagementApplyConfiguration{}
 }
 
-// WithPreemptionStrategy sets the PreemptionStrategy field in the declarative configuration to the given value
+// WithLabelPolicy sets the LabelPolicy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PreemptionStrategy field is set to the value of the last call.
-func (b *PremptionApplyConfiguration) WithPreemptionStrategy(value kueueoperatorv1alpha1.PreemptionStrategy) *PremptionApplyConfiguration {
-	b.PreemptionStrategy = &value
+// If called multiple times, the LabelPolicy field is set to the value of the last call.
+func (b *WorkloadManagementApplyConfiguration) WithLabelPolicy(value kueueoperatorv1alpha1.LabelPolicy) *WorkloadManagementApplyConfiguration {
+	b.LabelPolicy = &value
 	return b
 }
