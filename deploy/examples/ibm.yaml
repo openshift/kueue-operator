@@ -11,15 +11,10 @@ spec:
   config:
     integrations:
       frameworks:
-      - BatchJob
-      - RayJob
-      - RayCluster
       - AppWrapper
-      - PyTorchJob
     kueueGangSchedulingPolicy:
-      policy: ByWorkload
-      byWorkload: Parallel
+      policy: Disabled
     queueLabelPolicy:
-      queueLabelPolicy: QueueNameRequired
+      queueLabelPolicy: QueueNameOptional
     preemption:
-      preemptionStrategy: Classical
+      preemptionStrategy: FairSharing

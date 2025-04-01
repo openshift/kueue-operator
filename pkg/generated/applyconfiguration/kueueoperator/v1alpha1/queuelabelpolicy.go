@@ -24,7 +24,7 @@ import (
 // QueueLabelPolicyApplyConfiguration represents a declarative configuration of the QueueLabelPolicy type for use
 // with apply.
 type QueueLabelPolicyApplyConfiguration struct {
-	QueueLabelPolicy *kueueoperatorv1alpha1.QueueLabelNamePolicy `json:"queueLabelPolicy,omitempty"`
+	Policy *kueueoperatorv1alpha1.QueueLabelNamePolicy `json:"policy,omitempty"`
 }
 
 // QueueLabelPolicyApplyConfiguration constructs a declarative configuration of the QueueLabelPolicy type for use with
@@ -33,10 +33,10 @@ func QueueLabelPolicy() *QueueLabelPolicyApplyConfiguration {
 	return &QueueLabelPolicyApplyConfiguration{}
 }
 
-// WithQueueLabelPolicy sets the QueueLabelPolicy field in the declarative configuration to the given value
+// WithPolicy sets the Policy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the QueueLabelPolicy field is set to the value of the last call.
-func (b *QueueLabelPolicyApplyConfiguration) WithQueueLabelPolicy(value kueueoperatorv1alpha1.QueueLabelNamePolicy) *QueueLabelPolicyApplyConfiguration {
-	b.QueueLabelPolicy = &value
+// If called multiple times, the Policy field is set to the value of the last call.
+func (b *QueueLabelPolicyApplyConfiguration) WithPolicy(value kueueoperatorv1alpha1.QueueLabelNamePolicy) *QueueLabelPolicyApplyConfiguration {
+	b.Policy = &value
 	return b
 }

@@ -21,22 +21,22 @@ import (
 	kueueoperatorv1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
 
-// PremptionApplyConfiguration represents a declarative configuration of the Premption type for use
+// PreemptionApplyConfiguration represents a declarative configuration of the Preemption type for use
 // with apply.
-type PremptionApplyConfiguration struct {
+type PreemptionApplyConfiguration struct {
 	PreemptionStrategy *kueueoperatorv1alpha1.PreemptionStrategy `json:"preemptionStrategy,omitempty"`
 }
 
-// PremptionApplyConfiguration constructs a declarative configuration of the Premption type for use with
+// PreemptionApplyConfiguration constructs a declarative configuration of the Preemption type for use with
 // apply.
-func Premption() *PremptionApplyConfiguration {
-	return &PremptionApplyConfiguration{}
+func Preemption() *PreemptionApplyConfiguration {
+	return &PreemptionApplyConfiguration{}
 }
 
 // WithPreemptionStrategy sets the PreemptionStrategy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the PreemptionStrategy field is set to the value of the last call.
-func (b *PremptionApplyConfiguration) WithPreemptionStrategy(value kueueoperatorv1alpha1.PreemptionStrategy) *PremptionApplyConfiguration {
+func (b *PreemptionApplyConfiguration) WithPreemptionStrategy(value kueueoperatorv1alpha1.PreemptionStrategy) *PreemptionApplyConfiguration {
 	b.PreemptionStrategy = &value
 	return b
 }

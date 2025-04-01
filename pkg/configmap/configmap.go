@@ -151,7 +151,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				EnableClusterQueueResources: true,
 			},
 			Webhook: configapi.ControllerWebhook{
-				Port: ptr.To[int](9443),
+				Port: ptr.To(9443),
 			},
 			Controller: &configapi.ControllerConfigurationSpec{
 				GroupKindConcurrency: map[string]int{
