@@ -22,7 +22,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
@@ -85,8 +84,13 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayJob, kueue.KueueIntegrationRayCluster, kueue.KueueIntegrationPyTorchJob},
 				},
-				GangSchedulingPolicy: &kueue.GangSchedulingPolicy{Policy: ptr.To(kueue.GangSchedulingPolicyEvictByWorkload), ByWorkload: ptr.To(kueue.GangSchedulingAdmissionOptionsParallel)},
-				Preemption:           &kueue.Preemption{PreemptionStrategy: ptr.To(kueue.PreemeptionStrategyClassical)},
+				GangScheduling: &kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionParallel,
+					},
+				},
+				Preemption: &kueue.Preemption{PreemptionPolicy: kueue.PreemptionStrategyClassical},
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
@@ -138,9 +142,9 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationAppWrapper},
 				},
-				GangSchedulingPolicy: &kueue.GangSchedulingPolicy{Policy: ptr.To(kueue.GangSchedulingPolicyDisabled)},
-				QueueLabelPolicy:     &kueue.QueueLabelPolicy{Policy: ptr.To(kueue.QueueLabelNamePolicyOptional)},
-				Preemption:           &kueue.Preemption{PreemptionStrategy: ptr.To(kueue.PreemeptionStrategyFairsharing)},
+				GangScheduling:     &kueue.GangScheduling{Policy: kueue.GangSchedulingPolicyDisabled},
+				WorkloadManagement: &kueue.WorkloadManagement{LabelPolicy: kueue.LabelPolicyNone},
+				Preemption:         &kueue.Preemption{PreemptionPolicy: kueue.PreemptionStrategyFairsharing},
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{

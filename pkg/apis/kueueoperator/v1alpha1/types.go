@@ -55,20 +55,20 @@ type KueueConfiguration struct {
 	// If this field is not specified, Kueue will only manage workloads
 	// that have the queue-name label.
 	// +optional
-	WorkloadManagement *WorkloadManagement `json:"workloadManagement,omitempty"`
+	WorkloadManagement WorkloadManagement `json:"workloadManagement,omitempty"`
 	// gangScheduling controls how Kueue admits workloads.
 	// Gang Scheduling is the act of all or nothing scheduling,
 	// where workloads do not become ready within a certain period, they may be evicted and later retried.
 	// This field is optional.
 	// If this field is not specified, gang scheduling will be disabled.
 	// +optional
-	GangScheduling *GangScheduling `json:"gangScheduling,omitempty"`
+	GangScheduling GangScheduling `json:"gangScheduling,omitempty"`
 	// preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
 	// Kueue has classical premption and preemption via fair sharing.
 	// This field is optional.
 	// If this field is not specified, preemption will be set to Classical.
 	// +optional
-	Preemption *Preemption `json:"preemption,omitempty"`
+	Preemption Preemption `json:"preemption,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -231,11 +231,15 @@ type GangScheduling struct {
 	// Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
 	// +required
 	// +unionDiscriminator
+<<<<<<< HEAD
 	Policy GangSchedulingPolicy `json:"policy"`
+=======
+	Policy GangSchedulingPolicy `json:"policy,omitempty"`
+>>>>>>> 5b85dc6 (use structs instead of pointers)
 	// byWorkload controls how admission is done.
 	// byWorkload is only required if policy is equal to ByWorkload.
 	// +optional
-	ByWorkload *ByWorkload `json:"byWorkload,omitempty"`
+	ByWorkload ByWorkload `json:"byWorkload,omitempty"`
 }
 
 // ByWorkload controls how admission is done
@@ -249,7 +253,7 @@ type ByWorkload struct {
 	// This may lead to a deadlock where workloads are in contention for cluster capacity and
 	// pods from another workload having successfully scheduled prevent pods from the current workload scheduling.
 	// +optional
-	Admission *GangSchedulingWorkloadAdmission `json:"admission,omitempty"`
+	Admission GangSchedulingWorkloadAdmission `json:"admission,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=QueueName;None
@@ -299,5 +303,5 @@ type Preemption struct {
 	// FairSharing is a more heavy weight algorithm.
 	// The default is Classical.
 	// +optional
-	PreemptionPolicy *PreemptionPolicy `json:"preemptionPolicy,omitempty"`
+	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy,omitempty"`
 }

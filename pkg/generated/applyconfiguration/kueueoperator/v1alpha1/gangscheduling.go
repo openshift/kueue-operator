@@ -21,23 +21,23 @@ import (
 	kueueoperatorv1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
 )
 
-// KueueGangSchedulingPolicyApplyConfiguration represents a declarative configuration of the KueueGangSchedulingPolicy type for use
+// GangSchedulingApplyConfiguration represents a declarative configuration of the GangScheduling type for use
 // with apply.
-type KueueGangSchedulingPolicyApplyConfiguration struct {
-	Policy     *kueueoperatorv1alpha1.KueueGangSchedulingPolicyOptions    `json:"policy,omitempty"`
-	ByWorkload *kueueoperatorv1alpha1.KueueGangSchedulingAdmissionOptions `json:"byWorkload,omitempty"`
+type GangSchedulingApplyConfiguration struct {
+	Policy     *kueueoperatorv1alpha1.GangSchedulingPolicy `json:"policy,omitempty"`
+	ByWorkload *ByWorkloadApplyConfiguration               `json:"byWorkload,omitempty"`
 }
 
-// KueueGangSchedulingPolicyApplyConfiguration constructs a declarative configuration of the KueueGangSchedulingPolicy type for use with
+// GangSchedulingApplyConfiguration constructs a declarative configuration of the GangScheduling type for use with
 // apply.
-func KueueGangSchedulingPolicy() *KueueGangSchedulingPolicyApplyConfiguration {
-	return &KueueGangSchedulingPolicyApplyConfiguration{}
+func GangScheduling() *GangSchedulingApplyConfiguration {
+	return &GangSchedulingApplyConfiguration{}
 }
 
 // WithPolicy sets the Policy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Policy field is set to the value of the last call.
-func (b *KueueGangSchedulingPolicyApplyConfiguration) WithPolicy(value kueueoperatorv1alpha1.KueueGangSchedulingPolicyOptions) *KueueGangSchedulingPolicyApplyConfiguration {
+func (b *GangSchedulingApplyConfiguration) WithPolicy(value kueueoperatorv1alpha1.GangSchedulingPolicy) *GangSchedulingApplyConfiguration {
 	b.Policy = &value
 	return b
 }
@@ -45,7 +45,7 @@ func (b *KueueGangSchedulingPolicyApplyConfiguration) WithPolicy(value kueueoper
 // WithByWorkload sets the ByWorkload field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ByWorkload field is set to the value of the last call.
-func (b *KueueGangSchedulingPolicyApplyConfiguration) WithByWorkload(value kueueoperatorv1alpha1.KueueGangSchedulingAdmissionOptions) *KueueGangSchedulingPolicyApplyConfiguration {
-	b.ByWorkload = &value
+func (b *GangSchedulingApplyConfiguration) WithByWorkload(value *ByWorkloadApplyConfiguration) *GangSchedulingApplyConfiguration {
+	b.ByWorkload = value
 	return b
 }

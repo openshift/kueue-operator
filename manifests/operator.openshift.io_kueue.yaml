@@ -4,13 +4,13 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
-  name: kueues.operator.openshift.io
+  name: kueue.operator.openshift.io
 spec:
   group: operator.openshift.io
   names:
     kind: Kueue
     listKind: KueueList
-    plural: kueues
+    plural: kueue
     singular: kueue
   scope: Cluster
   versions:
@@ -53,6 +53,7 @@ spec:
                       Gang Scheduling is the act of all or nothing scheduling,
                       where workloads do not become ready within a certain period, they may be evicted and later retried.
                       This field is optional.
+                      If this field is not specified, gang scheduling will be disabled.
                     properties:
                       byWorkload:
                         description: |-
@@ -87,6 +88,8 @@ spec:
                         - ByWorkload
                         - Disabled
                         type: string
+                    required:
+                    - policy
                     type: object
                     x-kubernetes-validations:
                     - message: byWorkload is required when policy is byWorkload, and
@@ -118,6 +121,7 @@ spec:
                                 Must be a valid DNS 1123 subdomain consisting of of lower-case alphanumeric characters,
                                 hyphens and periods, of at most 253 characters in length.
                                 Each period separated segment within the subdomain must start and end with an alphanumeric character.
+                                We are using matches and not cel functions to allow for use on 4.17.
                               maxLength: 253
                               minLength: 1
                               type: string
@@ -131,6 +135,7 @@ spec:
                                 Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
                                 and hyphens of at most 63 characters in length.
                                 The value must start and end with an alphanumeric character.
+                                We are using matches and not cel functions to allow for use on 4.17.
                               maxLength: 63
                               minLength: 1
                               type: string
@@ -143,6 +148,7 @@ spec:
                                 Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
                                 and hyphens of at most 63 characters in length.
                                 The value must start with an alphabetic character and end with an alphanumeric character.
+                                We are using matches and not cel functions to allow for use on 4.17.
                               maxLength: 63
                               minLength: 1
                               type: string
@@ -197,9 +203,10 @@ spec:
                           properties:
                             key:
                               description: |-
-                                key is the label key
+                                key is the label key.
                                 A label key must be a valid qualified name consisting of a lower-case alphanumeric string,
                                 and hyphens of at most 63 characters in length.
+                                We are using matches and not cel functions to allow for use on 4.17.
                                 The name must start and end with an alphanumeric character.
                                 The name may be optionally prefixed with a subdomain consisting of lower-case alphanumeric characters,
                                 hyphens and periods, of at most 253 characters in length.
@@ -211,10 +218,12 @@ spec:
                               x-kubernetes-validations:
                               - rule: self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$')
                                   && self.size() <= 317
+                          required:
+                          - key
                           type: object
                         maxItems: 64
                         type: array
-                        x-kubernetes-list-type: atomic
+                        x-kubernetes-list-type: set
                     required:
                     - frameworks
                     type: object
@@ -223,6 +232,7 @@ spec:
                       preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
                       Kueue has classical premption and preemption via fair sharing.
                       This field is optional.
+                      If this field is not specified, preemption will be set to Classical.
                     properties:
                       preemptionPolicy:
                         description: |-
@@ -251,6 +261,8 @@ spec:
                       By default Kueue will manage workloads that have a queue-name label.
                       Workloads that are missing the queue-name will be ignored by Kueue.
                       This field is optional.
+                      If this field is not specified, Kueue will only manage workloads
+                      that have the queue-name label.
                     properties:
                       labelPolicy:
                         description: |-
@@ -264,11 +276,12 @@ spec:
                           by Kueue must have a label kueue.x-k8s.io/queue-name.
                           If this label is not present on the workload, then Kueue will
                           ignore this workload.
-                          Defaults to QueueName.
                         enum:
                         - QueueName
                         - None
                         type: string
+                    required:
+                    - labelPolicy
                     type: object
                 required:
                 - integrations
