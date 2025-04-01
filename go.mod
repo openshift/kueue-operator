@@ -5,9 +5,9 @@ go 1.23.0
 toolchain go1.23.4
 
 replace (
- 	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
- 	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
- )
+	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
+	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
+)
 
 require (
 	github.com/google/go-cmp v0.7.0
@@ -93,7 +93,7 @@ require (
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.17 // indirect
-	go.etcd.io/etcd/client/pkg/v3 v3.5.17 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.21 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.17 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.58.0 // indirect
