@@ -108,19 +108,37 @@ for doc in docs:
     if kind not in allowed_kinds:
         continue  # Skip unrelated kinds
 
-    base_filename = file_map[kind]
-
-    # Update namespace for specific resources (excluding Secret)
+    # For Validating and Mutating webhook configurations, update namespace selectors and clientConfig.
+    if kind in ["ValidatingWebhookConfiguration", "MutatingWebhookConfiguration"]:
+        if "webhooks" in doc:
+            for webhook in doc["webhooks"]:
+                # Update namespaceSelector match expressions.
+                ns_selector = webhook.get("namespaceSelector")
+                if ns_selector is not None and "matchExpressions" in ns_selector:
+                    for expr in ns_selector["matchExpressions"]:
+                        if expr.get("key") == "kubernetes.io/metadata.name" and expr.get("operator") == "NotIn":
+                            expr["values"] = [
+                                "openshift-kueue-operator" if v == "kueue-system" else v 
+                                for v in expr.get("values", [])
+                            ]
+                # Update clientConfig service namespace.
+                client_config = webhook.get("clientConfig", {})
+                service_config = client_config.get("service", {})
+                if service_config.get("namespace") == "kueue-system":
+                    service_config["namespace"] = "openshift-kueue-operator"
+    
+    # Update namespace for specific resources (excluding Secret).
     if kind in namespace_updates and "metadata" in doc:
         doc["metadata"]["namespace"] = "openshift-kueue-operator"
 
-    # Parametrize the image field in Deployment
+    # Parametrize the image field in Deployment.
     if kind == "Deployment" and doc["metadata"]["name"] == "kueue-controller-manager":
         for container in doc["spec"]["template"]["spec"]["containers"]:
             if container["name"] == "manager":
                 container["image"] = "${IMAGE}"
 
     # Store files in `bindata/assets/kueue-operator/`
+    base_filename = file_map[kind]
     if base_filename not in separated_manifests:
         separated_manifests[base_filename] = []
 
@@ -146,22 +164,22 @@ def write_yaml_if_changed(bindata_file, doc, add_header=False):
     else:
         print(f"Skipping {bindata_file} as content has not changed.")
 
-# Write YAML files to bindata directory
+# Write YAML files to bindata directory.
 for base_filename, content in separated_manifests.items():
     for i, doc in enumerate(content):
         # Skip creating crd.yaml in bindata/assets/kueue-operator/
         if base_filename == "crd":
             continue
 
-        # Handle RoleBinding, ClusterRoleBinding, Role, Service, and ClusterRole naming
+        # Handle RoleBinding, ClusterRoleBinding, Role, Service, and ClusterRole naming.
         if base_filename in ["rolebinding", "clusterrolebinding", "role", "service", "clusterrole"]:
             name = doc["metadata"]["name"]
             name = clean_name(name, doc["kind"])
             if base_filename == "service":
-                # Remove 'service-' prefix for Service resources
+                # Remove 'service-' prefix for Service resources.
                 bindata_file = os.path.join(bindata_dir, f"{name}.yaml")
             elif base_filename == "clusterrole":
-                # Write ClusterRole files to the clusterrole directory
+                # Write ClusterRole files to the clusterrole directory.
                 bindata_file = os.path.join(bindata_dir, "clusterroles", f"clusterrole-{name}.yaml")
             else:
                 bindata_file = os.path.join(bindata_dir, f"{base_filename}-{name}.yaml")
@@ -170,7 +188,7 @@ for base_filename, content in separated_manifests.items():
 
         write_yaml_if_changed(bindata_file, doc, add_header=base_filename in ["clusterrole", "crd"])
 
-# Break ClusterRole and CRD into separate files
+# Break ClusterRole and CRD into separate files.
 for base_filename, content in separated_manifests.items():
     if base_filename in ["clusterrole", "crd"]:
         for i, doc in enumerate(content):
