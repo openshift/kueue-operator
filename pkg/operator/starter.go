@@ -26,7 +26,6 @@ type queueItem struct {
 }
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
-
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return err
