@@ -82,7 +82,7 @@ undeploy-ocp:
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager:
-	oc apply -f hack/manifests/cert-manager-rh.yaml
+	hack/deploy-cert-manager.sh
 
 .PHONY: deploy-upstream-cert-manager
 deploy-upstream-cert-manager:
