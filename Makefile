@@ -67,6 +67,7 @@ bundle-generate: operator-sdk regen-crd manifests
 	hack/update-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
 	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
 	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+	hack/preserve-bundle-labels.sh
 
 .PHONY: deploy-ocp
 deploy-ocp:
