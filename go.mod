@@ -5,9 +5,9 @@ go 1.23.0
 toolchain go1.23.4
 
 replace (
- 	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
- 	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
- )
+	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
+	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
+)
 
 require (
 	github.com/google/go-cmp v0.7.0
@@ -67,7 +67,7 @@ require (
 	github.com/google/cel-go v0.22.1 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
+	github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.25.1 // indirect
