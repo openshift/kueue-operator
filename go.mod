@@ -5,9 +5,9 @@ go 1.23.0
 toolchain go1.23.4
 
 replace (
- 	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
- 	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
- )
+	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
+	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10
+)
 
 require (
 	github.com/google/go-cmp v0.7.0
@@ -36,7 +36,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.19.1 // indirect
+	cel.dev/expr v0.23.0 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
