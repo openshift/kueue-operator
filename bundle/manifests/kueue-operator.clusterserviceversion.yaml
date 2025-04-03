@@ -261,7 +261,7 @@ spec:
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
                   value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d
-                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:c675b15b873f26e890784c9fc40ffc2e3dbee701f8b6b719a1d4247f8d127d32
+                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:cc7ead3a16b1f957c4a26d7b0242855f40267a13e2773429510824e148818dfd
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
