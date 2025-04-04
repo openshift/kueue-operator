@@ -21,31 +21,33 @@ import (
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 )
 
-// ReclaimablePodApplyConfiguration represents a declarative configuration of the ReclaimablePod type for use
+// TopologyApplyConfiguration represents a declarative configuration of the Topology type for use
 // with apply.
-type ReclaimablePodApplyConfiguration struct {
-	Name  *kueuev1beta1.PodSetReference `json:"name,omitempty"`
-	Count *int32                        `json:"count,omitempty"`
+type TopologyApplyConfiguration struct {
+	Name   *kueuev1beta1.TopologyReference `json:"name,omitempty"`
+	Levels []string                        `json:"levels,omitempty"`
 }
 
-// ReclaimablePodApplyConfiguration constructs a declarative configuration of the ReclaimablePod type for use with
+// TopologyApplyConfiguration constructs a declarative configuration of the Topology type for use with
 // apply.
-func ReclaimablePod() *ReclaimablePodApplyConfiguration {
-	return &ReclaimablePodApplyConfiguration{}
+func Topology() *TopologyApplyConfiguration {
+	return &TopologyApplyConfiguration{}
 }
 
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *ReclaimablePodApplyConfiguration) WithName(value kueuev1beta1.PodSetReference) *ReclaimablePodApplyConfiguration {
+func (b *TopologyApplyConfiguration) WithName(value kueuev1beta1.TopologyReference) *TopologyApplyConfiguration {
 	b.Name = &value
 	return b
 }
 
-// WithCount sets the Count field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Count field is set to the value of the last call.
-func (b *ReclaimablePodApplyConfiguration) WithCount(value int32) *ReclaimablePodApplyConfiguration {
-	b.Count = &value
+// WithLevels adds the given value to the Levels field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Levels field.
+func (b *TopologyApplyConfiguration) WithLevels(values ...string) *TopologyApplyConfiguration {
+	for i := range values {
+		b.Levels = append(b.Levels, values[i])
+	}
 	return b
 }
