@@ -154,8 +154,8 @@ github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2 h1:Pw
 github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2/go.mod h1:8jcm8UPtg2mCAsxfqKil1xrmRMI3a+XU2TZ9fF8A7TE=
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a h1:duO3JMrUOqVx50QhzxvDeOYIwTNOB8/EEuRLPyvAMBg=
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a/go.mod h1:Qw3ThpzVZ0bfTILpBNYg4LGyjtNxfyCiGh/uDLOOTP8=
-github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10 h1:slivXSA18sKFUUZh5sheEThoRhwzOY9xIChniKEhulU=
-github.com/openshift/controller-tools v0.12.1-0.20250218152928-be0dbe446d10/go.mod h1:LkvYw1gDIjjhvamu3BGP9z4bgWbtOtvK7KNF3kw1Shg=
+github.com/openshift/controller-tools v0.12.1-0.20250402141027-24f590ca0886 h1:Ez6hT01wFM+C1O/tY+n8AugjOTvtqgovqUFOyaF6ObI=
+github.com/openshift/controller-tools v0.12.1-0.20250402141027-24f590ca0886/go.mod h1:LkvYw1gDIjjhvamu3BGP9z4bgWbtOtvK7KNF3kw1Shg=
 github.com/openshift/library-go v0.0.0-20250402180609-ce2ba53fb2a4 h1:MDnTCGqFUULZ4+0fr0sQYlB80yTun8nEZ062azvFSCk=
 github.com/openshift/library-go v0.0.0-20250402180609-ce2ba53fb2a4/go.mod h1:DAa3BGl0CFtkfJn/g5rU8kDDTErfMVA/QlFm4cvU+MI=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
