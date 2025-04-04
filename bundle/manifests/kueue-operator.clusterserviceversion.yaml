@@ -310,5 +310,7 @@ spec:
   relatedImages:
   - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d
     name: operand-image
+  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:c675b15b873f26e890784c9fc40ffc2e3dbee701f8b6b719a1d4247f8d127d32
+    name: operator-image
   version: 0.0.1
   minKubeVersion: 1.28.0
