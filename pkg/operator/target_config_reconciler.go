@@ -75,6 +75,7 @@ type TargetConfigReconciler struct {
 	operatorNamespace          string
 	resourceCache              resourceapply.ResourceCache
 	kueueImage                 string
+	openshiftEnabled           bool
 }
 
 func NewTargetConfigReconciler(
@@ -106,6 +107,15 @@ func NewTargetConfigReconciler(
 		operatorNamespace:          namespace.GetNamespace(),
 		resourceCache:              resourceapply.NewResourceCache(),
 		kueueImage:                 kueueImage,
+		openshiftEnabled:           false,
+	}
+
+	c.openshiftEnabled = c.RunningOnOpenshift(ctx)
+
+	if c.openshiftEnabled {
+		klog.Info("OpenShift detected")
+	} else {
+		klog.Info("OpenShift not detected")
 	}
 
 	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
@@ -139,7 +149,6 @@ func NewTargetConfigReconciler(
 }
 
 func (c TargetConfigReconciler) sync() error {
-
 	found, err := isResourceRegistered(c.discoveryClient, schema.GroupVersionKind{
 		Group:   "cert-manager.io",
 		Version: "v1",
@@ -351,10 +360,10 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	// TODO: metrics should autodetected if openshift-monitoring exists
-	// For microshift we cannot assume monitoring apis exist.
-	if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
-		return err
+	if c.openshiftEnabled {
+		if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
+			return err
+		}
 	}
 
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
@@ -1085,7 +1094,6 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 }
 
 func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
-
 	// Create ServiceMonitor object
 	serviceMonitor := monitoringv1.ServiceMonitor{
 		TypeMeta: metav1.TypeMeta{
@@ -1170,4 +1178,11 @@ func convertObj2Unstructured(k8sObj interface{}, u *unstructured.Unstructured) (
 	}
 	err = u.UnmarshalJSON(tmp)
 	return
+}
+
+func (c *TargetConfigReconciler) RunningOnOpenshift(ctx context.Context) bool {
+	if _, err := c.osrClient.RouteV1().Routes("").List(ctx, metav1.ListOptions{}); err != nil {
+		return false
+	}
+	return true
 }
