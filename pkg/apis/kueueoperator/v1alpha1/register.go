@@ -9,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
 var (
@@ -36,5 +38,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	utilruntime.Must(apiregistrationv1.AddToScheme(scheme))
 	return nil
 }

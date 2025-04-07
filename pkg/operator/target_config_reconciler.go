@@ -53,6 +53,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	apiregistrationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
 )
 
 const (
@@ -75,6 +78,7 @@ type TargetConfigReconciler struct {
 	operatorNamespace          string
 	resourceCache              resourceapply.ResourceCache
 	kueueImage                 string
+	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
 }
 
 func NewTargetConfigReconciler(
@@ -89,7 +93,7 @@ func NewTargetConfigReconciler(
 	discoveryClient discovery.DiscoveryInterface,
 	crdClient apiextv1.ApiextensionsV1Interface,
 	eventRecorder events.Recorder,
-	kueueImage string,
+	kueueImage string, aggregatorClient aggregatorclient.Interface,
 ) (*TargetConfigReconciler, error) {
 	c := &TargetConfigReconciler{
 		ctx:                        ctx,
@@ -106,6 +110,7 @@ func NewTargetConfigReconciler(
 		operatorNamespace:          namespace.GetNamespace(),
 		resourceCache:              resourceapply.NewResourceCache(),
 		kueueImage:                 kueueImage,
+		apiRegistrationClient:      aggregatorClient.ApiregistrationV1(),
 	}
 
 	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
@@ -285,15 +290,29 @@ func (c TargetConfigReconciler) sync() error {
 	}
 	specAnnotations["service/controller-manager-metrics-service"] = resourceVersion
 
-	visbilityService, _, err := c.manageService("assets/kueue-operator/visibility-server.yaml", ownerReference)
+	visibilityService, _, err := c.manageAPIService("assets/kueue-operator/apiservice.yaml", ownerReference)
 	if err != nil {
-		klog.Error("unable to manage visbility service")
+		klog.Error("unable to manage visibility service")
 		return err
 	}
-	if visbilityService != nil {
-		resourceVersion = visbilityService.ResourceVersion
+	if visibilityService != nil {
+		resourceVersion = visibilityService.ResourceVersion
 	}
 	specAnnotations["service/visibility-service"] = resourceVersion
+
+	if _, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-visibility-server-auth-reader.yaml", ownerReference, false); err != nil {
+		klog.Error("unable to bind visibility server role")
+	}
+
+	visbilityServer, _, err := c.manageService("assets/kueue-operator/visibility-server.yaml", ownerReference)
+	if err != nil {
+		klog.Error("unable to manage visbility server")
+		return err
+	}
+	if visbilityServer != nil {
+		resourceVersion = visbilityServer.ResourceVersion
+	}
+	specAnnotations["service/visibility-server"] = resourceVersion
 
 	webhookService, _, err := c.manageService("assets/kueue-operator/webhook-service.yaml", ownerReference)
 	if err != nil {
@@ -735,6 +754,16 @@ func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference 
 	}
 	required.Namespace = c.operatorNamespace
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageAPIService(assetPath string, ownerReference metav1.OwnerReference) (*apiregistrationv1.APIService, bool, error) {
+	required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset(assetPath))
+	if required.Spec.Service != nil {
+		required.Spec.Service.Namespace = c.operatorNamespace
+	}
+	required.OwnerReferences = []metav1.OwnerReference{ownerReference}
+
+	return resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
 }
 
 func (c *TargetConfigReconciler) manageClusterRoles(ownerReference metav1.OwnerReference) error {

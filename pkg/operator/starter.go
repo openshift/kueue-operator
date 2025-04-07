@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 )
 
 type queueItem struct {
@@ -68,6 +69,11 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
+	aggregatorClient, err := aggregatorclient.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+
 	targetConfigReconciler, err := NewTargetConfigReconciler(
 		ctx,
 		operatorConfigClient.KueueV1alpha1(),
@@ -81,6 +87,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		crdClient,
 		cc.EventRecorder,
 		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
+		aggregatorClient,
 	)
 	if err != nil {
 		return err
