@@ -12,6 +12,6 @@ spec:
   insecureSkipTLSVerify: true
   service:
     name: kueue-visibility-server
-    namespace: kueue-system
+    namespace: openshift-kueue-operator
   version: v1beta1
   versionPriority: 100

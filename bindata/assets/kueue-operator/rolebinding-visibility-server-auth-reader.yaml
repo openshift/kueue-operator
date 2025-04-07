@@ -14,4 +14,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: kueue-controller-manager
-  namespace: kueue-system
+  namespace: openshift-kueue-operator

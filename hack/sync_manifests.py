@@ -131,6 +131,17 @@ for doc in docs:
     if kind in namespace_updates and "metadata" in doc:
         doc["metadata"]["namespace"] = "openshift-kueue-operator"
 
+    # Update APIService's service namespace.
+    if kind == "APIService" and doc["metadata"]["name"] == "v1beta1.visibility.kueue.x-k8s.io":
+        if "service" in doc["spec"] and doc["spec"]["service"]["namespace"] == "kueue-system":
+            doc["spec"]["service"]["namespace"] = "openshift-kueue-operator"
+
+    # Update RoleBinding's subject namespace.
+    if kind == "RoleBinding" and doc["metadata"]["name"] == "kueue-visibility-server-auth-reader":
+        for subject in doc.get("subjects", []):
+            if subject.get("kind") == "ServiceAccount" and subject["namespace"] == "kueue-system":
+                subject["namespace"] = "openshift-kueue-operator"
+
     # Parametrize the image field in Deployment.
     if kind == "Deployment" and doc["metadata"]["name"] == "kueue-controller-manager":
         for container in doc["spec"]["template"]["spec"]["containers"]:
