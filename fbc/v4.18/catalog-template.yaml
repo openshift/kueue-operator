@@ -1,0 +1,13 @@
+Schema: olm.semver
+GenerateMajorChannels: false
+GenerateMinorChannels: true
+DefaultChannelTypePreference: "minor"
+Candidate:
+  Bundles:
+  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle@sha256:77c9f5d061b66f3a496d3ed95757ac60590729aea49fca600f162fbba510cada
+Fast:
+  Bundles:
+  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle@sha256:77c9f5d061b66f3a496d3ed95757ac60590729aea49fca600f162fbba510cada
+Stable:
+  Bundles:
+  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle@sha256:77c9f5d061b66f3a496d3ed95757ac60590729aea49fca600f162fbba510cada
