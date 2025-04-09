@@ -55,20 +55,20 @@ type KueueConfiguration struct {
 	// If this field is not specified, Kueue will only manage workloads
 	// that have the queue-name label.
 	// +optional
-	WorkloadManagement WorkloadManagement `json:"workloadManagement,omitempty"`
+	WorkloadManagement *WorkloadManagement `json:"workloadManagement,omitempty"`
 	// gangScheduling controls how Kueue admits workloads.
 	// Gang Scheduling is the act of all or nothing scheduling,
 	// where workloads do not become ready within a certain period, they may be evicted and later retried.
 	// This field is optional.
 	// If this field is not specified, gang scheduling will be disabled.
 	// +optional
-	GangScheduling GangScheduling `json:"gangScheduling,omitempty"`
+	GangScheduling *GangScheduling `json:"gangScheduling,omitempty"`
 	// preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
 	// Kueue has classical premption and preemption via fair sharing.
 	// This field is optional.
 	// If this field is not specified, preemption will be set to Classical.
 	// +optional
-	Preemption Preemption `json:"preemption,omitempty"`
+	Preemption *Preemption `json:"preemption,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -235,7 +235,7 @@ type GangScheduling struct {
 	// byWorkload controls how admission is done.
 	// byWorkload is only required if policy is equal to ByWorkload.
 	// +optional
-	ByWorkload ByWorkload `json:"byWorkload,omitempty"`
+	ByWorkload *ByWorkload `json:"byWorkload,omitempty"`
 }
 
 // ByWorkload controls how admission is done

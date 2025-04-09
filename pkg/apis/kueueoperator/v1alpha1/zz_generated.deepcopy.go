@@ -136,9 +136,21 @@ func (in *Kueue) DeepCopyObject() runtime.Object {
 func (in *KueueConfiguration) DeepCopyInto(out *KueueConfiguration) {
 	*out = *in
 	in.Integrations.DeepCopyInto(&out.Integrations)
-	out.WorkloadManagement = in.WorkloadManagement
-	out.GangScheduling = in.GangScheduling
-	out.Preemption = in.Preemption
+	if in.WorkloadManagement != nil {
+		in, out := &in.WorkloadManagement, &out.WorkloadManagement
+		*out = new(WorkloadManagement)
+		**out = **in
+	}
+	if in.GangScheduling != nil {
+		in, out := &in.GangScheduling, &out.GangScheduling
+		*out = new(GangScheduling)
+		**out = **in
+	}
+	if in.Preemption != nil {
+		in, out := &in.Preemption, &out.Preemption
+		*out = new(Preemption)
+		**out = **in
+	}
 	return
 }
 
