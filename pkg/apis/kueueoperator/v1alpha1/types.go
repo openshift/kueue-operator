@@ -231,11 +231,7 @@ type GangScheduling struct {
 	// Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
 	// +required
 	// +unionDiscriminator
-<<<<<<< HEAD
 	Policy GangSchedulingPolicy `json:"policy"`
-=======
-	Policy GangSchedulingPolicy `json:"policy,omitempty"`
->>>>>>> 5b85dc6 (use structs instead of pointers)
 	// byWorkload controls how admission is done.
 	// byWorkload is only required if policy is equal to ByWorkload.
 	// +optional
