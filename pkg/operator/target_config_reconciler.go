@@ -357,7 +357,7 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
+	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference, cm)
 	if err != nil {
 		klog.Error("unable to manage deployment")
 		return err
@@ -851,7 +851,7 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.Kueue, specAnnotations map[string]string, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.Kueue, specAnnotations map[string]string, ownerReference metav1.OwnerReference, configMap *v1.ConfigMap) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kueue-operator/deployment.yaml"))
 	required.Name = operatorclient.OperandName
 	required.Namespace = c.operatorNamespace
@@ -880,6 +880,36 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.K
 		required.Spec.Template.Spec.Containers[0].VolumeMounts,
 		metricsCertVolumeMount,
 	)
+
+	configVolume := v1.Volume{
+		Name: "kueue-config",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: configMap.Name,
+				},
+			},
+		},
+	}
+	required.Spec.Template.Spec.Volumes = append(required.Spec.Template.Spec.Volumes, configVolume)
+	// Add volume mount to fetch the operator configmap.
+	configMount := v1.VolumeMount{
+		Name:      "kueue-config",
+		MountPath: "/etc/kueue/config",
+		ReadOnly:  true,
+	}
+	required.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+		required.Spec.Template.Spec.Containers[0].VolumeMounts,
+		configMount,
+	)
+
+	configArg := fmt.Sprintf("--config=/etc/kueue/config/%s", "controller_manager_config.yaml")
+	newArgs := []string{
+		configArg,
+		"--zap-log-level=2",
+	}
+	required.Spec.Template.Spec.Containers[0].Args = newArgs
+
 	// Add HA configuration for Kueue deployment.
 	var replicas int32 = 2
 	required.Spec.Replicas = ptr.To(replicas)
