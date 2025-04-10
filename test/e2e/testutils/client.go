@@ -36,6 +36,7 @@ type TestClients struct {
 	KueueClient         *kueueclient.Clientset
 	UpstreamKueueClient *upstreamkueueclient.Clientset
 	DynamicClient       dynamic.Interface
+	RestConfig          *rest.Config
 }
 
 func NewTestClients() *TestClients {
@@ -51,6 +52,7 @@ func NewTestClients() *TestClients {
 		KueueClient:         getKueueClient(config),
 		UpstreamKueueClient: getUpstreamKueueClient(config),
 		DynamicClient:       getDynamicClient(config),
+		RestConfig:          config,
 	}
 }
 
