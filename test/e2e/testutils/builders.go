@@ -82,6 +82,9 @@ func (b *TestResourceBuilder) NewJob() *batchv1.Job {
 	if b.namespace == "kueue-managed-test" {
 		labels["kueue.x-k8s.io/queue-name"] = b.queueName
 	}
+	if b.namespace == "openshift-kueue-operator-test" {
+		labels["kueue.x-k8s.io/queue-name"] = b.queueName
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-job-",
