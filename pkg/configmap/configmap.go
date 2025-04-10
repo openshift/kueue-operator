@@ -98,6 +98,41 @@ func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
 	return ret
 }
 
+func buildManagedJobsWithoutQueueName(workloadManagement *kueue.WorkloadManagement) bool {
+	if workloadManagement == nil {
+		return false
+	}
+	return workloadManagement.LabelPolicy == kueue.LabelPolicyNone
+}
+
+func buildWaitForPodsReady(gangSchedulingPolicy *kueue.GangScheduling) *configapi.WaitForPodsReady {
+	if gangSchedulingPolicy == nil {
+		return &configapi.WaitForPodsReady{Enable: false}
+	}
+	switch gangSchedulingPolicy.Policy {
+	case kueue.GangSchedulingPolicyDisabled:
+		return &configapi.WaitForPodsReady{Enable: false}
+	case kueue.GangSchedulingPolicyByWorkload:
+		return &configapi.WaitForPodsReady{Enable: true, BlockAdmission: ptr.To(false)}
+	default:
+		return &configapi.WaitForPodsReady{Enable: false}
+	}
+}
+
+func buildFairSharing(preemption *kueue.Preemption) *configapi.FairSharing {
+	if preemption == nil {
+		return &configapi.FairSharing{Enable: false}
+	}
+	switch preemption.PreemptionPolicy {
+	case kueue.PreemptionStrategyClassical:
+		return &configapi.FairSharing{Enable: false}
+	case kueue.PreemptionStrategyFairsharing:
+		return &configapi.FairSharing{Enable: true, PreemptionStrategies: []configapi.PreemptionStrategy{"LessThanOrEqualToFinalShare", "LessThanInitialShare"}}
+	default:
+		return &configapi.FairSharing{Enable: false}
+	}
+}
+
 func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
@@ -113,7 +148,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				EnableClusterQueueResources: true,
 			},
 			Webhook: configapi.ControllerWebhook{
-				Port: ptr.To[int](9443),
+				Port: ptr.To(9443),
 			},
 			Controller: &configapi.ControllerConfigurationSpec{
 				GroupKindConcurrency: map[string]int{
@@ -133,5 +168,8 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
+		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
+		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
+		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 	}
 }
