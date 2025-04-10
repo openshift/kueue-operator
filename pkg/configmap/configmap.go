@@ -133,5 +133,10 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
+		// Disable the HierarchicalCohorts feature gate by default.
+		// related to https://github.com/kubernetes-sigs/kueue/issues/4869
+		FeatureGates: map[string]bool{
+			"HierarchialCohorts": false,
+		},
 	}
 }

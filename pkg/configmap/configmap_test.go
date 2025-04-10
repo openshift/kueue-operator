@@ -49,6 +49,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+featureGates:
+  HierarchialCohorts: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -93,6 +95,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+featureGates:
+  HierarchialCohorts: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -140,6 +144,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+featureGates:
+  HierarchialCohorts: false
 health:
   healthProbeBindAddress: :8081
 integrations:
