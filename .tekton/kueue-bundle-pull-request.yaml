@@ -8,8 +8,10 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main"
-    pipelinesascode.tekton.dev/on-path-change: "[bundle/***, .tekton/kueue-bundle-pull-request.yaml, bundle.Dockerfile]"
+    pipelinesascode.tekton.dev/on-cel-expression:
+      event == "pull_request" &&
+      target_branch == "main" &&
+      files.all.exists(path, path.matches('bundle/|bundle.Dockerfile|.tekton/kueue-bundle-pull-request.yaml'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: kueue-operator
