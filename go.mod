@@ -2,7 +2,7 @@ module github.com/openshift/kueue-operator
 
 go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.24.2
 
 replace (
 	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250410200144-aecd0b7e565a
