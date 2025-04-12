@@ -21,36 +21,33 @@ import (
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 )
 
-// FlavorUsageApplyConfiguration represents a declarative configuration of the FlavorUsage type for use
+// TopologyInfoApplyConfiguration represents a declarative configuration of the TopologyInfo type for use
 // with apply.
-type FlavorUsageApplyConfiguration struct {
-	Name      *kueuev1beta1.ResourceFlavorReference `json:"name,omitempty"`
-	Resources []ResourceUsageApplyConfiguration     `json:"resources,omitempty"`
+type TopologyInfoApplyConfiguration struct {
+	Name   *kueuev1beta1.TopologyReference `json:"name,omitempty"`
+	Levels []string                        `json:"levels,omitempty"`
 }
 
-// FlavorUsageApplyConfiguration constructs a declarative configuration of the FlavorUsage type for use with
+// TopologyInfoApplyConfiguration constructs a declarative configuration of the TopologyInfo type for use with
 // apply.
-func FlavorUsage() *FlavorUsageApplyConfiguration {
-	return &FlavorUsageApplyConfiguration{}
+func TopologyInfo() *TopologyInfoApplyConfiguration {
+	return &TopologyInfoApplyConfiguration{}
 }
 
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *FlavorUsageApplyConfiguration) WithName(value kueuev1beta1.ResourceFlavorReference) *FlavorUsageApplyConfiguration {
+func (b *TopologyInfoApplyConfiguration) WithName(value kueuev1beta1.TopologyReference) *TopologyInfoApplyConfiguration {
 	b.Name = &value
 	return b
 }
 
-// WithResources adds the given value to the Resources field in the declarative configuration
+// WithLevels adds the given value to the Levels field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the Resources field.
-func (b *FlavorUsageApplyConfiguration) WithResources(values ...*ResourceUsageApplyConfiguration) *FlavorUsageApplyConfiguration {
+// If called multiple times, values provided by each call will be appended to the Levels field.
+func (b *TopologyInfoApplyConfiguration) WithLevels(values ...string) *TopologyInfoApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithResources")
-		}
-		b.Resources = append(b.Resources, *values[i])
+		b.Levels = append(b.Levels, values[i])
 	}
 	return b
 }
