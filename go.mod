@@ -13,7 +13,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
-	github.com/openshift/api v0.0.0-20250402094343-3d7abe90f97e
+	github.com/openshift/api v0.0.0-20250411135543-10a8fa583797
 	github.com/openshift/build-machinery-go v0.0.0-20250211133638-a00a772ae1a2
 	github.com/openshift/client-go v0.0.0-20250402181141-b3bad3b645f2
 	github.com/openshift/library-go v0.0.0-20250402180609-ce2ba53fb2a4
