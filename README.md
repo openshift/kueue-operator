@@ -1,4 +1,10 @@
+**Note:** This project is under active development. During development, we use container images hosted on [Quay.io](https://quay.io):
+- Operator: `quay.io/repository/redhat-user-workloads/kueue-operator-tenant/kueue-operator`
+- Operand: `quay.io/repository/redhat-user-workloads/kueue-operator-tenant/kueue-0-11`
 # Kueue Operator
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/openshift/kueue-operator)](https://goreportcard.com/report/github.com/openshift/kueue-operator)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](https://opensource.org/licenses/Apache-2.0)
 
 Kueue Operator provides the ability to deploy kueue using different configurations
 
