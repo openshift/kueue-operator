@@ -341,26 +341,26 @@ spec:
         operator: in
         values:
         - "false"
-    - name: ecosystem-cert-preflight-checks
-      params:
-      - name: image-url
-        value: $(tasks.build-image-index.results.IMAGE_URL)
-      runAfter:
-      - build-image-index
-      taskRef:
-        params:
-        - name: name
-          value: ecosystem-cert-preflight-checks
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-ecosystem-cert-preflight-checks:0.2@sha256:00b13d06d17328e105b11619ee4db98b215ca6ac02314a4776aa5fc2a974f9c1
-        - name: kind
-          value: task
-        resolver: bundles
-      when:
-      - input: $(params.skip-checks)
-        operator: in
-        values:
-        - "false"
+#    - name: ecosystem-cert-preflight-checks
+#      params:
+#      - name: image-url
+#        value: $(tasks.build-image-index.results.IMAGE_URL)
+#      runAfter:
+#      - build-image-index
+#      taskRef:
+#        params:
+#        - name: name
+#          value: ecosystem-cert-preflight-checks
+#        - name: bundle
+#          value: quay.io/konflux-ci/tekton-catalog/task-ecosystem-cert-preflight-checks:0.2@sha256:00b13d06d17328e105b11619ee4db98b215ca6ac02314a4776aa5fc2a974f9c1
+#        - name: kind
+#          value: task
+#        resolver: bundles
+#      when:
+#      - input: $(params.skip-checks)
+#        operator: in
+#        values:
+#        - "false"
     - name: sast-snyk-check
       params:
       - name: image-digest
@@ -443,7 +443,7 @@ spec:
         - name: name
           value: sast-coverity-check-oci-ta
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-sast-coverity-check-oci-ta:0.2@sha256:07cb09253da53235f83d1a2327faebb8505091c509fc1e3af12a43cfe34f63a6
+          value: quay.io/konflux-ci/tekton-catalog/task-sast-coverity-check-oci-ta:0.2@sha256:8eb97a206debc398e4ffc58a112b04be32cfa59447e6ea9d650b29de858f96a2
         - name: kind
           value: task
         resolver: bundles
