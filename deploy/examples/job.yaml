@@ -12,3 +12,6 @@ spec:
     integrations:
       frameworks:
       - BatchJob
+      - Pod
+      - Deployment
+      - StatefulSet 
