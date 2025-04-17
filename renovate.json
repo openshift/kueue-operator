@@ -12,7 +12,8 @@
   "rebaseLabel": "needs-rebase",
   "rebaseWhen": "behind-base-branch",
   "recreateWhen": "always",
-  "schedule": ["on Tuesday"],
+  "schedule": ["daily"],
+  "timezone": "America/New_York",
   "tekton": {
     "enabled": true,
     "packageRules": [
@@ -40,7 +41,6 @@
     ]
   },
   "gomod": {
-    "schedule": ["at any time"],
     "enabled": false
   },
   "vulnerabilityAlerts": {
