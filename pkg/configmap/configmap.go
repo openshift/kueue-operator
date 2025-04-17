@@ -99,9 +99,6 @@ func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
 }
 
 func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagement) bool {
-	if workloadManagement.LabelPolicy == "" {
-		return false
-	}
 	return workloadManagement.LabelPolicy == kueue.LabelPolicyNone
 }
 
@@ -110,9 +107,20 @@ func buildWaitForPodsReady(gangSchedulingPolicy kueue.GangScheduling) *configapi
 	case kueue.GangSchedulingPolicyNone:
 		return &configapi.WaitForPodsReady{Enable: false}
 	case kueue.GangSchedulingPolicyByWorkload:
-		return &configapi.WaitForPodsReady{Enable: true, BlockAdmission: ptr.To(false)}
+		return &configapi.WaitForPodsReady{Enable: true, BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload)}
 	default:
 		return &configapi.WaitForPodsReady{Enable: false}
+	}
+}
+
+func blockAdmission(admission *kueue.ByWorkload) *bool {
+	if admission == nil {
+		return ptr.To(false)
+	}
+	if admission.Admission == kueue.GangSchedulingWorkloadAdmissionSequential {
+		return ptr.To(true)
+	} else {
+		return ptr.To(false)
 	}
 }
 
@@ -121,7 +129,7 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	case kueue.PreemptionStrategyClassical:
 		return &configapi.FairSharing{Enable: false}
 	case kueue.PreemptionStrategyFairsharing:
-		return &configapi.FairSharing{Enable: true, PreemptionStrategies: []configapi.PreemptionStrategy{"LessThanOrEqualToFinalShare", "LessThanInitialShare"}}
+		return &configapi.FairSharing{Enable: true, PreemptionStrategies: []configapi.PreemptionStrategy{configapi.LessThanOrEqualToFinalShare, configapi.LessThanInitialShare}}
 	default:
 		return &configapi.FairSharing{Enable: false}
 	}
