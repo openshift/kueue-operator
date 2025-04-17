@@ -260,8 +260,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d
-                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:d90da026cf2633ee1a02e2f5674808088f5acd0c54c987941ccb39c214842adb
+                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:82d20c7077054c436ee1da337f7559403f21d68bc6faa4db05c13753b9e5b1f6
+                image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:1828412992a7d0b83a9c9ab09240d59f6e18fdf00bd1a91cf4a691b2b559c504
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -308,9 +308,9 @@ spec:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
   relatedImages:
-  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d
+  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:82d20c7077054c436ee1da337f7559403f21d68bc6faa4db05c13753b9e5b1f6
     name: operand-image
-  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:d90da026cf2633ee1a02e2f5674808088f5acd0c54c987941ccb39c214842adb
+  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:1828412992a7d0b83a9c9ab09240d59f6e18fdf00bd1a91cf4a691b2b559c504
     name: operator-image
   version: 0.0.1
   minKubeVersion: 1.28.0
