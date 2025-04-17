@@ -189,7 +189,7 @@ get-kueue-image:
 
 .PHONY: get-operator-image
 get-operator-image:
-	$(eval REVISION := $(shell git rev-parse HEAD))
+	$(eval REVISION := $(shell git log --oneline -1 | awk '{print $4}' | tr -d "'"))
 	$(eval export OPERATOR_IMAGE := quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator:on-pr-$(REVISION))
 	@echo "OPERATOR_IMAGE set to $(OPERATOR_IMAGE)"
 
