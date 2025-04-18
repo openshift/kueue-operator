@@ -3,10 +3,10 @@ GenerateMajorChannels: false
 GenerateMinorChannels: false
 Candidate:
   Bundles:
-  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:6f5d6bd9f5ea2610e5165543e7dcf5f4a8d416255d57cfb5a86c031a0aa78470
+  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:9b194b6ab6506f2ae71e6aff71ca28c92d3261f49c0a4e82654c277edb653795
 Fast:
   Bundles:
-  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:6f5d6bd9f5ea2610e5165543e7dcf5f4a8d416255d57cfb5a86c031a0aa78470
+  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:9b194b6ab6506f2ae71e6aff71ca28c92d3261f49c0a4e82654c277edb653795
 Stable:
   Bundles:
-  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:6f5d6bd9f5ea2610e5165543e7dcf5f4a8d416255d57cfb5a86c031a0aa78470
+  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:9b194b6ab6506f2ae71e6aff71ca28c92d3261f49c0a4e82654c277edb653795
