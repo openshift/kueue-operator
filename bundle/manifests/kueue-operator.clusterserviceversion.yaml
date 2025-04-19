@@ -19,6 +19,37 @@ metadata:
             "config": {
               "integrations": {
                 "frameworks": [
+                  "AppWrapper"
+                ]
+              },
+              "kueueGangSchedulingPolicy": {
+                "policy": "Disabled"
+              },
+              "preemption": {
+                "preemptionStrategy": "FairSharing"
+              },
+              "queueLabelPolicy": {
+                "queueLabelPolicy": "QueueNameOptional"
+              }
+            },
+            "managementState": "Managed"
+          }
+        },
+        {
+          "apiVersion": "operator.openshift.io/v1alpha1",
+          "kind": "Kueue",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "kueue-operator"
+            },
+            "name": "cluster",
+            "namespace": "openshift-kueue-operator"
+          },
+          "spec": {
+            "config": {
+              "integrations": {
+                "frameworks": [
                   "BatchJob",
                   "Pod",
                   "Deployment",
@@ -43,22 +74,32 @@ metadata:
           "spec": {
             "config": {
               "integrations": {
-                "externalFrameworks": [
-                  "AppWrapper"
-                ],
                 "frameworks": [
                   "BatchJob",
                   "RayJob",
-                  "RayCluster"
+                  "RayCluster",
+                  "AppWrapper",
+                  "PyTorchJob"
                 ]
+              },
+              "kueueGangSchedulingPolicy": {
+                "byWorkload": "Parallel",
+                "policy": "ByWorkload"
+              },
+              "preemption": {
+                "preemptionStrategy": "Classical"
+              },
+              "queueLabelPolicy": {
+                "queueLabelPolicy": "QueueNameRequired"
               }
-            }
+            },
+            "managementState": "Managed"
           }
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-04-03T17:38:12Z"
-    operators.operatorframework.io/builder: operator-sdk-v1.39.1+git
+    createdAt: "2025-04-17T14:58:26Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
     features.operators.openshift.io/cnf: "false"
@@ -260,8 +301,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d
-                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:d90da026cf2633ee1a02e2f5674808088f5acd0c54c987941ccb39c214842adb
+                  value: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-11@sha256:82d20c7077054c436ee1da337f7559403f21d68bc6faa4db05c13753b9e5b1f6
+                image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator-1-0@sha256:1828412992a7d0b83a9c9ab09240d59f6e18fdf00bd1a91cf4a691b2b559c504
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -310,7 +351,5 @@ spec:
   relatedImages:
   - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d
     name: operand-image
-  - image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:d90da026cf2633ee1a02e2f5674808088f5acd0c54c987941ccb39c214842adb
-    name: operator-image
   version: 0.0.1
   minKubeVersion: 1.28.0

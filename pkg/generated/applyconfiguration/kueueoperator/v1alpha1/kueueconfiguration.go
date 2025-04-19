@@ -20,7 +20,10 @@ package v1alpha1
 // KueueConfigurationApplyConfiguration represents a declarative configuration of the KueueConfiguration type for use
 // with apply.
 type KueueConfigurationApplyConfiguration struct {
-	Integrations *IntegrationsApplyConfiguration `json:"integrations,omitempty"`
+	Integrations       *IntegrationsApplyConfiguration       `json:"integrations,omitempty"`
+	WorkloadManagement *WorkloadManagementApplyConfiguration `json:"workloadManagement,omitempty"`
+	GangScheduling     *GangSchedulingApplyConfiguration     `json:"gangScheduling,omitempty"`
+	Preemption         *PreemptionApplyConfiguration         `json:"preemption,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -34,5 +37,29 @@ func KueueConfiguration() *KueueConfigurationApplyConfiguration {
 // If called multiple times, the Integrations field is set to the value of the last call.
 func (b *KueueConfigurationApplyConfiguration) WithIntegrations(value *IntegrationsApplyConfiguration) *KueueConfigurationApplyConfiguration {
 	b.Integrations = value
+	return b
+}
+
+// WithWorkloadManagement sets the WorkloadManagement field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the WorkloadManagement field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithWorkloadManagement(value *WorkloadManagementApplyConfiguration) *KueueConfigurationApplyConfiguration {
+	b.WorkloadManagement = value
+	return b
+}
+
+// WithGangScheduling sets the GangScheduling field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the GangScheduling field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithGangScheduling(value *GangSchedulingApplyConfiguration) *KueueConfigurationApplyConfiguration {
+	b.GangScheduling = value
+	return b
+}
+
+// WithPreemption sets the Preemption field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Preemption field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithPreemption(value *PreemptionApplyConfiguration) *KueueConfigurationApplyConfiguration {
+	b.Preemption = value
 	return b
 }

@@ -49,6 +49,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: false
 featureGates:
   HierarchialCohorts: false
 health:
@@ -71,6 +73,7 @@ manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -83,6 +86,13 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayJob, kueue.KueueIntegrationRayCluster, kueue.KueueIntegrationPyTorchJob},
 				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionParallel,
+					},
+				},
+				Preemption: kueue.Preemption{PreemptionPolicy: kueue.PreemptionStrategyClassical},
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
@@ -95,6 +105,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: false
 featureGates:
   HierarchialCohorts: false
 health:
@@ -119,6 +131,64 @@ manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+waitForPodsReady:
+  blockAdmission: false
+  enable: true
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"ibm example": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationAppWrapper},
+				},
+				GangScheduling:     kueue.GangScheduling{Policy: kueue.GangSchedulingPolicyNone},
+				WorkloadManagement: kueue.WorkloadManagement{LabelPolicy: kueue.LabelPolicyNone},
+				Preemption:         kueue.Preemption{PreemptionPolicy: kueue.PreemptionStrategyFairsharing},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: true
+  preemptionStrategies:
+  - LessThanOrEqualToFinalShare
+  - LessThanInitialShare
+featureGates:
+  HierarchialCohorts: false
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - workload.codeflare.dev/appwrapper
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
+manageJobsWithoutQueueName: true
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -144,6 +214,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: false
 featureGates:
   HierarchialCohorts: false
 health:
@@ -170,6 +242,68 @@ manageJobsWithoutQueueName: false
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+waitForPodsReady: {}
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"sequential gang admission": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationDeployment, kueue.KueueIntegrationPod, kueue.KueueIntegrationStatefulSet, kueue.KueueIntegrationAppWrapper, kueue.KueueIntegrationLeaderWorkerSet},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionSequential,
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: false
+featureGates:
+  HierarchialCohorts: false
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - deployment
+  - pod
+  - statefulset
+  - workload.codeflare.dev/appwrapper
+  - leaderworkerset.x-k8s.io/leaderworkerset
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 0s
+  renewDeadline: 0s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 0s
+manageJobsWithoutQueueName: false
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+waitForPodsReady:
+  blockAdmission: true
+  enable: true
 webhook:
   port: 9443
 `,
