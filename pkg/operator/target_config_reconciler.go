@@ -1051,7 +1051,7 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 		Resource: "certificates",
 	}
 
-	metricsServiceName := fmt.Sprintf("kueue-controller-manager.%s.svc", c.operatorNamespace)
+	metricsServiceName := fmt.Sprintf("kueue-controller-manager-metrics-service.%s.svc", c.operatorNamespace)
 	required := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "cert-manager.io/v1",
@@ -1071,7 +1071,9 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 			"spec": map[string]interface{}{
 				"dnsNames": []interface{}{
 					metricsServiceName,
+					metricsServiceName + ".cluster.local",
 				},
+				"commonName": "kueue-metrics",
 				"issuerRef": map[string]interface{}{
 					"kind": "Issuer",
 					"name": "selfsigned",
@@ -1113,12 +1115,36 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 			Endpoints: []monitoringv1.Endpoint{
 				{
 					Interval:        "30s",
-					Port:            "metrics", // Name of the port you want to monitor
+					Path:            "/metrics",
+					Port:            "https", // Name of the port you want to monitor
 					Scheme:          "https",
 					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
 					TLSConfig: &monitoringv1.TLSConfig{
 						SafeTLSConfig: monitoringv1.SafeTLSConfig{
-							InsecureSkipVerify: ptr.To(true),
+							InsecureSkipVerify: ptr.To(false),
+							CA: monitoringv1.SecretOrConfigMap{
+								Secret: &v1.SecretKeySelector{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: "metrics-server-cert",
+									},
+									Key: "ca.crt",
+								},
+							},
+							Cert: monitoringv1.SecretOrConfigMap{
+								Secret: &v1.SecretKeySelector{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: "metrics-server-cert",
+									},
+									Key: "tls.crt",
+								},
+							},
+							KeySecret: &v1.SecretKeySelector{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "metrics-server-cert",
+								},
+								Key: "tls.key",
+							},
+							ServerName: ptr.To("kueue-controller-manager-metrics-service.openshift-kueue-operator.svc"),
 						},
 					},
 				},

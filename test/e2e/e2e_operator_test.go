@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -41,7 +42,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
@@ -50,6 +50,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	//+kubebuilder:scaffold:imports
@@ -63,7 +66,9 @@ const (
 )
 
 var _ = Describe("Kueue Operator", Ordered, func() {
-	var namespace = operatorNamespace
+	var (
+		namespace = operatorNamespace
+	)
 	// AfterEach(func() {
 	// 	Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
 	// })
@@ -229,54 +234,12 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cq := &kueuev1beta1.ClusterQueue{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-clusterqueue",
-				},
-				Spec: kueuev1beta1.ClusterQueueSpec{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							labelKey: labelValue,
-						},
-					},
-					ResourceGroups: []kueuev1beta1.ResourceGroup{
-						{
-							CoveredResources: []corev1.ResourceName{"cpu", "memory"},
-							Flavors: []kueuev1beta1.FlavorQuotas{
-								{
-									Name: "default",
-									Resources: []kueuev1beta1.ResourceQuota{
-										{
-											Name:         "cpu",
-											NominalQuota: resource.MustParse("100"),
-										},
-										{
-											Name:         "memory",
-											NominalQuota: resource.MustParse("100Gi"),
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-
-			_, err = kueueClient.KueueV1beta1().ClusterQueues().Create(context.TODO(), cq, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(testutils.CreateClusterQueue(kueueClient)).To(Succeed())
 
 			// Create LocalQueue in managed namespace
-			lq := &kueuev1beta1.LocalQueue{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      testQueue,
-					Namespace: testNamespaceWithLabel,
-				},
-				Spec: kueuev1beta1.LocalQueueSpec{
-					ClusterQueue: "test-clusterqueue",
-				},
-			}
-			_, err = kueueClient.KueueV1beta1().LocalQueues(testNamespaceWithLabel).Create(context.TODO(), lq, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(testutils.CreateLocalQueue(kueueClient, testNamespaceWithLabel)).To(Succeed())
+
+			Expect(testutils.CreateResourceFlavor(kueueClient)).To(Succeed())
 
 			nodes, err := kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -304,19 +267,6 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				)
 				Expect(err).NotTo(HaveOccurred(), "failed to label node %s", node.Name)
 			}
-
-			rf := &kueuev1beta1.ResourceFlavor{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "default",
-				},
-				Spec: kueuev1beta1.ResourceFlavorSpec{
-					NodeLabels: map[string]string{
-						"kueue.x-k8s.io/default-flavor": "true",
-					},
-				},
-			}
-			_, err = kueueClient.KueueV1beta1().ResourceFlavors().Create(context.TODO(), rf, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterAll(func() {
@@ -325,6 +275,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			_ = kueueClient.KueueV1beta1().ClusterQueues().Delete(context.TODO(), "test-clusterqueue", metav1.DeleteOptions{})
 			_ = kueueClient.KueueV1beta1().LocalQueues(testNamespaceWithLabel).Delete(context.TODO(), testQueue, metav1.DeleteOptions{})
 			_ = kueueClient.KueueV1beta1().ResourceFlavors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
+			_ = kubeClient.CoreV1().Pods(operatorNamespace).Delete(context.TODO(), "curl-metrics-test", metav1.DeleteOptions{})
 		})
 
 		It("should manage jobs only in labeled namespaces", func() {
@@ -464,6 +415,59 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				ss, _ := kubeClient.AppsV1().StatefulSets(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledSS.Name, metav1.GetOptions{})
 				return ss.Status.ReadyReplicas
 			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "StatefulSet in unlabeled namespace not ready")
+		})
+		It("should expose metrics endpoint with TLS", func() {
+			ctx := context.TODO()
+			var (
+				err                error
+				podName            = "curl-metrics-test"
+				containerName      = "curl-metrics"
+				certMountPath      = "/etc/kueue/metrics/certs"
+				metricsServiceName = "kueue-controller-manager-metrics-service"
+				kueueClient        = clients.UpstreamKueueClient
+			)
+
+			By("creating workloads")
+			Expect(testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload")).To(Succeed())
+			Expect(testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload-2")).To(Succeed())
+
+			By("Creating curl test pod")
+			curlPod := testutils.MakeCurlMetricsPod(operatorNamespace)
+			_, err = kubeClient.CoreV1().Pods(operatorNamespace).Create(ctx, curlPod.Obj(), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to create curl metrics test pod")
+
+			Eventually(func() error {
+				pod, err := kubeClient.CoreV1().Pods(operatorNamespace).Get(ctx, podName, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get pod: %w", err)
+				}
+				if pod.Status.Phase != corev1.PodRunning {
+					return fmt.Errorf("pod %q not ready, phase: %s", podName, pod.Status.Phase)
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "curl-metrics-test pod did not become ready")
+
+			Eventually(func() error {
+				metricsOutput, _, err := Kexecute(ctx, clients.RestConfig, kubeClient, operatorNamespace, podName, containerName,
+					[]string{
+						"/bin/sh", "-c",
+						fmt.Sprintf(
+							"curl -s --cacert %s/ca.crt -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://%s.%s.svc.cluster.local:8443/metrics",
+							certMountPath,
+							metricsServiceName,
+							operatorNamespace,
+						),
+					})
+				if err != nil {
+					return fmt.Errorf("exec into pod failed: %w", err)
+				}
+
+				if !strings.Contains(string(metricsOutput), "kueue_quota_reserved_workloads_total") {
+					return fmt.Errorf("expected metric not found in output")
+				}
+
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
 
@@ -762,4 +766,30 @@ func deployOperator() error {
 	}, operatorReadyTime, operatorPoll).Should(Succeed(), "assets should be deployed")
 
 	return nil
+}
+
+func Kexecute(ctx context.Context, restConfig *rest.Config, kubeClient kubernetes.Interface, namespace, podName, containerName string, command []string) ([]byte, []byte, error) {
+	var out, outErr bytes.Buffer
+
+	req := kubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   command,
+			Container: containerName,
+			Stdout:    true,
+			Stderr:    true,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{Stdout: &out, Stderr: &outErr}); err != nil {
+		return nil, nil, err
+	}
+
+	return out.Bytes(), outErr.Bytes(), nil
 }
