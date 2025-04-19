@@ -129,6 +129,10 @@ bundle-build: bundle-generate
 bundle-push:
 	${CONTAINER_TOOL} push ${BUNDLE_IMAGE}
 
+.PHONY: fbc-generate
+fbc-generate:
+	hack/generate-fbc.sh
+
 clean:
 	$(RM) ./kueue-operator
 	$(RM) -r ./_tmp
