@@ -22,7 +22,8 @@
           "pin",
           "digest"
         ],
-        "automerge": true
+        "automerge": true,
+	"addLabels": ["lgtm", "approved"]
       }
     ]
   },
@@ -34,7 +35,8 @@
           "Dockerfile.*",
           "*.Dockerfile"
         ],
-        "automerge": true
+        "automerge": true,
+	"addLabels": ["lgtm", "approved"]
       }
     ]
   },
