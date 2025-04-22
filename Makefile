@@ -19,7 +19,6 @@ OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
 
-NAMESPACE ?= openshift-kueue-operator
 KUBECONFIG ?= ${HOME}/.kube/config
 
 CONTAINER_TOOL ?= podman
@@ -27,6 +26,10 @@ CONTAINER_TOOL ?= podman
 CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
 CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
 CODEGEN_GROUPS_VERSION :=kueue:v1alpha1
+
+KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
+KUEUE_BRANCH := release-0.11
+TEMP_DIR := $(shell mktemp -d)
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
@@ -62,20 +65,39 @@ code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject
 generate-clients:
 	GO=GO111MODULE=on GOTOOLCHAIN=go1.23.4 GOFLAGS=-mod=readonly hack/update-codegen.sh
 
+.PHONY: get-kueue-image
+get-kueue-image:
+	@echo "Cloning Kueue repository into $(TEMP_DIR)..."
+	@git clone --depth 1 --branch $(KUEUE_BRANCH) $(KUEUE_REPO) $(TEMP_DIR) && \
+	KUEUE_COMMIT_ID=$$(cd $(TEMP_DIR) && git rev-parse HEAD) && \
+	echo "$$KUEUE_COMMIT_ID" > .kueue_commit_id
+	@KUEUE_COMMIT_ID=$$(cat .kueue_commit_id) && \
+	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-11:$$KUEUE_COMMIT_ID-linux-x86-64" && \
+	echo "$$KUEUE_IMAGE" > .kueue_image
+	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
+	@rm -f .kueue_commit_id
+
 .PHONY: bundle-generate
-bundle-generate: operator-sdk regen-crd manifests
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+bundle-generate: operator-sdk regen-crd manifests get-kueue-image
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
 	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
 	hack/preserve-bundle-labels.sh
+	@rm -f .kueue_image
 
 .PHONY: deploy-ocp
-deploy-ocp:
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+deploy-ocp: get-kueue-image
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	hack/update-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
 	oc apply -f deploy/
 	oc apply -f deploy/crd/
 	oc apply -f deploy/examples/job.yaml
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} ${KUEUE_IMAGE}
+	hack/revert-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
+	echo "Waiting for Kueue Controller Manager..."
+	timeout 300s bash -c 'until oc get deployment kueue-controller-manager -n openshift-kueue-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
+	echo "Kueue Controller Manager is ready"
 
 .PHONY: undeploy-ocp
 undeploy-ocp:
@@ -106,6 +128,10 @@ bundle-build: bundle-generate
 .PHONY: bundle-push
 bundle-push:
 	${CONTAINER_TOOL} push ${BUNDLE_IMAGE}
+
+.PHONY: fbc-generate
+fbc-generate:
+	hack/generate-fbc.sh
 
 clean:
 	$(RM) ./kueue-operator
@@ -166,3 +192,41 @@ GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
 	GOBIN=$(LOCALBIN) GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.1.4
+
+.PHONY: wait-for-image
+wait-for-image:
+	@echo "Waiting for operator image $(OPERATOR_IMAGE) to be available..."
+	@timeout 10m bash -c 'until skopeo inspect docker://$(OPERATOR_IMAGE) >/dev/null 2>&1; do echo "Operator image not found yet. Retrying in 30s..."; sleep 30; done'
+	@echo "Operator image is available."
+
+.PHONY: wait-for-cert-manager
+wait-for-cert-manager:
+	@echo "Waiting for cert-manager components..."
+	@timeout 120s bash -c 'until oc get crd certificates.cert-manager.io >/dev/null 2>&1; do sleep 5; done'
+	@echo "cert-manager CRDs installed"
+	@timeout 300s bash -c 'until [ "$$(oc get csv -n cert-manager-operator -o jsonpath="{.items[0].status.phase}" 2>/dev/null)" = "Succeeded" ]; do sleep 10; done'
+	@echo "cert-manager CSV succeeded"
+	@for dep in cert-manager cert-manager-cainjector cert-manager-webhook; do \
+		echo "Waiting for $$dep deployment..."; \
+		oc wait --for=condition=Available deployment/$$dep -n cert-manager --timeout=300s || exit 1; \
+	done
+
+.PHONY: e2e-ci-test
+e2e-ci-test: get-kueue-image wait-for-image deploy-cert-manager ginkgo
+	@echo "Running operator e2e tests..."
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	export KUEUE_IMAGE; \
+	$(GINKGO) -v ./test/e2e/...
+	make undeploy-ocp
+	@rm -f .kueue_image
+
+.PHONY: e2e-upstream-test
+e2e-upstream-test: get-kueue-image wait-for-image deploy-cert-manager wait-for-cert-manager deploy-ocp
+	@echo "Running upstream e2e tests..."
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	export KUEUE_IMAGE; \
+	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
+	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
+	@rm -rf $(TEMP_DIR)
+	make undeploy-ocp
+	@rm -f .kueue_image
