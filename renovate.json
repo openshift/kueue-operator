@@ -7,11 +7,11 @@
   "automergeStrategy": "auto",
   "automergeType": "pr",
   "prConcurrentLimit": 5,
-  "commitMessagePrefix": "NO-JIRA: ",
   "ignoreTests": false,
   "rebaseLabel": "needs-rebase",
   "rebaseWhen": "behind-base-branch",
   "recreateWhen": "always",
+  "commitMessageSuffix": "{{baseBranch}}",
   "tekton": {
     "enabled": true,
     "packageRules": [
@@ -23,7 +23,7 @@
           "digest"
         ],
         "automerge": true,
-	"addLabels": ["lgtm", "approved"]
+        "addLabels": ["lgtm", "approved"]
       }
     ]
   },
@@ -36,7 +36,7 @@
           "*.Dockerfile"
         ],
         "automerge": true,
-	"addLabels": ["lgtm", "approved"]
+        "addLabels": ["lgtm", "approved"]
       }
     ]
   },
