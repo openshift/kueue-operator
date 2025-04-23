@@ -170,10 +170,13 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
-		// Disable the HierarchicalCohorts feature gate by default.
-		// related to https://github.com/kubernetes-sigs/kueue/issues/4869
 		FeatureGates: map[string]bool{
+			// Disable the HierarchicalCohorts feature gate by default.
+			// related to https://github.com/kubernetes-sigs/kueue/issues/4869
 			"HierarchialCohorts": false,
+			// Disable visibilityOnDemand
+			// apiserver is insecure.
+			"VisibilityOnDemand": false,
 		},
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
