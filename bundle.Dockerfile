@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:d086e9b85efa3818f9429c2959c9acd62a6a4115c7ad6d59ae428c61d3c704fa
+FROM registry.access.redhat.com/ubi9/ubi-micro@sha256:dfd6e38dfecbb306899a548be0509c2ea16ff1cf843845682948e755de1ae948
 
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
