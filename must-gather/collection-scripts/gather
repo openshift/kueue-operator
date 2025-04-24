@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euxo pipefail
+
+OUTPUT_DIR=${OUTPUT_DIR:-/must-gather}
+KUEUE_NS=openshift-kueue-operator
+
+echo "[INFO] Gathering Kueue-specific resources from namespace: ${KUEUE_NS}"
+mkdir -p ${OUTPUT_DIR}/kueue
+
+/usr/bin/gather-kueue "${KUEUE_NS}" "${OUTPUT_DIR}/kueue"
+
+echo "[INFO] Kueue must-gather complete."

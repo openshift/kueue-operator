@@ -18,6 +18,7 @@ OPERATOR_VERSION ?= 0.0.1
 OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
+MUST_GATHER_IMAGE ?= https://quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
 
 KUBECONFIG ?= ${HOME}/.kube/config
 
@@ -246,3 +247,37 @@ e2e-tech-preview-upstream-test: wait-for-image deploy-cert-manager wait-for-cert
 	@rm -rf $(TEMP_DIR)
 	make undeploy-ocp
 	@rm -f .kueue_image
+
+.PHONY: e2e-tech-preview-test
+e2e-tech-preview-test: wait-for-image deploy-cert-manager ginkgo
+	@echo "Running operator e2e tests with released images..."
+	export KUEUE_IMAGE=registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:d0d6c34952e3d60be62fe7add33aa7ae2b0ac5c1bd2592e319f4cc28b2a2783e
+	$(GINKGO) -v ./test/e2e/...
+	make undeploy-ocp
+	@rm -f .kueue_image
+
+.PHONY: e2e-tech-preview-upstream-test
+e2e-tech-preview-upstream-test: wait-for-image deploy-cert-manager wait-for-cert-manager deploy-ocp
+	@echo "Running upstream e2e tests with released images..."
+	export KUEUE_IMAGE=registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:d0d6c34952e3d60be62fe7add33aa7ae2b0ac5c1bd2592e319f4cc28b2a2783e
+	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
+	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
+	@rm -rf $(TEMP_DIR)
+	make undeploy-ocp
+	@rm -f .kueue_image
+
+.PHONY: build-must
+build-must:
+	$(CONTAINER_TOOL) build -f must-gather/Dockerfile -t $(MUST_GATHER_IMAGE) .
+
+.PHONY: push-must
+push-must:
+	$(CONTAINER_TOOL) push $(MUST_GATHER_IMAGE)
+
+.PHONY: run-must
+run-must:
+	oc adm must-gather --image=$(MUST_GATHER_IMAGE)
+
+.PHONY: clean-must
+clean-must:
+	-$(CONTAINER_TOOL) rmi $(MUST_GATHER_IMAGE) || true
