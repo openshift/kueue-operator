@@ -880,6 +880,10 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.K
 		required.Spec.Template.Spec.Containers[0].VolumeMounts,
 		metricsCertVolumeMount,
 	)
+
+	// add ReadOnlyRootFilesystem to Kueue deployment.
+	// this will be fixed in upstream as of 0.12.
+	required.Spec.Template.Spec.Containers[0].SecurityContext.ReadOnlyRootFilesystem = ptr.To(true)
 	// Add HA configuration for Kueue deployment.
 	var replicas int32 = 2
 	required.Spec.Replicas = ptr.To(replicas)
