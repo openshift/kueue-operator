@@ -78,14 +78,11 @@ get-kueue-image:
 	@rm -f .kueue_commit_id
 
 .PHONY: bundle-generate
-bundle-generate: operator-sdk regen-crd manifests get-kueue-image
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
+bundle-generate: operator-sdk regen-crd manifests
 	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
 	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
 	hack/preserve-bundle-labels.sh
-	@rm -f .kueue_image
 
 .PHONY: deploy-ocp
 deploy-ocp: get-kueue-image
