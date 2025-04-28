@@ -1,7 +1,7 @@
 #!/bin/bash
 set -exou pipefail
 
-KUEUE_OPERAND_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kubernetes-sigs-kueue@sha256:ec6688b483a2919d10d7ff6876f559c7b98961c6da425d80a653f0fe55db684d"
+KUEUE_OPERAND_IMAGE="registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:d0d6c34952e3d60be62fe7add33aa7ae2b0ac5c1bd2592e319f4cc28b2a2783e"
 KUEUE_OPERATOR_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator@sha256:c675b15b873f26e890784c9fc40ffc2e3dbee701f8b6b719a1d4247f8d127d32"
 DESIRED_BASE="registry.access.redhat.com/ubi9/ubi-micro@sha256:d086e9b85efa3818f9429c2959c9acd62a6a4115c7ad6d59ae428c61d3c704fa"
 CSV_FILE="bundle/manifests/kueue-operator.clusterserviceversion.yaml"
