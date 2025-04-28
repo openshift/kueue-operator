@@ -227,3 +227,22 @@ e2e-upstream-test: get-kueue-image wait-for-image deploy-cert-manager wait-for-c
 	@rm -rf $(TEMP_DIR)
 	make undeploy-ocp
 	@rm -f .kueue_image
+
+
+.PHONY: e2e-tech-preview-test
+e2e-tech-preview-test: wait-for-image deploy-cert-manager ginkgo
+	@echo "Running operator e2e tests with released images..."
+	export KUEUE_IMAGE=registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:d0d6c34952e3d60be62fe7add33aa7ae2b0ac5c1bd2592e319f4cc28b2a2783e
+	$(GINKGO) -v ./test/e2e/...
+	make undeploy-ocp
+	@rm -f .kueue_image
+
+.PHONY: e2e-tech-preview-upstream-test
+e2e-tech-preview-upstream-test: wait-for-image deploy-cert-manager wait-for-cert-manager deploy-ocp
+	@echo "Running upstream e2e tests with released images..."
+	export KUEUE_IMAGE=registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:d0d6c34952e3d60be62fe7add33aa7ae2b0ac5c1bd2592e319f4cc28b2a2783e
+	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
+	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
+	@rm -rf $(TEMP_DIR)
+	make undeploy-ocp
+	@rm -f .kueue_image
