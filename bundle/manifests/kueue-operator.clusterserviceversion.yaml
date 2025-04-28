@@ -351,5 +351,5 @@ spec:
   relatedImages:
   - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:d0d6c34952e3d60be62fe7add33aa7ae2b0ac5c1bd2592e319f4cc28b2a2783e
     name: operand-image
-  version: 0.0.1
+  version: 0.1.0
   minKubeVersion: 1.28.0
