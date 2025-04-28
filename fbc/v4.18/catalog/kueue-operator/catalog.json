@@ -1,21 +1,21 @@
 {
     "schema": "olm.package",
     "name": "kueue-operator",
-    "defaultChannel": "stable-v0.0"
+    "defaultChannel": "stable-v0.1"
 }
 {
     "schema": "olm.channel",
-    "name": "stable-v0.0",
+    "name": "stable-v0.1",
     "package": "kueue-operator",
     "entries": [
         {
-            "name": "kueue-operator.v0.0.1"
+            "name": "kueue-operator.v0.1.0"
         }
     ]
 }
 {
     "schema": "olm.bundle",
-    "name": "kueue-operator.v0.0.1",
+    "name": "kueue-operator.v0.1.0",
     "package": "kueue-operator",
     "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:a006ae12d6af7218f820ecc595af287bef0284fd69fb6b223dc284d685c66114",
     "properties": [
@@ -31,7 +31,7 @@
             "type": "olm.package",
             "value": {
                 "packageName": "kueue-operator",
-                "version": "0.0.1"
+                "version": "0.1.0"
             }
         },
         {
