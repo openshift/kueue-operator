@@ -19,6 +19,7 @@ import (
 	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions/kueueoperator/v1alpha1"
 	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
+	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
 	"github.com/openshift/kueue-operator/pkg/webhook"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -308,6 +309,11 @@ func (c TargetConfigReconciler) sync() error {
 	// From here, we will create our cluster wide resources.
 	if err := c.manageCustomResources(ownerReference); err != nil {
 		klog.Error("unable to manage custom resource")
+		return err
+	}
+
+	if err := c.manageNetworkPolicies(ownerReference); err != nil {
+		klog.Error("unable to manage network policies")
 		return err
 	}
 
@@ -757,6 +763,30 @@ func (c *TargetConfigReconciler) manageClusterRoles(ownerReference metav1.OwnerR
 
 		_, _, err := resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *TargetConfigReconciler) manageNetworkPolicies(ownerReference metav1.OwnerReference) error {
+	networkPolicyDir := "assets/kueue-operator/networkpolicy"
+
+	files, err := bindata.AssetDir(networkPolicyDir)
+	if err != nil {
+		return fmt.Errorf("failed to read networkpolicy from directory %q: %w", networkPolicyDir, err)
+	}
+
+	for _, file := range files {
+		assetPath := filepath.Join(networkPolicyDir, file)
+		// TODO: move these resource helper functions to library-go
+		want := utilresourceapply.ReadNetworkPolicyV1OrDie(bindata.MustAsset(assetPath))
+		want.Namespace = c.operatorNamespace
+		want.OwnerReferences = []metav1.OwnerReference{
+			ownerReference,
+		}
+
+		if _, _, err := utilresourceapply.ApplyNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, want); err != nil {
 			return err
 		}
 	}
