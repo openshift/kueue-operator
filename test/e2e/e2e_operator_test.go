@@ -693,9 +693,23 @@ func deployOperator() error {
 			},
 		},
 		{
+			path: "assets/02_role.yaml",
+			readerAndApply: func(objBytes []byte) error {
+				_, _, err := resourceapply.ApplyRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleV1OrDie(objBytes))
+				return err
+			},
+		},
+		{
 			path: "assets/03_clusterrolebinding.yaml",
 			readerAndApply: func(objBytes []byte) error {
 				_, _, err := resourceapply.ApplyClusterRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleBindingV1OrDie(objBytes))
+				return err
+			},
+		},
+		{
+			path: "assets/03_rolebinding.yaml",
+			readerAndApply: func(objBytes []byte) error {
+				_, _, err := resourceapply.ApplyRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleBindingV1OrDie(objBytes))
 				return err
 			},
 		},
