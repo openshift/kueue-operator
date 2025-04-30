@@ -5,26 +5,6 @@
 }
 {
     "schema": "olm.channel",
-    "name": "candidate-v0.0",
-    "package": "kueue-operator",
-    "entries": [
-        {
-            "name": "kueue-operator.v0.0.1"
-        }
-    ]
-}
-{
-    "schema": "olm.channel",
-    "name": "fast-v0.0",
-    "package": "kueue-operator",
-    "entries": [
-        {
-            "name": "kueue-operator.v0.0.1"
-        }
-    ]
-}
-{
-    "schema": "olm.channel",
     "name": "stable-v0.0",
     "package": "kueue-operator",
     "entries": [
@@ -37,7 +17,7 @@
     "schema": "olm.bundle",
     "name": "kueue-operator.v0.0.1",
     "package": "kueue-operator",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle@sha256:77c9f5d061b66f3a496d3ed95757ac60590729aea49fca600f162fbba510cada",
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:a006ae12d6af7218f820ecc595af287bef0284fd69fb6b223dc284d685c66114",
     "properties": [
         {
             "type": "olm.gvk",
@@ -139,7 +119,7 @@
         },
         {
             "name": "",
-            "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle@sha256:77c9f5d061b66f3a496d3ed95757ac60590729aea49fca600f162fbba510cada"
+            "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:a006ae12d6af7218f820ecc595af287bef0284fd69fb6b223dc284d685c66114"
         },
         {
             "name": "operator-image",
