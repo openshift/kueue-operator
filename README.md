@@ -124,3 +124,61 @@ oc label namespace <namespace> kueue.openshift.io/managed=true
 ```
 
 This label instructs the Kueue Operator that the namespace should be managed by its webhook admission controllers. As a result, any Kueue resources within that namespace will be properly validated and mutated.
+
+### Local Development with Kind Cluster
+Run your changes against a cluster using `go run`
+
+1. create a kind cluster:
+unset KUBECONFIG environment variable, the cluster access configuration is stored in ${HOME}/.kube/config
+```
+unset KUBECONFIG
+kind create cluster --name=kueue-debug
+```
+
+You can use any existing cluster you have
+
+2. create the namespace from where the operator will run:
+```
+export KUBECONFIG=${HOME}/.kube/config
+# make sure you are at the root of the kueue operator repo
+kubectl create -f deploy/01_namespace.yaml
+```
+
+3. create the CRD
+```
+kubectl create -f deploy/crd/kueue-operator.crd.yaml
+```
+
+4. install cert manager
+```
+helm install  --repo https://charts.jetstack.io  --version v1.16.3 --create-namespace --namespace cert-manager --wait --set crds.enabled=true cert-manager cert-manager 
+```
+
+4. create the custom resource
+```
+❯ kubectl create -f - <<EOF
+apiVersion: operator.openshift.io/v1alpha1
+kind: Kueue
+metadata:
+  labels:
+    app.kubernetes.io/name: kueue-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: cluster
+  namespace: openshift-kueue-operator
+spec:
+  config:
+    integrations:
+      frameworks:
+      - "BatchJob"
+EOF
+```
+
+5. install monitoring CRD
+```
+kubectl create -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/refs/heads/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+```
+
+6. Run the operator
+```
+go run cmd/kueue-operator/main.go operator --kubeconfig=${HOME}/.kube/config --namespace=openshift-kueue-operator
+``
