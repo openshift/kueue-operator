@@ -98,7 +98,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-04-24T20:32:48Z"
+    createdAt: "2025-05-01T17:14:19Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -116,7 +116,7 @@ metadata:
     operatorframework.io/suggested-namespace: openshift-kueue-operator
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
-  name: kueue-operator.v0.0.1
+  name: kueue-operator.v0.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -301,8 +301,8 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:9ebceb075baaeb41838707fac47d2abc5c96dc4b2106fece7cb3f2c51e039256
-                image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:31b88562e2d361ed48cec4177c010f902da68b563736c7a6f3ec72770ed6a369
+                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:5e1c44d2a931df99c9d068720b787fffd0dfa9afee5b6c85a63fcddee0dcbd38
+                image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:be7dc28194ccbc66d09fbf17a8d6b01e3766b9edd4955835ec572579f6b4e49a
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -349,7 +349,7 @@ spec:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
   relatedImages:
-  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:9ebceb075baaeb41838707fac47d2abc5c96dc4b2106fece7cb3f2c51e039256
+  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:5e1c44d2a931df99c9d068720b787fffd0dfa9afee5b6c85a63fcddee0dcbd38
     name: operand-image
   version: 0.1.0
   minKubeVersion: 1.28.0
