@@ -20,8 +20,8 @@ LABEL description="kueue-operator-container"
 LABEL distribution-scope="public"
 LABEL name="kueue-operator-rhel9-operator"
 LABEL vendor="Red Hat, Inc."
-LABEL version=0.0.1
-LABEL release=0.0.1
+LABEL version=0.1.0
+LABEL release=0.1.0
 LABEL maintainer="Node team, <aos-node@redhat.com>"
 
 USER 1001

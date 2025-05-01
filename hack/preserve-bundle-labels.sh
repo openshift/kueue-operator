@@ -25,8 +25,8 @@ LABEL io.openshift.expose-services=\"\"\\
 LABEL io.openshift.tags=\"openshift,kueue-operator-bundle\"\\
 LABEL description=\"kueue-operator-bundle\"\\
 LABEL distribution-scope=\"public\"\\
-LABEL release=0.0.1\\
-LABEL version=0.0.1\\
+LABEL release=0.1.0\\
+LABEL version=0.1.0\\
 \\
 LABEL maintainer=\"Node team, <aos-node@redhat.com>\"" "${DOCKERFILE}"
 
@@ -80,7 +80,7 @@ sed -i 's|url: https://your.domain|url: https://github.com/openshift/kueue-opera
 
 # Add/update minKubeVersion.
 if ! grep -q "minKubeVersion" "${CSV_FILE}"; then
-  sed -i '/version: 0.0.1/a \  minKubeVersion: 1.28.0' "${CSV_FILE}"
+  sed -i '/version: 0.1.0/a \  minKubeVersion: 1.28.0' "${CSV_FILE}"
 else
   sed -i 's/minKubeVersion:.*/minKubeVersion: 1.28.0/g' "${CSV_FILE}"
 fi
