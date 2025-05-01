@@ -12,9 +12,9 @@ spec:
     integrations:
       frameworks:
       - AppWrapper
-    kueueGangSchedulingPolicy:
+    gangScheduling:
       policy: Disabled
-    queueLabelPolicy:
-      queueLabelPolicy: QueueNameOptional
+    workloadManagement:
+      labelPolicy: QueueNameOptional
     preemption:
-      preemptionStrategy: FairSharing
+      preemptionPolicy: FairSharing

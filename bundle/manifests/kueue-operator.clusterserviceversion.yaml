@@ -17,19 +17,19 @@ metadata:
           },
           "spec": {
             "config": {
+              "gangScheduling": {
+                "policy": "Disabled"
+              },
               "integrations": {
                 "frameworks": [
                   "AppWrapper"
                 ]
               },
-              "kueueGangSchedulingPolicy": {
-                "policy": "Disabled"
-              },
               "preemption": {
-                "preemptionStrategy": "FairSharing"
+                "preemptionPolicy": "FairSharing"
               },
-              "queueLabelPolicy": {
-                "queueLabelPolicy": "QueueNameOptional"
+              "workloadManagement": {
+                "labelPolicy": "QueueNameOptional"
               }
             },
             "managementState": "Managed"
@@ -73,24 +73,23 @@ metadata:
           },
           "spec": {
             "config": {
+              "gangScheduling": {
+                "byWorkload": "Parallel",
+                "policy": "ByWorkload"
+              },
               "integrations": {
                 "frameworks": [
-                  "BatchJob",
                   "RayJob",
                   "RayCluster",
                   "AppWrapper",
                   "PyTorchJob"
                 ]
               },
-              "kueueGangSchedulingPolicy": {
-                "byWorkload": "Parallel",
-                "policy": "ByWorkload"
-              },
               "preemption": {
-                "preemptionStrategy": "Classical"
+                "preemptionPolicy": "Classical"
               },
-              "queueLabelPolicy": {
-                "queueLabelPolicy": "QueueNameRequired"
+              "workloadManagement": {
+                "labelPolicy": "QueueNameRequired"
               }
             },
             "managementState": "Managed"
@@ -98,7 +97,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-01T17:14:19Z"
+    createdAt: "2025-05-01T20:58:29Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
