@@ -11,7 +11,7 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression:
       event == "pull_request" &&
       target_branch == "main" &&
-      files.all.exists(path, !path.matches('bundle/|bundle.Dockerfile|.tekton/kueue-bundle-pull-request.yaml|fbc/|.tekton/kueue-fbc-418-pull-request.yaml'))
+      files.all.exists(path, !path.matches('bundle/|bundle.Dockerfile|.tekton/kueue-bundle-*|fbc/|.tekton/kueue-fbc-*'))
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: kueue-operator
