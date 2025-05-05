@@ -777,6 +777,17 @@ func (c *TargetConfigReconciler) manageNetworkPolicies(ownerReference metav1.Own
 		return fmt.Errorf("failed to read networkpolicy from directory %q: %w", networkPolicyDir, err)
 	}
 
+	// TODO: does the order of the creation of these policies matter?
+	// TODO: Since OLM does not support networkpolicy resource yet the
+	// operator Pod is creating policies for self isolation (in addition
+	// to operand isolation). let's say our operator creates the following
+	// network policy manifests for self and the operand in the following
+	// order: a) deny-all, b) allow-egress-api, c) allow egress cluster-dns,
+	// and d) allow-ingress-metrics; while creating these manifests in order,
+	// if there is a delay between a and b, long enough that deny-all takes
+	// effect and creation of b fails. If this can happen then the operator
+	// has lost access to the apiserver in a self inflicted manner. Should
+	// the operator create the deny-all policy last to avoid this issue?
 	for _, file := range files {
 		assetPath := filepath.Join(networkPolicyDir, file)
 		// TODO: move these resource helper functions to library-go
@@ -1150,7 +1161,7 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 				{
 					Interval:        "30s",
 					Path:            "/metrics",
-					Port:            "https", // Name of the port you want to monitor
+					Port:            "metrics", // Name of the port you want to monitor
 					Scheme:          "https",
 					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
 					TLSConfig: &monitoringv1.TLSConfig{
