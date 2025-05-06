@@ -1,0 +1,52 @@
+#!/bin/bash
+set -euxo pipefail
+
+NAMESPACE="$1"
+OUT="$2"
+
+mkdir -p "${OUT}"
+
+echo "[INFO] Collecting Kueue Custom Resources"
+oc get workloads -A -o yaml > "${OUT}/workloads.yaml" || true
+oc get clusterqueues -A -o yaml > "${OUT}/clusterqueues.yaml" || true
+oc get localqueues -A -o yaml > "${OUT}/localqueues.yaml" || true
+oc get resourceflavors -A -o yaml > "${OUT}/resourceflavors.yaml" || true
+oc get admissionchecks -A -o yaml > "${OUT}/admissionchecks.yaml" || true
+
+echo "[INFO] Collecting CRD Definitions"
+for crd in clusterqueues.kueue.x-k8s.io localqueues.kueue.x-k8s.io workloads.kueue.x-k8s.io resourceflavors.kueue.x-k8s.io admissionchecks.kueue.x-k8s.io; do
+  oc get crd "$crd" -o yaml > "${OUT}/crd-${crd}.yaml" || true
+done
+
+echo "[INFO] Collecting Services and Endpoints"
+oc get services -n "${NAMESPACE}" -o yaml > "${OUT}/services.yaml" || true
+oc get endpoints -n "${NAMESPACE}" -o yaml > "${OUT}/endpoints.yaml" || true
+
+for svc in kueue-controller-manager-metrics-service kueue-webhook-service kueue-visibility-server; do
+  oc describe service "$svc" -n "${NAMESPACE}" > "${OUT}/describe-svc-${svc}.txt" || true
+done
+
+echo "[INFO] Collecting Webhook Configurations"
+oc get mutatingwebhookconfiguration -o yaml > "${OUT}/mutatingwebhookconfiguration.yaml" || true
+oc get validatingwebhookconfiguration -o yaml > "${OUT}/validatingwebhookconfiguration.yaml" || true
+
+echo "[INFO] Collecting Operator Deployment Pod Logs"
+for pod in $(oc get pods -n "${NAMESPACE}" -l name=openshift-kueue-operator -o jsonpath='{.items[*].metadata.name}'); do
+    oc logs -n "${NAMESPACE}" "$pod" > "${OUT}/logs-operator-${pod}.log" || true
+done
+
+echo "[INFO] Collecting kueue-controller-manager Pod Logs"
+for pod in $(oc get pods -n "${NAMESPACE}" -l control-plane=controller-manager -o jsonpath='{.items[*].metadata.name}'); do
+    oc logs -n "${NAMESPACE}" "$pod" > "${OUT}/logs-controller-manager-${pod}.log" || true
+done
+
+echo "[INFO] Collecting Deployments"
+oc get deployment openshift-kueue-operator -n "${NAMESPACE}" -o yaml > "${OUT}/deployment-openshift-kueue-operator.yaml" || true
+oc get deployment kueue-controller-manager -n "${NAMESPACE}" -o yaml > "${OUT}/deployment-kueue-controller-manager.yaml" || true
+
+echo "[INFO] Collecting RBAC"
+oc get serviceaccount -n "${NAMESPACE}" -o yaml > "${OUT}/serviceaccounts.yaml" || true
+oc get role -n "${NAMESPACE}" -o yaml > "${OUT}/roles.yaml" || true
+oc get rolebinding -n "${NAMESPACE}" -o yaml > "${OUT}/rolebindings.yaml" || true
+
+echo "[INFO] Kueue must-gather collection completed successfully."

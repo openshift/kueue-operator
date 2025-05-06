@@ -18,6 +18,7 @@ OPERATOR_VERSION ?= 0.1.0
 OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
+MUST_GATHER_IMAGE ?= https://quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
 
 KUBECONFIG ?= ${HOME}/.kube/config
 
@@ -246,3 +247,19 @@ e2e-tech-preview-upstream-test: wait-for-image deploy-cert-manager wait-for-cert
 	@rm -rf $(TEMP_DIR)
 	make undeploy-ocp
 	@rm -f .kueue_image
+
+.PHONY: build-must
+build-must:
+	$(CONTAINER_TOOL) build -f must-gather/Dockerfile -t $(MUST_GATHER_IMAGE) .
+
+.PHONY: push-must
+push-must:
+	$(CONTAINER_TOOL) push $(MUST_GATHER_IMAGE)
+
+.PHONY: run-must
+run-must:
+	oc adm must-gather --image=$(MUST_GATHER_IMAGE)
+
+.PHONY: clean-must
+clean-must:
+	-$(CONTAINER_TOOL) rmi $(MUST_GATHER_IMAGE) || true
