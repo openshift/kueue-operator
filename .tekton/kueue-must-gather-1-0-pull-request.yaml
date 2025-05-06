@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release-1.0"
+      == "release-1.0" && files.all.exists(path, path.matches('must-gather/.*|must-gather/Dockerfile|.tekton/kueue-must-gather-*'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kueue-operator-1-0
