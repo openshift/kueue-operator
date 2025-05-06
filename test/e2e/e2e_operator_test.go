@@ -46,6 +46,7 @@ import (
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -64,6 +65,28 @@ const (
 	operatorPoll                    = 10 * time.Second
 	operatorNamespace               = "openshift-kueue-operator"
 )
+
+func findOperatorPods(namespace string, list *corev1.PodList) []*corev1.Pod {
+	pods := make([]*corev1.Pod, 0)
+	for i := range list.Items {
+		pod := &list.Items[i]
+		if strings.HasPrefix(pod.Name, namespace+"-") {
+			pods = append(pods, pod)
+		}
+	}
+	return pods
+}
+
+func findKueuePods(list *corev1.PodList) []*corev1.Pod {
+	pods := make([]*corev1.Pod, 0)
+	for i := range list.Items {
+		pod := &list.Items[i]
+		if strings.HasPrefix(pod.Name, "kueue-controller-manager") {
+			pods = append(pods, pod)
+		}
+	}
+	return pods
+}
 
 var _ = Describe("Kueue Operator", Ordered, func() {
 	var (
@@ -196,6 +219,52 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 				return err
 			}, operatorReadyTime, operatorPoll).Should(Succeed(), "webhook configurations are not ready")
+		})
+
+		It("verify that deny-all network policy is present", func() {
+			Eventually(func() error {
+				const (
+					denyLabelKey   = "app.openshift.io/name"
+					denyLabelValue = "kueue"
+				)
+
+				deny, err := kubeClient.NetworkingV1().NetworkPolicies(operatorNamespace).Get(
+					context.Background(),
+					"kueue-deny-all",
+					metav1.GetOptions{},
+				)
+				if err != nil {
+					return err // retry
+				}
+
+				// deny-all policy should prohibit all traffic
+				// (ingress and egress) for pods that has the
+				// label 'app.openshift.io/name: kueue'
+				Expect(deny.Spec.PodSelector.MatchLabels).To(Equal(map[string]string{denyLabelKey: denyLabelValue}))
+				Expect(deny.Spec.Ingress).To(BeEmpty())
+				Expect(deny.Spec.Egress).To(BeEmpty())
+				Expect(deny.Spec.PolicyTypes).To(Equal([]networkingv1.PolicyType{
+					networkingv1.PolicyTypeIngress,
+					networkingv1.PolicyTypeEgress,
+				}))
+
+				// make sure that both our operator pod and the
+				// operand pod have the right label
+				pods, err := kubeClient.CoreV1().Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+				if err != nil {
+					return err // retry
+				}
+
+				operatorPods := findOperatorPods(operatorNamespace, pods)
+				Expect(len(operatorPods)).To(BeNumerically(">=", 1), "no operator pod seen")
+				kueuePods := findKueuePods(pods)
+				Expect(len(kueuePods)).To(BeNumerically(">=", 1), "no kueue pod seen")
+
+				for _, pod := range append(operatorPods, kueuePods...) {
+					Expect(pod.Labels).To(HaveKeyWithValue(denyLabelKey, denyLabelValue))
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "network policy has not been setup")
 		})
 	})
 
