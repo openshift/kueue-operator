@@ -4,4 +4,4 @@ GenerateMinorChannels: true
 DefaultChannelTypePreference: "minor"
 Stable:
   Bundles:
-  - Image: quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-bundle-1-0@sha256:ce10c13a9dfd0267630b1e53b80515739c38d36b0323176d69a522500e1f4b7b
+  - Image: registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:a273e8bbd5e93b814e0855015ff7e5ec051689dca71d1409e8fb897e94bd275a
