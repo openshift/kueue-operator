@@ -17,7 +17,7 @@
     "schema": "olm.bundle",
     "name": "kueue-operator.v0.1.0",
     "package": "kueue-operator",
-    "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:a273e8bbd5e93b814e0855015ff7e5ec051689dca71d1409e8fb897e94bd275a",
+    "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:de644d640f355815f3aa40ced5456bb5b0e958aeba8bfbdc4ab360fcdb90f26d",
     "properties": [
         {
             "type": "olm.gvk",
@@ -115,15 +115,15 @@
     "relatedImages": [
         {
             "name": "",
-            "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:a273e8bbd5e93b814e0855015ff7e5ec051689dca71d1409e8fb897e94bd275a"
+            "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:de644d640f355815f3aa40ced5456bb5b0e958aeba8bfbdc4ab360fcdb90f26d"
         },
         {
             "name": "",
-            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:558f365fd53e751981cf118605ae5e05496ef36d820ae9803b62236dfe82ae57"
+            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:0c4d9cd97f7579adbf2afd238c953ca5f170408cf27e3b2bf4aa16c108a76881"
         },
         {
             "name": "operand-image",
-            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:5e1c44d2a931df99c9d068720b787fffd0dfa9afee5b6c85a63fcddee0dcbd38"
+            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:dd765c446564d4397570f4bc056b55989f6c0bae0d70514874e67765c9c77889"
         }
     ]
 }
