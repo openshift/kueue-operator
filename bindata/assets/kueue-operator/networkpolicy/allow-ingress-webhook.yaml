@@ -1,0 +1,23 @@
+# allow ingress traffic to the webhook from kube-apiserver
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kueue-allow-ingress-webhook
+  namespace: openshift-kueue-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kueue # applies to the kueue pod only
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-kube-apiserver
+      podSelector:
+        matchLabels:
+          app: openshift-kube-apiserver
+    ports:
+    - protocol: TCP
+      port: webhook-server
+  policyTypes:
+  - Ingress
