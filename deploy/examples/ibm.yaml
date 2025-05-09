@@ -13,8 +13,8 @@ spec:
       frameworks:
       - AppWrapper
     gangScheduling:
-      policy: Disabled
+      policy: None
     workloadManagement:
-      labelPolicy: QueueNameOptional
+      labelPolicy: None
     preemption:
       preemptionPolicy: FairSharing

@@ -17,8 +17,9 @@ spec:
       - PyTorchJob
     gangScheduling:
       policy: ByWorkload
-      byWorkload: Parallel
+      byWorkload: 
+        admission: Parallel
     workloadManagement:
-      labelPolicy: QueueNameRequired
+      labelPolicy: QueueName
     preemption:
       preemptionPolicy: Classical

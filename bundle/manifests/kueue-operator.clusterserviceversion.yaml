@@ -18,7 +18,7 @@ metadata:
           "spec": {
             "config": {
               "gangScheduling": {
-                "policy": "Disabled"
+                "policy": "None"
               },
               "integrations": {
                 "frameworks": [
@@ -29,7 +29,7 @@ metadata:
                 "preemptionPolicy": "FairSharing"
               },
               "workloadManagement": {
-                "labelPolicy": "QueueNameOptional"
+                "labelPolicy": "None"
               }
             },
             "managementState": "Managed"
@@ -74,7 +74,9 @@ metadata:
           "spec": {
             "config": {
               "gangScheduling": {
-                "byWorkload": "Parallel",
+                "byWorkload": {
+                  "admission": "Parallel"
+                },
                 "policy": "ByWorkload"
               },
               "integrations": {
@@ -89,7 +91,7 @@ metadata:
                 "preemptionPolicy": "Classical"
               },
               "workloadManagement": {
-                "labelPolicy": "QueueNameRequired"
+                "labelPolicy": "QueueName"
               }
             },
             "managementState": "Managed"
@@ -97,7 +99,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-01T20:58:29Z"
+    createdAt: "2025-05-09T13:04:52Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
