@@ -8,7 +8,7 @@ COPY --from=builder /go/src/github.com/openshift/kueue-operator/kueue-operator /
 RUN mkdir /licenses
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/LICENSE /licenses/.
 
-LABEL io.k8s.display-name="OpenShift Kueue Operator based on RHEL 9"
+LABEL io.k8s.display-name="Red Hat Build of Kueue Operator based on RHEL 9"
 LABEL io.k8s.description="This is a component of OpenShift and manages kueue based on RHEL 9"
 LABEL com.redhat.component="kueue-operator-container"
 LABEL com.redhat.openshift.versions="v4.17-v4.18"
