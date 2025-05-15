@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kueue-allow-ingress-visibility
+  namespace: openshift-kueue-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kueue # applies to the kueue pod only
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: visibility
+  policyTypes:
+  - Ingress
