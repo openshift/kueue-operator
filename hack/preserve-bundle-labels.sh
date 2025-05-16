@@ -6,6 +6,7 @@ KUEUE_OPERATOR_IMAGE="registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator
 DESIRED_BASE="scratch"
 CSV_FILE="bundle/manifests/kueue-operator.clusterserviceversion.yaml"
 DOCKERFILE="bundle.Dockerfile"
+DISPLAY_NAME="Red Hat Build of Kueue"
 
 # Use the correct base image for the bundle.
 sed -i "s|^FROM .*|FROM ${DESIRED_BASE}|" "${DOCKERFILE}"
@@ -13,8 +14,8 @@ sed -i "s|^FROM .*|FROM ${DESIRED_BASE}|" "${DOCKERFILE}"
 # Insert custom labels after metrics.project_layout label.
 sed -i "/^LABEL operators.operatorframework.io.metrics.project_layout=go\.kubebuilder\.io\/v4/a \\
 \\
-LABEL io.k8s.display-name=\"OpenShift Kueue Bundle\"\\
-LABEL io.k8s.description=\"This is a bundle for the kueue operator\"\\
+LABEL io.k8s.display-name=\"Red Hat Build of Kueue Operator bundle\"\\
+LABEL io.k8s.description=\"This is a bundle for the Red Hat Build of Kueue Operator\"\\
 LABEL com.redhat.component=\"kueue-operator-bundle\"\\
 LABEL com.redhat.openshift.versions=\"v4.18-v4.19\"\\
 LABEL name=\"kueue-operator-rhel9-operator-bundle\"\\
@@ -60,6 +61,9 @@ sed -i '/operators.operatorframework.io\/project_layout: go.kubebuilder.io\/v4/a
 # Replace image references.
 sed -i "s|value: mustchange|value: ${KUEUE_OPERAND_IMAGE}|g" "${CSV_FILE}"
 sed -i "s|image: mustchange|image: ${KUEUE_OPERATOR_IMAGE}|g" "${CSV_FILE}"
+
+# Replace Display Name
+sed -i "s|displayName: Kueue Operator|displayName: ${DISPLAY_NAME}|" "${CSV_FILE}"
 
 # Update links URL.
 sed -i 's|url: https://kueue-operator.domain|url: https://github.com/openshift/kueue-operator|g' "${CSV_FILE}"

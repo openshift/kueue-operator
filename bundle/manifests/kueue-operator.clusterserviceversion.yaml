@@ -99,7 +99,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-09T13:04:52Z"
+    createdAt: "2025-05-16T14:34:51Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -127,7 +127,7 @@ spec:
       name: kueues.operator.openshift.io
       version: v1alpha1
   description: Kueue Operator description. TODO.
-  displayName: Kueue Operator
+  displayName: Red Hat Build of Kueue
   icon:
   - base64data: ""
     mediatype: ""
