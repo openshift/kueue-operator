@@ -4,6 +4,8 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:9.5
 
 COPY --from=builder /usr/bin/oc /usr/bin/oc
 COPY --from=builder /usr/bin/gather /usr/bin/gather_original
+COPY --from=builder /usr/bin/rsync /usr/bin/rsync
+COPY --from=builder /usr/bin/tar /usr/bin/tar
 
 # COPY must-gather/collection-scripts/gather /gather
 # COPY must-gather/collection-scripts/gather-kueue.sh /gather-kueue.sh
