@@ -101,7 +101,7 @@ deploy-ocp: get-kueue-image
 	hack/update-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
 	oc apply -f deploy/
 	oc apply -f deploy/crd/
-	oc apply -f deploy/examples/job.yaml
+	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	hack/revert-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
 	echo "Waiting for Kueue Controller Manager..."
 	timeout 300s bash -c 'until oc get deployment kueue-controller-manager -n openshift-kueue-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
