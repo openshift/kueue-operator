@@ -78,6 +78,16 @@ get-kueue-image:
 	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
 	@rm -f .kueue_commit_id
 
+.PHONY: get-kueue-must-gather-image
+get-kueue-must-gather-image:
+	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0; \
+	MUST_GATHER_COMMIT=$$(for tag in $$(skopeo list-tags docker://$$REPO | jq -r '.Tags[]' | grep -E '^[a-f0-9]{40}$$' | tail -n 10); do \
+		created=$$(skopeo inspect docker://$$REPO:$$tag 2>/dev/null | jq -r '.Created'); \
+		if [ "$$created" != "null" ] && [ -n "$$created" ]; then echo "$$created $$tag"; fi; \
+	done | sort | tail -n1 | awk '{print $$2}'); \
+	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0:$$MUST_GATHER_COMMIT" > .must_gather_image && \
+	echo "Using must-gather image with tag: $$MUST_GATHER_COMMIT"
+
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
 	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
@@ -210,24 +220,32 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: get-kueue-image wait-for-image deploy-cert-manager ginkgo
+e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo
 	@echo "Running operator e2e tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
 	$(GINKGO) -v ./test/e2e/...
+	@echo "Running must-gather to gather diagnostics..."
+	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
+	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
 	make undeploy-ocp
 	@rm -f .kueue_image
+	@rm -f .must_gather_image
 
 .PHONY: e2e-upstream-test
-e2e-upstream-test: get-kueue-image wait-for-image deploy-cert-manager wait-for-cert-manager deploy-ocp
+e2e-upstream-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager wait-for-cert-manager deploy-ocp
 	@echo "Running upstream e2e tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
+	@echo "Running must-gather to gather diagnostics..."
+	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
+	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
 	make undeploy-ocp
 	@rm -f .kueue_image
+	@rm -f .must_gather_image
 
 
 .PHONY: e2e-tech-preview-test
@@ -258,7 +276,8 @@ push-must:
 
 .PHONY: run-must
 run-must:
-	oc adm must-gather --image=$(MUST_GATHER_IMAGE)
+	@mkdir -p $${ARTIFACT_DIR:-must-gather}/must-gather
+	oc adm must-gather --image=$(MUST_GATHER_IMAGE) --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
 
 .PHONY: clean-must
 clean-must:
