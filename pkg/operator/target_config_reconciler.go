@@ -565,7 +565,7 @@ func (c *TargetConfigReconciler) cleanUpClusterRoles(ctx context.Context) error 
 	}
 
 	for _, role := range clusterRoleList.Items {
-		if !strings.Contains(role.Name, "kueue") || role.Name == "openshift-kueue-operator" {
+		if !strings.Contains(role.Name, "kueue") || strings.Contains(role.Name, "kueue-operator") {
 			continue
 		}
 
@@ -599,7 +599,7 @@ func (c *TargetConfigReconciler) cleanUpClusterRoleBindings(ctx context.Context)
 	}
 	for _, binding := range clusterRoleBindingList.Items {
 
-		if !strings.Contains(binding.Name, "kueue") || binding.Name == "openshift-kueue-operator" {
+		if !strings.Contains(binding.Name, "kueue") || strings.Contains(binding.Name, "kueue-operator") {
 			continue
 		}
 
