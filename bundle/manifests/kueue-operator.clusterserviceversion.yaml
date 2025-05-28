@@ -287,6 +287,7 @@ spec:
           template:
             metadata:
               labels:
+                app.openshift.io/name: kueue
                 name: openshift-kueue-operator
             spec:
               containers:
@@ -327,6 +328,21 @@ spec:
               volumes:
               - emptyDir: {}
                 name: tmp
+      permissions:
+      - rules:
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        serviceAccountName: openshift-kueue-operator
     strategy: deployment
   installModes:
   - supported: false
