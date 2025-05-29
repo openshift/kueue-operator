@@ -282,3 +282,7 @@ run-must:
 .PHONY: clean-must
 clean-must:
 	-$(CONTAINER_TOOL) rmi $(MUST_GATHER_IMAGE) || true
+
+.PHONY: create_operator_namespace
+create_operator_namespace:
+	oc apply -f test/e2e/bindata/assets/01_namespace.yaml

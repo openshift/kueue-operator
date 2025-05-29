@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -32,9 +31,6 @@ import (
 	ssscheme "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/scheme"
 	"github.com/openshift/kueue-operator/test/e2e/bindata"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
-	"github.com/openshift/library-go/pkg/operator/events"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	batchv1 "k8s.io/api/batch/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
@@ -55,7 +51,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -688,7 +683,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				clusterRoles, _ := kubeClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
 				klog.Infof("Verifying removal of Cluster Roles")
 				for _, role := range clusterRoles.Items {
-					if strings.Contains(role.Name, "kueue") && role.Name != operatorNamespace {
+					if strings.Contains(role.Name, "kueue") && !strings.Contains(role.Name, "kueue-operator") {
 						return fmt.Errorf("ClusterRole %s still exists", role.Name)
 					}
 				}
@@ -696,7 +691,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				clusterRoleBindings, _ := kubeClient.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
 				klog.Infof("Verifying removal of Cluster Role Bindings")
 				for _, binding := range clusterRoleBindings.Items {
-					if strings.Contains(binding.Name, "kueue") && binding.Name != operatorNamespace {
+					if strings.Contains(binding.Name, "kueue") && !strings.Contains(binding.Name, "kueue-operator") {
 						return fmt.Errorf("ClusterRoleBinding %s still exists", binding.Name)
 					}
 				}
@@ -890,11 +885,7 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 }
 
 func deployOperator() error {
-	kubeClient := clients.KubeClient
-	apiExtClient := clients.APIExtClient
 	ssClient := clients.KueueClient
-
-	eventRecorder := events.NewKubeRecorder(kubeClient.CoreV1().Events(namespace), "test-e2e", &corev1.ObjectReference{}, clock.RealClock{})
 
 	ctx, cancelFnc := context.WithCancel(context.TODO())
 	defer cancelFnc()
@@ -903,89 +894,6 @@ func deployOperator() error {
 		path           string
 		readerAndApply func(objBytes []byte) error
 	}{
-		{
-			path: "assets/00_kueue-operator.crd.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(ctx, apiExtClient, eventRecorder, resourceread.ReadCustomResourceDefinitionV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/01_namespace.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyNamespace(ctx, kubeClient.CoreV1(), eventRecorder, resourceread.ReadNamespaceV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/02_clusterrole.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyClusterRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/02_role.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/03_clusterrolebinding.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyClusterRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleBindingV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/03_rolebinding.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyRoleBinding(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadRoleBindingV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/04_serviceaccount.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyServiceAccount(ctx, kubeClient.CoreV1(), eventRecorder, resourceread.ReadServiceAccountV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/05_clusterrole_kueue-batch.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyClusterRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleV1OrDie(objBytes))
-				return err
-			},
-		},
-		{
-			path: "assets/06_clusterrole_kueue-admin.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				_, _, err := resourceapply.ApplyClusterRole(ctx, kubeClient.RbacV1(), eventRecorder, resourceread.ReadClusterRoleV1OrDie(objBytes))
-				return err
-			},
-		},
-
-		{
-			path: "assets/07_deployment.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				required := resourceread.ReadDeploymentV1OrDie(objBytes)
-				operatorImage := os.Getenv("OPERATOR_IMAGE")
-				kueueImage := os.Getenv("KUEUE_IMAGE")
-
-				required.Spec.Template.Spec.Containers[0].Image = operatorImage
-				required.Spec.Template.Spec.Containers[0].Env[2].Value = kueueImage
-				_, _, err := resourceapply.ApplyDeployment(
-					ctx,
-					kubeClient.AppsV1(),
-					eventRecorder,
-					required,
-					1000, // any random high number
-				)
-				return err
-			},
-		},
 		{
 			path: "assets/08_kueue_default.yaml",
 			readerAndApply: func(objBytes []byte) error {
