@@ -16,7 +16,7 @@ IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 OPERATOR_VERSION ?= 0.1.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
-BUNDLE_IMAGE ?= mustchange
+BUNDLE_IMAGE ?= quay.io/rh-pbhojara/operatorbundle:latest
 KUEUE_IMAGE ?= mustchange
 MUST_GATHER_IMAGE ?= quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
 
@@ -282,3 +282,45 @@ run-must:
 .PHONY: clean-must
 clean-must:
 	-$(CONTAINER_TOOL) rmi $(MUST_GATHER_IMAGE) || true
+
+.PHONY: create_operator_namespace
+create_operator_namespace:
+	oc apply -f test/e2e/bindata/assets/01_namespace.yaml
+
+.PHONY: run-bundle-test
+run-bundle-test: get-kueue-image wait-for-image deploy-cert-manager
+	@echo "Running operator E2E tests with bundle..."
+
+	# Export required vars
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	export KUEUE_IMAGE; \
+	echo "KUEUE_IMAGE=$$KUEUE_IMAGE"; \
+	echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}"; \
+	echo "BUNDLE_IMAGE=${BUNDLE_IMAGE}"; \
+
+	# Replace images in manifests
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
+
+	# Generate bundle with updated images
+	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
+
+	# Revert deploy files to avoid polluting git
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
+
+	# Build and push bundle
+	${CONTAINER_TOOL} build -f bundle.Dockerfile -t ${BUNDLE_IMAGE}
+	${CONTAINER_TOOL} push ${BUNDLE_IMAGE}
+
+	make create_operator_namespace
+	# Run the bundle
+	operator-sdk run bundle --namespace ${OPERATOR_NAMESPACE} ${BUNDLE_IMAGE}
+
+	# Wait for CSV to succeed
+	echo "Waiting for CSV..."
+	timeout 300s bash -c 'until oc get csv -n ${OPERATOR_NAMESPACE} -o jsonpath="{.items[0].status.phase}" | grep -q "Succeeded"; do sleep 10; echo "Still waiting..."; done'
+
+	# Run E2E tests
+	@echo "Running Ginkgo tests..."
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	export KUEUE_IMAGE; \
+	SKIP_OPERATOR_DEPLOY=true $(GINKGO) -v ./test/e2e/...
