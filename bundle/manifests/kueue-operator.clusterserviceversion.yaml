@@ -125,8 +125,9 @@ spec:
     - kind: Kueue
       name: kueues.operator.openshift.io
       version: v1alpha1
-  description: Kueue Operator description. TODO.
-  displayName: Kueue Operator
+      description: |
+        Create a `Kueue` custom resource (CR) to configure your installation.
+  displayName: Red Hat build of Kueue Operator
   icon:
   - base64data: ""
     mediatype: ""
@@ -339,8 +340,10 @@ spec:
   keywords:
   - kueue-operator
   links:
-  - name: Kueue Operator
+  - name: Repository
     url: https://github.com/openshift/kueue-operator
+  - name: Documentation
+    url: https://docs.redhat.com/en/documentation/red_hat_build_of_kueue/1.0/html-single/about/index
   maintainers:
   - email: aos-node@redhat.com
     name: Node team
@@ -353,3 +356,7 @@ spec:
     name: operand-image
   version: 0.1.0
   minKubeVersion: 1.28.0
+  description: |
+    Red Hat build of Kueue is a collection of APIs, based on the [Kueue](https://kueue.sigs.k8s.io/docs/) open source project, that extends Kubernetes to manage access to resources for jobs.
+
+    Red Hat build of Kueue does not replace any existing components in a Kubernetes cluster, but instead integrates with the existing Kubernetes API server, scheduler, and cluster autoscaler components to determine when a job waits, is admitted to start by creating pods, or should be preempted.
