@@ -28,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-19T19:25:56Z"
+    createdAt: "2025-05-30T20:04:54Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -232,7 +232,7 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:dd765c446564d4397570f4bc056b55989f6c0bae0d70514874e67765c9c77889
+                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:56e3aca8165f9aad48372ee2b746a9d75756f1e8c3613e94d7ea554afe878122
                 image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:0c4d9cd97f7579adbf2afd238c953ca5f170408cf27e3b2bf4aa16c108a76881
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
@@ -295,7 +295,7 @@ spec:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
   relatedImages:
-  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:dd765c446564d4397570f4bc056b55989f6c0bae0d70514874e67765c9c77889
+  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:56e3aca8165f9aad48372ee2b746a9d75756f1e8c3613e94d7ea554afe878122
     name: operand-image
   version: 0.1.0
   minKubeVersion: 1.28.0
