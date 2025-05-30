@@ -17,81 +17,10 @@ metadata:
           },
           "spec": {
             "config": {
-              "gangScheduling": {
-                "policy": "None"
-              },
               "integrations": {
                 "frameworks": [
-                  "AppWrapper"
+                  "BatchJob"
                 ]
-              },
-              "preemption": {
-                "preemptionPolicy": "FairSharing"
-              },
-              "workloadManagement": {
-                "labelPolicy": "None"
-              }
-            },
-            "managementState": "Managed"
-          }
-        },
-        {
-          "apiVersion": "operator.openshift.io/v1alpha1",
-          "kind": "Kueue",
-          "metadata": {
-            "labels": {
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "kueue-operator"
-            },
-            "name": "cluster",
-            "namespace": "openshift-kueue-operator"
-          },
-          "spec": {
-            "config": {
-              "integrations": {
-                "frameworks": [
-                  "BatchJob",
-                  "Pod",
-                  "Deployment",
-                  "StatefulSet"
-                ]
-              }
-            },
-            "managementState": "Managed"
-          }
-        },
-        {
-          "apiVersion": "operator.openshift.io/v1alpha1",
-          "kind": "Kueue",
-          "metadata": {
-            "labels": {
-              "app.kubernetes.io/managed-by": "kustomize",
-              "app.kubernetes.io/name": "kueue-operator"
-            },
-            "name": "cluster",
-            "namespace": "openshift-kueue-operator"
-          },
-          "spec": {
-            "config": {
-              "gangScheduling": {
-                "byWorkload": {
-                  "admission": "Parallel"
-                },
-                "policy": "ByWorkload"
-              },
-              "integrations": {
-                "frameworks": [
-                  "RayJob",
-                  "RayCluster",
-                  "AppWrapper",
-                  "PyTorchJob"
-                ]
-              },
-              "preemption": {
-                "preemptionPolicy": "Classical"
-              },
-              "workloadManagement": {
-                "labelPolicy": "QueueName"
               }
             },
             "managementState": "Managed"
@@ -99,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-16T14:34:51Z"
+    createdAt: "2025-05-19T19:25:56Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
