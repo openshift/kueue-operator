@@ -52,7 +52,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -109,7 +109,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -169,7 +169,7 @@ fairSharing:
   - LessThanOrEqualToFinalShare
   - LessThanInitialShare
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -220,7 +220,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -280,7 +280,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
