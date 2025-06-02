@@ -167,20 +167,20 @@ golangci-lint:
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
-operator-sdk: ## Download operator-sdk locally if necessary.
-ifeq (,$(wildcard $(OPERATOR_SDK)))
-ifeq (, $(shell which operator-sdk 2>/dev/null))
-	@{ \
-	set -e ;\
-	mkdir -p $(dir $(OPERATOR_SDK)) ;\
-	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-	curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} ;\
-	chmod +x $(OPERATOR_SDK) ;\
-	}
-else
-OPERATOR_SDK = $(shell which operator-sdk)
-endif
-endif
+OPERATOR_SDK_VERSION ?= v1.37.0
+
+operator-sdk:
+	@echo "Ensuring operator-sdk exists at $(OPERATOR_SDK)"
+	@if [ ! -f "$(OPERATOR_SDK)" ]; then \
+		echo "Downloading operator-sdk $(OPERATOR_SDK_VERSION)..."; \
+		mkdir -p $(dir $(OPERATOR_SDK)); \
+		OS=$$(go env GOOS); ARCH=$$(go env GOARCH); \
+		URL="https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH}"; \
+		curl -sSL -o $(OPERATOR_SDK) "$$URL"; \
+		chmod +x $(OPERATOR_SDK); \
+	else \
+		echo "Found operator-sdk at $(OPERATOR_SDK)"; \
+	fi
 
 # Use this target like make sync-manifests VERSION=<version>
 .PHONY: sync-manifests
@@ -220,11 +220,34 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo
-	@echo "Running operator e2e tests..."
+e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo operator-sdk
+	@echo "Running operator E2E tests with bundle..."
+	
+	@KUEUE_IMAGE=$$(cat .kueue_image); \
+	export KUEUE_IMAGE; \
+	echo "KUEUE_IMAGE=$$KUEUE_IMAGE"; \
+
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
+
+	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
+
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
+
+	${CONTAINER_TOOL} build -f bundle.Dockerfile -t ${BUNDLE_IMAGE}
+	${CONTAINER_TOOL} push ${BUNDLE_IMAGE}
+
+	make create_operator_namespace
+	operator-sdk run bundle --namespace openshift-kueue-operator ${BUNDLE_IMAGE}
+
+	echo "Waiting for CSV..."
+	timeout 300s bash -c 'until oc get csv -n openshift-kueue-operator -o jsonpath="{.items[0].status.phase}" | grep -q "Succeeded"; do sleep 10; echo "Still waiting..."; done'
+
+	# Run E2E tests
+	@echo "Running Ginkgo tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
 	$(GINKGO) -v ./test/e2e/...
+
 	@echo "Running must-gather to gather diagnostics..."
 	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
 	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
@@ -286,41 +309,3 @@ clean-must:
 .PHONY: create_operator_namespace
 create_operator_namespace:
 	oc apply -f test/e2e/bindata/assets/01_namespace.yaml
-
-.PHONY: run-bundle-test
-run-bundle-test: get-kueue-image wait-for-image deploy-cert-manager
-	@echo "Running operator E2E tests with bundle..."
-
-	# Export required vars
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
-	echo "KUEUE_IMAGE=$$KUEUE_IMAGE"; \
-	echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}"; \
-	echo "BUNDLE_IMAGE=${BUNDLE_IMAGE}"; \
-
-	# Replace images in manifests
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-
-	# Generate bundle with updated images
-	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
-
-	# Revert deploy files to avoid polluting git
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-
-	# Build and push bundle
-	${CONTAINER_TOOL} build -f bundle.Dockerfile -t ${BUNDLE_IMAGE}
-	${CONTAINER_TOOL} push ${BUNDLE_IMAGE}
-
-	make create_operator_namespace
-	# Run the bundle
-	operator-sdk run bundle --namespace ${OPERATOR_NAMESPACE} ${BUNDLE_IMAGE}
-
-	# Wait for CSV to succeed
-	echo "Waiting for CSV..."
-	timeout 300s bash -c 'until oc get csv -n ${OPERATOR_NAMESPACE} -o jsonpath="{.items[0].status.phase}" | grep -q "Succeeded"; do sleep 10; echo "Still waiting..."; done'
-
-	# Run E2E tests
-	@echo "Running Ginkgo tests..."
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
-	SKIP_OPERATOR_DEPLOY=true $(GINKGO) -v ./test/e2e/...
