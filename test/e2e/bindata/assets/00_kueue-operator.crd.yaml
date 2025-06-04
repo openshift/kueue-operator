@@ -13,13 +13,10 @@ spec:
     singular: kueue
   scope: Cluster
   versions:
-    - name: v1alpha1
+    - name: v1
       schema:
         openAPIV3Schema:
-          description: |-
-            Kueue is the CRD to represent the Kueue operator
-            This CRD defines the configuration that the Kueue
-            Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
+          description: Kueue is the CRD to represent the Kueue operator.
           type: object
           required:
             - spec

@@ -12,11 +12,11 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
 	"github.com/openshift/kueue-operator/bindata"
-	kueuev1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueuev1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/pkg/cert"
 	"github.com/openshift/kueue-operator/pkg/configmap"
-	kueueconfigclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1alpha1"
-	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions/kueueoperator/v1alpha1"
+	kueueconfigclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1"
+	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
 	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
@@ -63,7 +63,7 @@ const (
 
 type TargetConfigReconciler struct {
 	ctx                        context.Context
-	operatorClient             kueueconfigclient.KueueV1alpha1Interface
+	operatorClient             kueueconfigclient.KueueV1Interface
 	kueueClient                *operatorclient.KueueClient
 	kubeClient                 kubernetes.Interface
 	osrClient                  openshiftrouteclientset.Interface
@@ -80,7 +80,7 @@ type TargetConfigReconciler struct {
 
 func NewTargetConfigReconciler(
 	ctx context.Context,
-	operatorConfigClient kueueconfigclient.KueueV1alpha1Interface,
+	operatorConfigClient kueueconfigclient.KueueV1Interface,
 	operatorClientInformer operatorclientinformers.KueueInformer,
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	kueueClient *operatorclient.KueueClient,
@@ -162,7 +162,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 
 	ownerReference := metav1.OwnerReference{
-		APIVersion: "operator.openshift.io/v1alpha1",
+		APIVersion: "operator.openshift.io/v1",
 		Kind:       "Kueue",
 		Name:       kueue.Name,
 		UID:        kueue.UID,
@@ -379,7 +379,7 @@ func (c TargetConfigReconciler) sync() error {
 	return nil
 }
 
-func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1alpha1.Kueue, add bool) error {
+func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1.Kueue, add bool) error {
 	finalizerOp := "added"
 	mutator := controllerutil.AddFinalizer
 	if !add {
@@ -417,7 +417,7 @@ func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1alpha1.Kueue, add
 		patch, err := strategicpatch.CreateTwoWayMergePatch(
 			originalData,
 			modifiedData,
-			kueuev1alpha1.Kueue{},
+			kueuev1.Kueue{},
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create patch: %w", err)
@@ -440,11 +440,11 @@ func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1alpha1.Kueue, add
 	})
 }
 
-func (c *TargetConfigReconciler) addFinalizerToKueueInstance(kueue *kueuev1alpha1.Kueue) error {
+func (c *TargetConfigReconciler) addFinalizerToKueueInstance(kueue *kueuev1.Kueue) error {
 	return c.updateFinalizer(kueue, true)
 }
 
-func (c *TargetConfigReconciler) removeFinalizerFromKueueInstance(kueue *kueuev1alpha1.Kueue) error {
+func (c *TargetConfigReconciler) removeFinalizerFromKueueInstance(kueue *kueuev1.Kueue) error {
 	return c.updateFinalizer(kueue, false)
 }
 
@@ -630,7 +630,7 @@ func (c *TargetConfigReconciler) cleanUpClusterRoleBindings(ctx context.Context)
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageConfigMap(kueue *kueuev1alpha1.Kueue) (*v1.ConfigMap, bool, error) {
+func (c *TargetConfigReconciler) manageConfigMap(kueue *kueuev1.Kueue) (*v1.ConfigMap, bool, error) {
 	required, err := c.kubeClient.CoreV1().ConfigMaps(c.operatorNamespace).Get(context.TODO(), KueueConfigMap, metav1.GetOptions{})
 
 	if errors.IsNotFound(err) {
@@ -642,7 +642,7 @@ func (c *TargetConfigReconciler) manageConfigMap(kueue *kueuev1alpha1.Kueue) (*v
 	return c.buildAndApplyConfigMap(required, kueue.Spec.Config)
 }
 
-func (c *TargetConfigReconciler) buildAndApplyConfigMap(oldCfgMap *v1.ConfigMap, kueueCfg kueuev1alpha1.KueueConfiguration) (*v1.ConfigMap, bool, error) {
+func (c *TargetConfigReconciler) buildAndApplyConfigMap(oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration) (*v1.ConfigMap, bool, error) {
 	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
@@ -666,7 +666,7 @@ func (c *TargetConfigReconciler) manageServiceAccount(ownerReference metav1.Owne
 	return resourceapply.ApplyServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageMutatingWebhook(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (*admissionregistrationv1.MutatingWebhookConfiguration, bool, error) {
+func (c *TargetConfigReconciler) manageMutatingWebhook(kueue *kueuev1.Kueue, ownerReference metav1.OwnerReference) (*admissionregistrationv1.MutatingWebhookConfiguration, bool, error) {
 	required := resourceread.ReadMutatingWebhookConfigurationV1OrDie(bindata.MustAsset("assets/kueue-operator/mutatingwebhook.yaml"))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
@@ -680,7 +680,7 @@ func (c *TargetConfigReconciler) manageMutatingWebhook(kueue *kueuev1alpha1.Kueu
 	return resourceapply.ApplyMutatingWebhookConfigurationImproved(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, newWebhook, c.resourceCache)
 }
 
-func (c *TargetConfigReconciler) manageValidatingWebhook(kueue *kueuev1alpha1.Kueue, ownerReference metav1.OwnerReference) (*admissionregistrationv1.ValidatingWebhookConfiguration, bool, error) {
+func (c *TargetConfigReconciler) manageValidatingWebhook(kueue *kueuev1.Kueue, ownerReference metav1.OwnerReference) (*admissionregistrationv1.ValidatingWebhookConfiguration, bool, error) {
 	required := resourceread.ReadValidatingWebhookConfigurationV1OrDie(bindata.MustAsset("assets/kueue-operator/validatingwebhook.yaml"))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
@@ -892,7 +892,7 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1alpha1.Kueue, specAnnotations map[string]string, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
+func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1.Kueue, specAnnotations map[string]string, ownerReference metav1.OwnerReference) (*appsv1.Deployment, bool, error) {
 	required := resourceread.ReadDeploymentV1OrDie(bindata.MustAsset("assets/kueue-operator/deployment.yaml"))
 	required.Name = operatorclient.OperandName
 	required.Namespace = c.operatorNamespace
@@ -1018,7 +1018,7 @@ func (c *TargetConfigReconciler) processNextWorkItem() bool {
 	return true
 }
 
-func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
+func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
 	gvr := schema.GroupVersionResource{
 		Group:    "cert-manager.io",
 		Version:  "v1",
@@ -1032,7 +1032,7 @@ func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueu
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion": "operator.openshift.io/v1alpha1",
+						"apiVersion": "operator.openshift.io/v1",
 						"kind":       "Kueue",
 						"name":       kueue.Name,
 						"uid":        string(kueue.UID),
@@ -1050,7 +1050,7 @@ func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueu
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
-func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
+func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
 	gvr := schema.GroupVersionResource{
 		Group:    "cert-manager.io",
 		Version:  "v1",
@@ -1065,7 +1065,7 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion": "operator.openshift.io/v1alpha1",
+						"apiVersion": "operator.openshift.io/v1",
 						"kind":       "Kueue",
 						"name":       kueue.Name,
 						"uid":        string(kueue.UID),
@@ -1089,7 +1089,7 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
-func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
+func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
 	gvr := schema.GroupVersionResource{
 		Group:    "cert-manager.io",
 		Version:  "v1",
@@ -1104,7 +1104,7 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion": "operator.openshift.io/v1alpha1",
+						"apiVersion": "operator.openshift.io/v1",
 						"kind":       "Kueue",
 						"name":       kueue.Name,
 						"uid":        string(kueue.UID),
@@ -1131,7 +1131,7 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
-func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1alpha1.Kueue) (*unstructured.Unstructured, bool, error) {
+func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
 
 	// Create ServiceMonitor object
 	serviceMonitor := monitoringv1.ServiceMonitor{
@@ -1144,7 +1144,7 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 			Namespace: c.operatorNamespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion: "operator.openshift.io/v1alpha1",
+					APIVersion: "operator.openshift.io/v1",
 					Kind:       "Kueue",
 					Name:       kueue.Name,
 					UID:        kueue.UID,

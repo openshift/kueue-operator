@@ -38,7 +38,7 @@ func Parser() *typed.Parser {
 var parserOnce sync.Once
 var parser *typed.Parser
 var schemaYAML = typed.YAMLObject(`types:
-- name: com.github.openshift.kueue-operator.pkg.apis.kueueoperator.v1alpha1.Kueue
+- name: com.github.openshift.kueue-operator.pkg.apis.kueueoperator.v1.Kueue
   scalar: untyped
   list:
     elementType:

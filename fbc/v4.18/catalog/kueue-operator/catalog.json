@@ -44,7 +44,7 @@
             "value": {
                 "group": "operator.openshift.io",
                 "kind": "Kueue",
-                "version": "v1alpha1"
+                "version": "v1"
             }
         },
         {
@@ -58,7 +58,7 @@
             "type": "olm.csv.metadata",
             "value": {
                 "annotations": {
-                    "alm-examples": "[\n  {\n    \"apiVersion\": \"operator.openshift.io/v1alpha1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"integrations\": {\n          \"frameworks\": [\n            \"BatchJob\",\n            \"Pod\",\n            \"Deployment\",\n            \"StatefulSet\"\n          ]\n        }\n      },\n      \"managementState\": \"Managed\"\n    }\n  },\n  {\n    \"apiVersion\": \"operator.openshift.io/v1alpha1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"integrations\": {\n          \"externalFrameworks\": [\n            \"AppWrapper\"\n          ],\n          \"frameworks\": [\n            \"BatchJob\",\n            \"RayJob\",\n            \"RayCluster\"\n          ]\n        }\n      }\n    }\n  }\n]",
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"operator.openshift.io/v1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"integrations\": {\n          \"frameworks\": [\n            \"BatchJob\",\n            \"Pod\",\n            \"Deployment\",\n            \"StatefulSet\"\n          ]\n        }\n      },\n      \"managementState\": \"Managed\"\n    }\n  },\n  {\n    \"apiVersion\": \"operator.openshift.io/v1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"integrations\": {\n          \"externalFrameworks\": [\n            \"AppWrapper\"\n          ],\n          \"frameworks\": [\n            \"BatchJob\",\n            \"RayJob\",\n            \"RayCluster\"\n          ]\n        }\n      }\n    }\n  }\n]",
                     "capabilities": "Basic Install",
                     "console.openshift.io/operator-monitoring-default": "true",
                     "createdAt": "2025-04-03T17:38:12Z",
@@ -83,7 +83,7 @@
                     "owned": [
                         {
                             "name": "kueues.operator.openshift.io",
-                            "version": "v1alpha1",
+                            "version": "v1",
                             "kind": "Kueue"
                         }
                     ]
