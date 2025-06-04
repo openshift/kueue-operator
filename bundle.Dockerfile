@@ -10,8 +10,8 @@ LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.37.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
-LABEL io.k8s.display-name="Red Hat Build of Kueue Operator bundle"
-LABEL io.k8s.description="This is a bundle for the Red Hat Build of Kueue Operator"
+LABEL io.k8s.display-name="Red Hat build of Kueue Operator bundle"
+LABEL io.k8s.description="This is a bundle for the Red Hat build of Kueue Operator"
 LABEL com.redhat.component="kueue-operator-bundle"
 LABEL com.redhat.openshift.versions="v4.18-v4.19"
 LABEL name="kueue-operator-rhel9-operator-bundle"
