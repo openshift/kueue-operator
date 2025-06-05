@@ -54,8 +54,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	kueueClient := &operatorclient.KueueClient{
 		Ctx:            ctx,
-		SharedInformer: operatorConfigInformers.Kueue().V1alpha1().Kueues().Informer(),
-		OperatorClient: operatorConfigClient.KueueV1alpha1(),
+		SharedInformer: operatorConfigInformers.Kueue().V1().Kueues().Informer(),
+		OperatorClient: operatorConfigClient.KueueV1(),
 	}
 
 	osrClient, err := openshiftrouteclientset.NewForConfig(cc.KubeConfig)
@@ -70,8 +70,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	targetConfigReconciler, err := NewTargetConfigReconciler(
 		ctx,
-		operatorConfigClient.KueueV1alpha1(),
-		operatorConfigInformers.Kueue().V1alpha1().Kueues(),
+		operatorConfigClient.KueueV1(),
+		operatorConfigInformers.Kueue().V1().Kueues(),
 		kubeInformersForNamespaces,
 		kueueClient,
 		kubeClient,

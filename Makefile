@@ -26,7 +26,7 @@ CONTAINER_TOOL ?= podman
 
 CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
 CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
-CODEGEN_GROUPS_VERSION :=kueue:v1alpha1
+CODEGEN_GROUPS_VERSION :=kueue:v1
 
 KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
 KUEUE_BRANCH := release-0.11
@@ -39,14 +39,14 @@ $(LOCALBIN):
 
 $(call verify-golang-versions,Dockerfile)
 
-$(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
+$(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1,./manifests/,./manifests/)
 
 .PHONY: test-e2e
 test-e2e: ginkgo
 	${GINKGO} -v ./test/e2e/...
 
 regen-crd:
-	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 	cp config/schemapatch/*.yaml manifests/.
 	cp manifests/operator.openshift.io_kueues.yaml deploy/crd/kueue-operator.crd.yaml
 	cp deploy/crd/kueue-operator.crd.yaml test/e2e/bindata/assets/00_kueue-operator.crd.yaml
@@ -56,7 +56,7 @@ generate: manifests code-gen generate-clients
 
 .PHONY: manifests
 manifests: ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
 
 .PHONY: code-gen
 code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

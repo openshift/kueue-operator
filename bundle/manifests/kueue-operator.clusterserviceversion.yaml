@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "operator.openshift.io/v1alpha1",
+          "apiVersion": "operator.openshift.io/v1",
           "kind": "Kueue",
           "metadata": {
             "labels": {
@@ -54,7 +54,7 @@ spec:
     owned:
     - kind: Kueue
       name: kueues.operator.openshift.io
-      version: v1alpha1
+      version: v1
   description: Kueue Operator description. TODO.
   displayName: Red Hat Build of Kueue
   icon:

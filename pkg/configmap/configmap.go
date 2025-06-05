@@ -27,7 +27,7 @@ import (
 
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
-	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
 func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev1.ConfigMap, error) {

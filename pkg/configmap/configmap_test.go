@@ -23,7 +23,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
 func TestBuildConfigMap(t *testing.T) {
