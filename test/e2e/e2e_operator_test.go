@@ -347,6 +347,54 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			_ = kubeClient.CoreV1().Pods(operatorNamespace).Delete(context.TODO(), "curl-metrics-test", metav1.DeleteOptions{})
 		})
 
+		It("should suspend jobs only in labeled namespaces when labelPolicy=None", func() {
+			kueueClientset := clients.KueueClient
+			ctx := context.TODO()
+
+			// Verify webhook configuration
+			Eventually(func() error {
+				validateWebhookConfig(kubeClient, labelKey, labelValue, "job")
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed())
+
+			kueueInstance, err := kueueClientset.KueueV1alpha1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance := kueueInstance.DeepCopy()
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			// Test labeled namespace
+			By("creating job in labeled namespace")
+			job := builderWithLabel.NewJob()
+			job.Labels = map[string]string{}
+			createdJob, err := kubeClient.BatchV1().Jobs(testNamespaceWithLabel).Create(context.TODO(), job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(kubeClient.BatchV1().Jobs(testNamespaceWithLabel).Delete, createdJob.Name, metav1.DeleteOptions{})
+
+			fetchWorkload(kueueClient, testNamespaceWithLabel, string(createdJob.UID))
+
+			// Verify job did not start (Kueue interference)
+			Eventually(func() *batchv1.JobStatus {
+				job, _ := kubeClient.BatchV1().Jobs(testNamespaceWithLabel).Get(context.TODO(), createdJob.Name, metav1.GetOptions{})
+				return &job.Status
+			}, operatorReadyTime, operatorPoll).Should(HaveField("Active", BeNumerically("==", 0)), "Job started in labeled namespace")
+
+			By("creating job in unlabeled namespace")
+			jobWithoutLabel := builderWithoutLabel.NewJob()
+			createdUnlabeledJob, err := kubeClient.BatchV1().Jobs(testNamespaceWithoutLabel).Create(context.TODO(), jobWithoutLabel, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(kubeClient.BatchV1().Jobs(testNamespaceWithoutLabel).Delete, createdUnlabeledJob.Name, metav1.DeleteOptions{})
+
+			// Verify job starts normally (no Kueue interference)
+			Eventually(func() *batchv1.JobStatus {
+				job, _ := kubeClient.BatchV1().Jobs(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledJob.Name, metav1.GetOptions{})
+				return &job.Status
+			}, operatorReadyTime, operatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not started in unlabeled namespace")
+
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+
+		})
+
 		It("should manage jobs only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
@@ -366,7 +414,6 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			jobWithoutLabel := builderWithoutLabel.NewJob()
 			createdUnlabeledJob, err := kubeClient.BatchV1().Jobs(testNamespaceWithoutLabel).Create(context.TODO(), jobWithoutLabel, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			// Verify job starts normally (no Kueue interference)
 			Eventually(func() *batchv1.JobStatus {
 				job, _ := kubeClient.BatchV1().Jobs(testNamespaceWithoutLabel).Get(context.TODO(), createdUnlabeledJob.Name, metav1.GetOptions{})
@@ -539,7 +586,6 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, operatorReadyTime, operatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
-
 	When("cleaning up Kueue resources", func() {
 		var (
 			kueueName      = "cluster"
@@ -660,6 +706,40 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 	})
 })
 
+func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClient *kubernetes.Clientset) {
+	kueueClientset := clients.KueueClient
+	By("Feching Kueue Instance")
+	kueueInstance, err := kueueClientset.KueueV1alpha1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+	Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+	kueueInstance.Spec.Config = config
+	By("Updating Kueue Instance with labelPolicy None")
+	_, err = kueueClientset.KueueV1alpha1().Kueues().Update(ctx, kueueInstance, metav1.UpdateOptions{})
+	Expect(err).ToNot(HaveOccurred(), "Failed to update Kueue instance")
+
+	By("Deleting kueue-controller-manager")
+	err = kClient.AppsV1().Deployments(operatorNamespace).Delete(ctx, "kueue-controller-manager", metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	Eventually(func() error {
+		ctx := context.TODO()
+		podItems, err := kClient.CoreV1().Pods(operatorNamespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			klog.Errorf("Unable to list pods: %v", err)
+			return nil
+		}
+		for _, pod := range podItems.Items {
+			if !strings.HasPrefix(pod.Name, "kueue-controller-manager") {
+				continue
+			}
+			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
+			if pod.Status.ContainerStatuses[0].Ready && pod.GetDeletionTimestamp() == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("pod is not ready")
+	}, operatorReadyTime, operatorPoll).Should(Succeed(), "kueue pod failed to be ready")
+}
+
 func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue, framework string) {
 	validateWebhook := func(webhooks []admissionregistrationv1.ValidatingWebhookConfiguration) {
 		for i, wh := range webhooks {
@@ -698,6 +778,24 @@ func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValu
 	mwh, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().List(context.TODO(), metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	mutatingWebhook(mwh.Items)
+}
+
+func fetchWorkload(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {
+	var workload *kueuev1beta1.Workload
+	Eventually(func() error {
+		workloads, err := kueueClient.KueueV1beta1().Workloads(namespace).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", uid),
+		})
+		if err != nil {
+			return err
+		}
+		if len(workloads.Items) == 0 {
+			return fmt.Errorf("no workload found")
+		}
+		workload = &workloads.Items[0]
+		return nil
+	}, operatorReadyTime, operatorPoll).Should(Succeed())
+	DeferCleanup(kueueClient.KueueV1beta1().Workloads(namespace).Delete, workload.Name, metav1.DeleteOptions{})
 }
 
 func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {

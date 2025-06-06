@@ -71,6 +71,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -130,6 +133,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -188,6 +194,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: true
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -243,6 +252,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -303,6 +315,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
