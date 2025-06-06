@@ -30,7 +30,7 @@ type KueueV1Interface interface {
 	KueuesGetter
 }
 
-// KueueV1Client is used to interact with features provided by the operator.openshift.io group.
+// KueueV1Client is used to interact with features provided by the kueue.openshift.io group.
 type KueueV1Client struct {
 	restClient rest.Interface
 }

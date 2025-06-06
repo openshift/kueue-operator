@@ -30,7 +30,7 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=operator.openshift.io, Version=v1
+	// Group=kueue.openshift.io, Version=v1
 	case v1.SchemeGroupVersion.WithKind("ByWorkload"):
 		return &kueueoperatorv1.ByWorkloadApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ExternalFramework"):
