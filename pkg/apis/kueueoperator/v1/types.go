@@ -80,9 +80,6 @@ type KueueStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // KueueList contains a list of Kueue
-//
-// Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
-// +openshift:compatibility-gen:level=4
 type KueueList struct {
 	metav1.TypeMeta `json:",inline"`
 	// metadata for the list
