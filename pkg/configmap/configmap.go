@@ -178,6 +178,9 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 			// apiserver is insecure.
 			"VisibilityOnDemand": false,
 		},
+		ManagedJobsNamespaceSelector: &v1.LabelSelector{
+			MatchLabels: map[string]string{"kueue.openshift.io/managed": "true"},
+		},
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
