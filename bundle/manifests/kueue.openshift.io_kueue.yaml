@@ -4,13 +4,13 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: kueues.operator.openshift.io
+  name: kueue.kueue.openshift.io
 spec:
-  group: operator.openshift.io
+  group: kueue.openshift.io
   names:
     kind: Kueue
     listKind: KueueList
-    plural: kueues
+    plural: kueue
     singular: kueue
   scope: Cluster
   versions:

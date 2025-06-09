@@ -41,7 +41,7 @@ func Kueue(name string) *KueueApplyConfiguration {
 	b := &KueueApplyConfiguration{}
 	b.WithName(name)
 	b.WithKind("Kueue")
-	b.WithAPIVersion("operator.openshift.io/v1")
+	b.WithAPIVersion("kueue.openshift.io/v1")
 	return b
 }
 
@@ -76,7 +76,7 @@ func extractKueue(kueue *kueueoperatorv1.Kueue, fieldManager string, subresource
 	b.WithName(kueue.Name)
 
 	b.WithKind("Kueue")
-	b.WithAPIVersion("operator.openshift.io/v1")
+	b.WithAPIVersion("kueue.openshift.io/v1")
 	return b, nil
 }
 

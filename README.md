@@ -92,7 +92,7 @@ You can read more at [Konflux example repo](https://github.com/konflux-ci/olm-op
 ## Sample CR
 
 ```yaml
-apiVersion: operator.openshift.io/v1
+apiVersion: kueue.openshift.io/v1
 kind: Kueue
 metadata:
   labels:

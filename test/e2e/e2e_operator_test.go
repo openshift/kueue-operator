@@ -152,7 +152,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 				for _, crd := range crdList.Items {
 					if strings.Contains(crd.Name, "kueue") {
-						if crd.Name != "kueues.operator.openshift.io" {
+						if crd.Name != "kueue.openshift.io" {
 							kueueCRDs = append(kueueCRDs, crd)
 						}
 					}
