@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "operator.openshift.io/v1",
+          "apiVersion": "kueue.openshift.io/v1",
           "kind": "Kueue",
           "metadata": {
             "labels": {
@@ -28,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-06-05T16:11:27Z"
+    createdAt: "2025-06-12T16:04:29Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -53,7 +53,7 @@ spec:
   customresourcedefinitions:
     owned:
     - kind: Kueue
-      name: kueues.operator.openshift.io
+      name: kueues.kueue.openshift.io
       version: v1
   description: Red Hat build of Kueue is a collection of APIs, based on the [Kueue](https://kueue.sigs.k8s.io/docs/) open source project, that extends Kubernetes to manage access to resources for jobs. Red Hat build of Kueue does not replace any existing components in a Kubernetes cluster, but instead integrates with the existing Kubernetes API server, scheduler, and cluster autoscaler components to determine when a job waits, is admitted to start by creating pods, or should be preempted.
   displayName: Red Hat build of Kueue
@@ -65,7 +65,7 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
-          - operator.openshift.io
+          - kueue.openshift.io
           resources:
           - kueues
           - kueues/status

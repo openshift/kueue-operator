@@ -162,7 +162,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 
 	ownerReference := metav1.OwnerReference{
-		APIVersion: "operator.openshift.io/v1",
+		APIVersion: "kueue.openshift.io/v1",
 		Kind:       "Kueue",
 		Name:       kueue.Name,
 		UID:        kueue.UID,
@@ -174,7 +174,7 @@ func (c TargetConfigReconciler) sync() error {
 	}
 
 	specAnnotations := map[string]string{
-		"kueueoperator.operator.openshift.io/cluster": strconv.FormatInt(kueue.Generation, 10),
+		"kueueoperator.kueue.openshift.io/cluster": strconv.FormatInt(kueue.Generation, 10),
 	}
 
 	if kueue.DeletionTimestamp != nil {
@@ -1065,7 +1065,7 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion": "operator.openshift.io/v1",
+						"apiVersion": "kueue.openshift.io/v1",
 						"kind":       "Kueue",
 						"name":       kueue.Name,
 						"uid":        string(kueue.UID),
@@ -1104,7 +1104,7 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion": "operator.openshift.io/v1",
+						"apiVersion": "kueue.openshift.io/v1",
 						"kind":       "Kueue",
 						"name":       kueue.Name,
 						"uid":        string(kueue.UID),
@@ -1144,7 +1144,7 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 			Namespace: c.operatorNamespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion: "operator.openshift.io/v1",
+					APIVersion: "kueue.openshift.io/v1",
 					Kind:       "Kueue",
 					Name:       kueue.Name,
 					UID:        kueue.UID,

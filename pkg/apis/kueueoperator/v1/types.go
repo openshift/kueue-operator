@@ -9,7 +9,7 @@ import (
 
 // Kueue is the CRD to represent the Kueue operator.
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=kueue,scope=Cluster
+// +kubebuilder:resource:path=kueues,scope=Cluster
 // +k8s:openapi-gen=true
 // +genclient
 // +genclient:nonNamespaced
@@ -80,9 +80,6 @@ type KueueStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // KueueList contains a list of Kueue
-//
-// Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.
-// +openshift:compatibility-gen:level=4
 type KueueList struct {
 	metav1.TypeMeta `json:",inline"`
 	// metadata for the list
