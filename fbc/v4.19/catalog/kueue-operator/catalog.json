@@ -17,14 +17,14 @@
     "schema": "olm.bundle",
     "name": "kueue-operator.v0.1.0",
     "package": "kueue-operator",
-    "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:de644d640f355815f3aa40ced5456bb5b0e958aeba8bfbdc4ab360fcdb90f26d",
+    "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:54035c055a37c74d90c75827f04539a8fd5c48d87214be17b0331a2b9122207b",
     "properties": [
         {
             "type": "olm.gvk",
             "value": {
-                "group": "operator.openshift.io",
+                "group": "kueue.openshift.io",
                 "kind": "Kueue",
-                "version": "v1alpha1"
+                "version": "v1"
             }
         },
         {
@@ -38,10 +38,10 @@
             "type": "olm.csv.metadata",
             "value": {
                 "annotations": {
-                    "alm-examples": "[\n  {\n    \"apiVersion\": \"operator.openshift.io/v1alpha1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"gangScheduling\": {\n          \"policy\": \"Disabled\"\n        },\n        \"integrations\": {\n          \"frameworks\": [\n            \"AppWrapper\"\n          ]\n        },\n        \"preemption\": {\n          \"preemptionPolicy\": \"FairSharing\"\n        },\n        \"workloadManagement\": {\n          \"labelPolicy\": \"QueueNameOptional\"\n        }\n      },\n      \"managementState\": \"Managed\"\n    }\n  },\n  {\n    \"apiVersion\": \"operator.openshift.io/v1alpha1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"integrations\": {\n          \"frameworks\": [\n            \"BatchJob\",\n            \"Pod\",\n            \"Deployment\",\n            \"StatefulSet\"\n          ]\n        }\n      },\n      \"managementState\": \"Managed\"\n    }\n  },\n  {\n    \"apiVersion\": \"operator.openshift.io/v1alpha1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"gangScheduling\": {\n          \"byWorkload\": \"Parallel\",\n          \"policy\": \"ByWorkload\"\n        },\n        \"integrations\": {\n          \"frameworks\": [\n            \"RayJob\",\n            \"RayCluster\",\n            \"AppWrapper\",\n            \"PyTorchJob\"\n          ]\n        },\n        \"preemption\": {\n          \"preemptionPolicy\": \"Classical\"\n        },\n        \"workloadManagement\": {\n          \"labelPolicy\": \"QueueNameRequired\"\n        }\n      },\n      \"managementState\": \"Managed\"\n    }\n  }\n]",
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"kueue.openshift.io/v1\",\n    \"kind\": \"Kueue\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"kueue-operator\"\n      },\n      \"name\": \"cluster\",\n      \"namespace\": \"openshift-kueue-operator\"\n    },\n    \"spec\": {\n      \"config\": {\n        \"integrations\": {\n          \"frameworks\": [\n            \"BatchJob\"\n          ]\n        }\n      },\n      \"managementState\": \"Managed\"\n    }\n  }\n]",
                     "capabilities": "Basic Install",
                     "console.openshift.io/operator-monitoring-default": "true",
-                    "createdAt": "2025-05-01T20:58:29Z",
+                    "createdAt": "2025-06-15T03:12:50Z",
                     "features.operators.openshift.io/cnf": "false",
                     "features.operators.openshift.io/cni": "false",
                     "features.operators.openshift.io/csi": "false",
@@ -62,14 +62,14 @@
                 "crdDescriptions": {
                     "owned": [
                         {
-                            "name": "kueues.operator.openshift.io",
-                            "version": "v1alpha1",
+                            "name": "kueues.kueue.openshift.io",
+                            "version": "v1",
                             "kind": "Kueue"
                         }
                     ]
                 },
-                "description": "Kueue Operator description. TODO.",
-                "displayName": "Kueue Operator",
+                "description": "Red Hat build of Kueue is a collection of APIs, based on the [Kueue](https://kueue.sigs.k8s.io/docs/) open source project, that extends Kubernetes to manage access to resources for jobs. Red Hat build of Kueue does not replace any existing components in a Kubernetes cluster, but instead integrates with the existing Kubernetes API server, scheduler, and cluster autoscaler components to determine when a job waits, is admitted to start by creating pods, or should be preempted.",
+                "displayName": "Red Hat build of Kueue",
                 "installModes": [
                     {
                         "type": "OwnNamespace",
@@ -115,15 +115,15 @@
     "relatedImages": [
         {
             "name": "",
-            "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:de644d640f355815f3aa40ced5456bb5b0e958aeba8bfbdc4ab360fcdb90f26d"
+            "image": "registry.redhat.io/kueue-tech-preview/kueue-operator-bundle@sha256:54035c055a37c74d90c75827f04539a8fd5c48d87214be17b0331a2b9122207b"
         },
         {
             "name": "",
-            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:0c4d9cd97f7579adbf2afd238c953ca5f170408cf27e3b2bf4aa16c108a76881"
+            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:2aeaed0a5d5ea0545ccc2296ecc2957e531eefec3dce1af376e885363e18f677"
         },
         {
             "name": "operand-image",
-            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:dd765c446564d4397570f4bc056b55989f6c0bae0d70514874e67765c9c77889"
+            "image": "registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:ba5033599a55e5756668a8bd9c66cab4b6b39ad4d090bdf7adad1dbdd6e2068a"
         }
     ]
 }
