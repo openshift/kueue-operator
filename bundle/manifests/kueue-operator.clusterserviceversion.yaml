@@ -232,7 +232,7 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:ba5033599a55e5756668a8bd9c66cab4b6b39ad4d090bdf7adad1dbdd6e2068a
+                  value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:ba9e06581288a6cf8f0ee31a765febc0032476d5c55a1ec0f066e06a22a57c2d
                 image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:2aeaed0a5d5ea0545ccc2296ecc2957e531eefec3dce1af376e885363e18f677
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
@@ -295,7 +295,7 @@ spec:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
   relatedImages:
-  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:ba5033599a55e5756668a8bd9c66cab4b6b39ad4d090bdf7adad1dbdd6e2068a
+  - image: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:ba9e06581288a6cf8f0ee31a765febc0032476d5c55a1ec0f066e06a22a57c2d
     name: operand-image
   version: 0.1.0
   minKubeVersion: 1.28.0
