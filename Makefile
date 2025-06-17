@@ -13,7 +13,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 0.1.0
+OPERATOR_VERSION ?= 0.2.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
@@ -90,7 +90,7 @@ get-kueue-must-gather-image:
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
 	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
+	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION} 
 	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
 	hack/preserve-bundle-labels.sh
 
