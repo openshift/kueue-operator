@@ -221,27 +221,8 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo operator-sdk
 	@echo "Running operator E2E tests with bundle..."
-	
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
-	echo "KUEUE_IMAGE=$$KUEUE_IMAGE"; \
-
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-
-	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
-
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-
-	${CONTAINER_TOOL} build -f bundle.Dockerfile -t ${BUNDLE_IMAGE}
-	${CONTAINER_TOOL} push ${BUNDLE_IMAGE}
 
 	make create_operator_namespace
-	operator-sdk run bundle --namespace openshift-kueue-operator ${BUNDLE_IMAGE}
-
-	echo "Waiting for CSV..."
-	timeout 300s bash -c 'until oc get csv -n openshift-kueue-operator -o jsonpath="{.items[0].status.phase}" | grep -q "Succeeded"; do sleep 10; echo "Still waiting..."; done'
-
-	# Run E2E tests
 	@echo "Running Ginkgo tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
