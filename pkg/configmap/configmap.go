@@ -166,6 +166,10 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				LeaderElect: ptr.To(true),
 			},
 		},
+		ClientConnection: &configapi.ClientConnection{
+			QPS:   float32Ptr(50),
+			Burst: int32Ptr(100),
+		},
 		Integrations: mapOperatorIntegrationsToKueue(&kueueCfg.Integrations),
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
@@ -185,4 +189,12 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 	}
+}
+
+func float32Ptr(f float32) *float32 {
+	return &f
+}
+
+func int32Ptr(i int32) *int32 {
+	return &i
 }

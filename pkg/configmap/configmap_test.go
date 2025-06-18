@@ -41,6 +41,9 @@ func TestBuildConfigMap(t *testing.T) {
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -101,6 +104,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -161,6 +167,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -218,6 +227,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -281,6 +293,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
