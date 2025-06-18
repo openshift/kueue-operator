@@ -28,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-06-17T14:34:46Z"
+    createdAt: "2025-06-19T18:51:31Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -249,6 +249,7 @@ spec:
                 volumeMounts:
                 - mountPath: /tmp
                   name: tmp
+              priorityClassName: system-cluster-critical
               securityContext:
                 runAsNonRoot: true
                 seccompProfile:

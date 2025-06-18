@@ -14,6 +14,7 @@ spec:
         name: openshift-kueue-operator
         app.openshift.io/name: kueue # for network policies to select this pod
     spec:
+      priorityClassName: system-cluster-critical
       securityContext:
         runAsNonRoot: true
         seccompProfile:

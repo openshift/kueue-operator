@@ -38,6 +38,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -950,6 +951,14 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1.Kueue, 
 					},
 				},
 			},
+		},
+	}
+
+	required.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
+	required.Spec.Template.Spec.Containers[0].Resources = v1.ResourceRequirements{
+		Requests: v1.ResourceList{
+			v1.ResourceCPU:    resource.MustParse("500m"),
+			v1.ResourceMemory: resource.MustParse("512Mi"),
 		},
 	}
 
