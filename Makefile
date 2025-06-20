@@ -16,7 +16,7 @@ IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 OPERATOR_VERSION ?= 0.2.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
-BUNDLE_IMAGE ?= quay.io/rh-pbhojara/operatorbundle:latest
+BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
 MUST_GATHER_IMAGE ?= quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
 
@@ -166,20 +166,20 @@ golangci-lint:
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
-OPERATOR_SDK_VERSION ?= v1.37.0
-
-operator-sdk:
-	@echo "Ensuring operator-sdk exists at $(OPERATOR_SDK)"
-	@if [ ! -f "$(OPERATOR_SDK)" ]; then \
-		echo "Downloading operator-sdk $(OPERATOR_SDK_VERSION)..."; \
-		mkdir -p $(dir $(OPERATOR_SDK)); \
-		OS=$$(go env GOOS); ARCH=$$(go env GOARCH); \
-		URL="https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH}"; \
-		curl -sSL -o $(OPERATOR_SDK) "$$URL"; \
-		chmod +x $(OPERATOR_SDK); \
-	else \
-		echo "Found operator-sdk at $(OPERATOR_SDK)"; \
-	fi
+operator-sdk: ## Download operator-sdk locally if necessary.
+ifeq (,$(wildcard $(OPERATOR_SDK)))
+ifeq (, $(shell which operator-sdk 2>/dev/null))
+	@{ \
+	set -e ;\
+	mkdir -p $(dir $(OPERATOR_SDK)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} ;\
+	chmod +x $(OPERATOR_SDK) ;\
+	}
+else
+OPERATOR_SDK = $(shell which operator-sdk)
+endif
+endif
 
 # Use this target like make sync-manifests VERSION=<version>
 .PHONY: sync-manifests
@@ -219,10 +219,9 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo operator-sdk
+e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo
 	@echo "Running operator E2E tests with bundle..."
 
-	make create_operator_namespace
 	@echo "Running Ginkgo tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
