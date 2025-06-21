@@ -49,7 +49,7 @@ controller:
     ClusterQueue.kueue.x-k8s.io: 1
     Job.batch: 5
     LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
+    Pod: 20
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 fairSharing:
@@ -112,7 +112,7 @@ controller:
     ClusterQueue.kueue.x-k8s.io: 1
     Job.batch: 5
     LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
+    Pod: 20
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 fairSharing:
@@ -175,7 +175,7 @@ controller:
     ClusterQueue.kueue.x-k8s.io: 1
     Job.batch: 5
     LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
+    Pod: 20
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 fairSharing:
@@ -235,7 +235,7 @@ controller:
     ClusterQueue.kueue.x-k8s.io: 1
     Job.batch: 5
     LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
+    Pod: 20
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 fairSharing:
@@ -301,7 +301,7 @@ controller:
     ClusterQueue.kueue.x-k8s.io: 1
     Job.batch: 5
     LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
+    Pod: 20
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 fairSharing:

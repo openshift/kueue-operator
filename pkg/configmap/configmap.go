@@ -155,7 +155,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 			Controller: &configapi.ControllerConfigurationSpec{
 				GroupKindConcurrency: map[string]int{
 					"Job.batch":                     5,
-					"Pod":                           5,
+					"Pod":                           20,
 					"Workload.kueue.x-k8s.io":       5,
 					"LocalQueue.kueue.x-k8s.io":     1,
 					"ClusterQueue.kueue.x-k8s.io":   1,
