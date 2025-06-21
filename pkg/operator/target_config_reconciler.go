@@ -1041,7 +1041,7 @@ func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueu
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion": "operator.openshift.io/v1",
+						"apiVersion": "kueue.openshift.io/v1",
 						"kind":       "Kueue",
 						"name":       kueue.Name,
 						"uid":        string(kueue.UID),
