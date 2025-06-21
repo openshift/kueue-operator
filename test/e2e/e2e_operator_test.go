@@ -141,24 +141,34 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 		It("kueue operator deployment should contain priority class", func() {
 			ctx := context.TODO()
-			operatorDeployment, err := kubeClient.AppsV1().Deployments(operatorNamespace).Get(ctx, "openshift-kueue-operator", metav1.GetOptions{})
-			if err != nil {
-				Expect(err).NotTo(HaveOccurred(), err)
-			}
-			By("Checking if deployment spec priority class has expected value")
-			Expect(operatorDeployment.Spec.Template.Spec.PriorityClassName).To(Equal("system-cluster-critical"))
+			Eventually(func() error {
+				operatorDeployment, err := kubeClient.AppsV1().Deployments(operatorNamespace).Get(ctx, "openshift-kueue-operator", metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				if operatorDeployment.Spec.Template.Spec.PriorityClassName != "system-cluster-critical" {
+					return fmt.Errorf("Operator deployment does not have priority class system-cluster-critical")
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Unexpected priority class")
 		})
 
 		It("kueue deployment should contain priority class and have no resource limits set", func() {
 			ctx := context.TODO()
-			managerDeployment, err := kubeClient.AppsV1().Deployments(operatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-			if err != nil {
-				Expect(err).NotTo(HaveOccurred(), err)
-			}
-			By("Checking if deployment spec priority class has expected value")
-			Expect(managerDeployment.Spec.Template.Spec.PriorityClassName).To(Equal("system-cluster-critical"))
-			By("Checking if deployment containers spec has no limit set")
-			Expect(len(managerDeployment.Spec.Template.Spec.Containers[0].Resources.Limits)).To(Equal(0))
+
+			Eventually(func() error {
+				managerDeployment, err := kubeClient.AppsV1().Deployments(operatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				if managerDeployment.Spec.Template.Spec.PriorityClassName != "system-cluster-critical" {
+					return fmt.Errorf("kueue-controller-manager does not have priority class system-cluster-critical")
+				}
+				if len(managerDeployment.Spec.Template.Spec.Containers[0].Resources.Limits) > 0 {
+					return fmt.Errorf("kueue-controller-manager shouldn't set resources limits")
+				}
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Unexpected kueue-controller-manager spec")
 		})
 
 		It("Verifying that no v1alpha Kueue CRDs are installed", func() {
