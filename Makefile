@@ -220,10 +220,13 @@ wait-for-cert-manager:
 
 .PHONY: e2e-ci-test
 e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo
-	@echo "Running operator e2e tests..."
+	@echo "Running operator E2E tests with bundle..."
+
+	@echo "Running Ginkgo tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
 	$(GINKGO) -v ./test/e2e/...
+
 	@echo "Running must-gather to gather diagnostics..."
 	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
 	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
@@ -281,3 +284,7 @@ run-must:
 .PHONY: clean-must
 clean-must:
 	-$(CONTAINER_TOOL) rmi $(MUST_GATHER_IMAGE) || true
+
+.PHONY: create_operator_namespace
+create_operator_namespace:
+	oc apply -f test/e2e/bindata/assets/01_namespace.yaml
