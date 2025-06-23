@@ -90,8 +90,12 @@ sed -i '/name: Node team/{n;/name:/d}' "${CSV_FILE}"
 sed -i 's|name: Provider Name|name: Red Hat, Inc|' "${CSV_FILE}"
 sed -i 's|url: https://your.domain|url: https://github.com/openshift/kueue-operator|' "${CSV_FILE}"
 
-# Fix relatedImages entry.
-# sed -i "/relatedImages:/{n;s|image:.*|image: ${KUEUE_OPERAND_IMAGE}|;n;s|name:.*|name: operand-image|}" "${CSV_FILE}"
+# Add the relatedImages entries
+yq -i '
+  .spec.relatedImages += [
+    {"name": "must-gather", "image": env(MUST_GATHER_IMAGE)}
+  ]
+' "${CSV_FILE}"
 
 # Add/update minKubeVersion.
 if ! grep -q "minKubeVersion" "${CSV_FILE}"; then
