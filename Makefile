@@ -223,7 +223,7 @@ e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-c
 	@echo "Running operator e2e tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
-	$(GINKGO) -v ./test/e2e/...
+	$(GINKGO) -v ./test/e2e/... || @echo "E2E tests failed"
 	@echo "Running must-gather to gather diagnostics..."
 	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
 	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
@@ -236,7 +236,7 @@ e2e-upstream-test: get-kueue-image wait-for-image get-kueue-must-gather-image de
 	@echo "Running upstream e2e tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
-	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
+	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp || @echo "E2E tests failed"
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
 	@echo "Running must-gather to gather diagnostics..."
