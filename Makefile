@@ -13,7 +13,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 0.2.0
+OPERATOR_VERSION ?= 0.2.1
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
