@@ -7,12 +7,12 @@ metadata:
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
     rbac.kueue.x-k8s.io/batch-admin: "true"
-  name: kueue-topology-editor-role
+  name: kueue-cohort-editor-role
 rules:
 - apiGroups:
   - kueue.x-k8s.io
   resources:
-  - topologies
+  - cohorts
   verbs:
   - create
   - delete
