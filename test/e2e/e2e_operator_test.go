@@ -442,6 +442,16 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 			verifyWorkloadCreated(kueueClient, testNamespaceWithLabel, string(createdJob.UID))
 
+			By("creating job in labeled namespace not managed by Kueue")
+			jobWithoutQueue := builderWithLabel.NewJobWithoutQueue()
+			createdUnmanagedJob, err := kubeClient.BatchV1().Jobs(testNamespaceWithLabel).Create(context.TODO(), jobWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() *batchv1.JobStatus {
+				job, _ := kubeClient.BatchV1().Jobs(testNamespaceWithLabel).Get(context.TODO(), createdUnmanagedJob.Name, metav1.GetOptions{})
+				return &job.Status
+			}, operatorReadyTime, operatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not managed by Kueue in labeled namespace")
+
 			By("creating job in unlabeled namespace")
 			jobWithoutLabel := builderWithoutLabel.NewJob()
 			createdUnlabeledJob, err := kubeClient.BatchV1().Jobs(testNamespaceWithoutLabel).Create(context.TODO(), jobWithoutLabel, metav1.CreateOptions{})
@@ -466,6 +476,16 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			verifyWorkloadCreated(kueueClient, testNamespaceWithLabel, string(createdPod.UID))
+
+			By("creating pod in labeled namespace not managed by Kueue")
+			podWithoutQueue := builderWithLabel.NewPodWithoutQueue()
+			createdUnmanagedPod, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).Create(context.TODO(), podWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() corev1.PodPhase {
+				pod, _ := kubeClient.CoreV1().Pods(testNamespaceWithLabel).Get(context.TODO(), createdUnmanagedPod.Name, metav1.GetOptions{})
+				return pod.Status.Phase
+			}, operatorReadyTime, operatorPoll).Should(Equal(corev1.PodRunning), "Pod not managed by Kueue in labeled namespace")
 
 			By("creating pod in unlabeled namespace")
 			podWithoutLabel := builderWithoutLabel.NewPod()
@@ -511,6 +531,16 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				return deploy.Status.AvailableReplicas
 			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "Deployment not available")
 
+			By("creating deployment in labeled namespace not managed by Kueue")
+			deployWithoutQueue := builderWithLabel.NewDeploymentWithoutQueue()
+			createdUnmanagedDeploy, err := kubeClient.AppsV1().Deployments(testNamespaceWithLabel).Create(context.TODO(), deployWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() int32 {
+				deploy, _ := kubeClient.AppsV1().Deployments(testNamespaceWithLabel).Get(context.TODO(), createdUnmanagedDeploy.Name, metav1.GetOptions{})
+				return deploy.Status.AvailableReplicas
+			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "Deployment not managed by Kueue in labeled namespace")
+
 			By("creating deployment in unlabeled namespace")
 			deployWithoutLabel := builderWithoutLabel.NewDeployment()
 			createdUnlabeledDeploy, err := kubeClient.AppsV1().Deployments(testNamespaceWithoutLabel).Create(context.TODO(), deployWithoutLabel, metav1.CreateOptions{})
@@ -553,6 +583,16 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				ss, _ := kubeClient.AppsV1().StatefulSets(testNamespaceWithLabel).Get(context.TODO(), createdSS.Name, metav1.GetOptions{})
 				return ss.Status.ReadyReplicas
 			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "StatefulSet not ready")
+
+			By("creating statefulset in labeled namespace not managed by Kueue")
+			ssWithoutQueue := builderWithLabel.NewStatefulSetWithoutQueue()
+			createdUnmanagedSS, err := kubeClient.AppsV1().StatefulSets(testNamespaceWithLabel).Create(context.TODO(), ssWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() int32 {
+				ss, _ := kubeClient.AppsV1().StatefulSets(testNamespaceWithLabel).Get(context.TODO(), createdUnmanagedSS.Name, metav1.GetOptions{})
+				return ss.Status.ReadyReplicas
+			}, operatorReadyTime, operatorPoll).Should(Equal(int32(1)), "StatefulSet not managed by Kueue in labeled namespace")
 
 			By("creating statefulset in unlabeled namespace")
 			ssWithoutLabel := builderWithoutLabel.NewStatefulSet()
