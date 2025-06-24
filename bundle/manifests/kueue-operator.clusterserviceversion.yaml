@@ -28,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-06-23T17:39:11Z"
+    createdAt: "2025-06-24T02:48:55Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -46,7 +46,7 @@ metadata:
     operatorframework.io/suggested-namespace: openshift-kueue-operator
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
-  name: kueue-operator.v0.2.0
+  name: kueue-operator.v0.2.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -233,7 +233,7 @@ spec:
                         value: openshift-kueue-operator
                       - name: RELATED_IMAGE_OPERAND_IMAGE
                         value: registry.redhat.io/kueue-tech-preview/kueue-rhel9@sha256:9a0b85b0752135694193befe00d10f7abdc0c99c6b9f295d59b237fa0fe3e6d2
-                    image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:f27860e983ee9fa75e341079b5572a7170047c57cfb13d1592750747eb6875e9
+                    image: registry.redhat.io/kueue-tech-preview/kueue-rhel9-operator@sha256:8a8ff932d817b3d1c678a97cb7f6b7e03897b5fe918e258d68e8685b2cc270a0
                     imagePullPolicy: Always
                     name: openshift-kueue-operator
                     ports:
@@ -300,5 +300,5 @@ spec:
       name: operand-image
     - name: must-gather
       image: registry.redhat.io/kueue-tech-preview/kueue-must-gather-rhel9@sha256:e5306c95bf6c5f55be6e791fcb66fe9b34f4f982536f4f90f8ed74acf3f6c31d
-  version: 0.2.0
+  version: 0.2.1
   minKubeVersion: 1.28.0
