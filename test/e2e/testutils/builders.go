@@ -173,3 +173,29 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 		},
 	}
 }
+
+func (b *TestResourceBuilder) NewPodWithoutQueue() *corev1.Pod {
+	pod := b.NewPod()
+	delete(pod.Annotations, "kueue.x-k8s.io/queue-name")
+	return pod
+}
+
+func (b *TestResourceBuilder) NewJobWithoutQueue() *batchv1.Job {
+	job := b.NewJob()
+	if job.Labels != nil {
+		delete(job.Labels, "kueue.x-k8s.io/queue-name")
+	}
+	return job
+}
+
+func (b *TestResourceBuilder) NewDeploymentWithoutQueue() *appsv1.Deployment {
+	deploy := b.NewDeployment()
+	delete(deploy.Annotations, "kueue.x-k8s.io/queue-name")
+	return deploy
+}
+
+func (b *TestResourceBuilder) NewStatefulSetWithoutQueue() *appsv1.StatefulSet {
+	ss := b.NewStatefulSet()
+	delete(ss.Annotations, "kueue.x-k8s.io/queue-name")
+	return ss
+}

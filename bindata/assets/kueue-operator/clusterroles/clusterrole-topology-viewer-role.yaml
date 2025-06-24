@@ -12,7 +12,7 @@ rules:
 - apiGroups:
   - kueue.x-k8s.io
   resources:
-  - topology
+  - topologies
   verbs:
   - get
   - list
