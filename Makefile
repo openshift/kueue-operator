@@ -285,4 +285,4 @@ clean-must:
 
 .PHONY: create_operator_namespace
 create_operator_namespace:
-	oc apply -f test/e2e/bindata/assets/01_namespace.yaml
+	oc apply -f deploy/01_namespace.yaml
