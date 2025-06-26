@@ -109,11 +109,11 @@ func (b *TestResourceBuilder) NewStatefulSet() *appsv1.StatefulSet {
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: ptr.To(replicas),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
+				MatchLabels: map[string]string{"app": "test-statefulset"},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "test"},
+					Labels: map[string]string{"app": "test-statefulset"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -125,6 +125,12 @@ func (b *TestResourceBuilder) NewStatefulSet() *appsv1.StatefulSet {
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("200m"),
 									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr.To(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
 								},
 							},
 						},
@@ -148,11 +154,11 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To(replicas),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
+				MatchLabels: map[string]string{"app": "test-deployment"},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "test"},
+					Labels: map[string]string{"app": "test-deployment"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -164,6 +170,12 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("200m"),
 									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr.To(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
 								},
 							},
 						},

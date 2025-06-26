@@ -509,7 +509,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			var deploymentPod *corev1.Pod
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
-					LabelSelector: "app=test",
+					LabelSelector: "app=test-deployment",
 				})
 				if err != nil || len(pods.Items) == 0 {
 					return fmt.Errorf("no pods found for deployment")
@@ -562,7 +562,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			var ssPod *corev1.Pod
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).List(context.TODO(), metav1.ListOptions{
-					LabelSelector: "app=test",
+					LabelSelector: "app=test-statefulset",
 				})
 				if err != nil || len(pods.Items) == 0 {
 					return fmt.Errorf("no pods found for statefulset")
@@ -802,33 +802,45 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 
 func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue, framework string) {
 	validateWebhook := func(webhooks []admissionregistrationv1.ValidatingWebhookConfiguration) {
-		for i, wh := range webhooks {
-			if strings.HasPrefix(wh.Name, "v"+framework) && strings.Contains(wh.Name, ".kb.io") {
-				Expect(wh.Webhooks[i].NamespaceSelector).NotTo(BeNil())
-				Expect(wh.Webhooks[i].NamespaceSelector.MatchExpressions).To(
-					ContainElement(metav1.LabelSelectorRequirement{
-						Key:      labelKey,
-						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{labelValue},
-					}),
-				)
+		found := false
+		for _, wh := range webhooks {
+			for _, webhook := range wh.Webhooks {
+				if strings.Contains(webhook.Name, framework) && strings.Contains(webhook.Name, ".kb.io") {
+					found = true
+					Expect(webhook.NamespaceSelector).NotTo(BeNil(),
+						"NamespaceSelector is nil for webhook %s", webhook.Name)
+					Expect(webhook.NamespaceSelector.MatchExpressions).To(
+						ContainElement(metav1.LabelSelectorRequirement{
+							Key:      labelKey,
+							Operator: metav1.LabelSelectorOpIn,
+							Values:   []string{labelValue},
+						}),
+						"Webhook %s missing required namespace selector", webhook.Name)
+				}
 			}
 		}
+		Expect(found).To(BeTrue(), "No validating webhook found for framework %s", framework)
 	}
 
 	mutatingWebhook := func(webhooks []admissionregistrationv1.MutatingWebhookConfiguration) {
-		for i, wh := range webhooks {
-			if strings.HasPrefix(wh.Name, "m"+framework) && strings.Contains(wh.Name, ".kb.io") {
-				Expect(wh.Webhooks[i].NamespaceSelector).NotTo(BeNil())
-				Expect(wh.Webhooks[i].NamespaceSelector.MatchExpressions).To(
-					ContainElement(metav1.LabelSelectorRequirement{
-						Key:      labelKey,
-						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{labelValue},
-					}),
-				)
+		found := false
+		for _, wh := range webhooks {
+			for _, webhook := range wh.Webhooks {
+				if strings.Contains(webhook.Name, framework) && strings.Contains(webhook.Name, ".kb.io") {
+					found = true
+					Expect(webhook.NamespaceSelector).NotTo(BeNil(),
+						"NamespaceSelector is nil for webhook %s", webhook.Name)
+					Expect(webhook.NamespaceSelector.MatchExpressions).To(
+						ContainElement(metav1.LabelSelectorRequirement{
+							Key:      labelKey,
+							Operator: metav1.LabelSelectorOpIn,
+							Values:   []string{labelValue},
+						}),
+						"Webhook %s missing required namespace selector", webhook.Name)
+				}
 			}
 		}
+		Expect(found).To(BeTrue(), "No mutating webhook found for framework %s", framework)
 	}
 
 	vwh, err := kubeClient.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(context.TODO(), metav1.ListOptions{})
@@ -868,11 +880,27 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 		if err != nil {
 			return err
 		}
-		if len(workloads.Items) == 0 {
-			return fmt.Errorf("no workload found")
+		if len(workloads.Items) > 0 {
+			workload = &workloads.Items[0]
+			return nil
 		}
-		workload = &workloads.Items[0]
-		return nil
+
+		// If not found by job-uid label, look for workloads by ownerReference (for StatefulSets)
+		allWorkloads, err := kueueClient.KueueV1beta1().Workloads(namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+
+		for _, wl := range allWorkloads.Items {
+			for _, ownerRef := range wl.OwnerReferences {
+				if ownerRef.UID == types.UID(uid) {
+					workload = &wl
+					return nil
+				}
+			}
+		}
+
+		return fmt.Errorf("no workload found")
 	}, operatorReadyTime, operatorPoll).Should(Succeed())
 
 	Eventually(func() bool {
