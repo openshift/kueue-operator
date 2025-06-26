@@ -29,7 +29,6 @@ import (
 )
 
 var (
-	namespace     = ""
 	operatorImage = ""
 	kueueImage    = ""
 	kubeClient    *kubernetes.Clientset
