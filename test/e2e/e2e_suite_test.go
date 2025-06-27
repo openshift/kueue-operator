@@ -17,7 +17,6 @@ limitations under the License.
 package e2e
 
 import (
-	"os"
 	"testing"
 
 	"github.com/onsi/ginkgo/v2/reporters"
@@ -29,10 +28,8 @@ import (
 )
 
 var (
-	operatorImage = ""
-	kueueImage    = ""
-	kubeClient    *kubernetes.Clientset
-	clients       *testutils.TestClients
+	kubeClient *kubernetes.Clientset
+	clients    *testutils.TestClients
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -50,7 +47,5 @@ func TestE2E(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	clients = testutils.NewTestClients()
-	operatorImage = os.Getenv("OPERATOR_IMAGE")
-	kueueImage = os.Getenv("KUEUE_IMAGE")
 	kubeClient = clients.KubeClient
 })
