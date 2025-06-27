@@ -220,7 +220,7 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager ginkgo
+e2e-ci-test: get-kueue-must-gather-image deploy-cert-manager ginkgo
 	@echo "Running operator e2e tests..."
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
