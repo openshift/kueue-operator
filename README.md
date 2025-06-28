@@ -19,6 +19,10 @@ Kubernetes version.
 See [Kueue Release](https://github.com/kubernetes-sigs/kueue/blob/main/RELEASE.md) for more details
 on the Kueue release policy.
 
+## Release Documentation
+
+See [release](docs/RELEASE.md)
+
 ## Deploy the Operator
 
 ### Quick Development Operator
