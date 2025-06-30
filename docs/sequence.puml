@@ -1,0 +1,149 @@
+@startuml
+actor User
+participant TargetConfigReconciler as Reconciler
+participant KubernetesAPI as K8sAPI
+participant CertManager as CertMgr
+participant KueueInstance as Kueue
+
+User -> Reconciler: Trigger Reconciliation (e.g., Kueue instance change)
+activate Reconciler
+
+Reconciler -> K8sAPI: Check if cert-manager is installed (isResourceRegistered)
+activate K8sAPI
+K8sAPI --> Reconciler: Cert-manager status
+deactivate K8sAPI
+
+Reconciler -> K8sAPI: Get Kueue instance
+activate K8sAPI
+K8sAPI --> Reconciler: Kueue instance details
+deactivate K8sAPI
+
+Reconciler -> Kueue: Add finalizer (addFinalizerToKueueInstance)
+activate Kueue
+Kueue --> Reconciler: Finalizer added
+deactivate Kueue
+
+alt If Kueue instance is being deleted
+    Reconciler -> K8sAPI: Clean up webhooks (cleanUpWebhooks)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Webhooks cleaned
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Clean up certificates and issuers (cleanUpCertificatesAndIssuers)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Certs/Issuers cleaned
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Clean up cluster roles (cleanUpClusterRoles)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Cluster roles cleaned
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Clean up cluster role bindings (cleanUpClusterRoleBindings)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Cluster role bindings cleaned
+    deactivate K8sAPI
+
+    Reconciler -> Kueue: Remove finalizer (removeFinalizerFromKueueInstance)
+    activate Kueue
+    Kueue --> Reconciler: Finalizer removed
+    deactivate Kueue
+else Normal reconciliation flow
+    Reconciler -> CertMgr: Manage Issuer CR (manageIssuerCR)
+    activate CertMgr
+    CertMgr --> Reconciler: Issuer CR status
+    deactivate CertMgr
+
+    Reconciler -> CertMgr: Manage Webhook Certificate CR (manageCertificateWebhookCR)
+    activate CertMgr
+    CertMgr --> Reconciler: Webhook Cert CR status
+    deactivate CertMgr
+
+    Reconciler -> CertMgr: Manage Metrics Certificate CR (manageMetricsCertificateCR)
+    activate CertMgr
+    CertMgr --> Reconciler: Metrics Cert CR status
+    deactivate CertMgr
+
+    Reconciler -> K8sAPI: Manage ConfigMap (manageConfigMap)
+    activate K8sAPI
+    K8sAPI --> Reconciler: ConfigMap status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage ServiceAccount (manageServiceAccount)
+    activate K8sAPI
+    K8sAPI --> Reconciler: ServiceAccount status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Roles (leader-election, prometheus)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Role status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage RoleBindings (leader-election, prometheus)
+    activate K8sAPI
+    K8sAPI --> Reconciler: RoleBinding status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Services (metrics, visibility, webhook)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Service status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Custom Resources (manageCustomResources)
+    activate K8sAPI
+    K8sAPI --> Reconciler: CRD status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Network Policies (manageNetworkPolicies)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Network Policy status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Cluster Roles (manageClusterRoles)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Cluster Role status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage OpenShift Cluster Roles for Kueue (manageOpenshiftClusterRolesForKueue)
+    activate K8sAPI
+    K8sAPI --> Reconciler: OpenShift Cluster Role status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage OpenShift Cluster Role Bindings for Kueue (manageOpenshiftClusterRolesBindingForKueue)
+    activate K8sAPI
+    K8sAPI --> Reconciler: OpenShift Cluster Role Binding status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Cluster Role Bindings (proxy, manager, metrics)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Cluster Role Binding status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Mutating Webhook (manageMutatingWebhook)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Mutating Webhook status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Validating Webhook (manageValidatingWebhook)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Validating Webhook status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Service Monitor (manageServiceMonitor)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Service Monitor status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Manage Deployment (manageDeployment)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Deployment status
+    deactivate K8sAPI
+
+    Reconciler -> K8sAPI: Update Operator Status (UpdateStatus)
+    activate K8sAPI
+    K8sAPI --> Reconciler: Status updated
+    deactivate K8sAPI
+end
+
+deactivate Reconciler
+@enduml
