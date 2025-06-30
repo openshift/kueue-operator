@@ -222,7 +222,7 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: get-kueue-must-gather-image deploy-cert-manager ginkgo
 	@echo "Running operator e2e tests..."
-        oc get deployment openshift-kueue-operator -n openshift-kueue-operator -o yaml; \
+	oc get deployment openshift-kueue-operator -n openshift-kueue-operator -o yaml; \
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	export KUEUE_IMAGE; \
 	$(GINKGO) -v ./test/e2e/...
