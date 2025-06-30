@@ -1,0 +1,32 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+Container(operator, "Kueue Operator", "Go", "Manages Kueue components in an OpenShift cluster")
+
+Component(reconciler, "TargetConfigReconciler", "Go", "Reconciles the state of the Kueue installation")
+Component(kueue_crd, "Kueue CRD", "YAML", "Defines the Kueue custom resource")
+Component(main, "main.go", "Go", "Entrypoint for the operator")
+
+Rel(operator, reconciler, "Uses")
+Rel(main, reconciler, "Initializes")
+Rel(reconciler, kueue_crd, "Reads")
+
+Container_Boundary(crds, "Managed Resources") {
+    Component(deployment, "Kueue Deployment", "Kubernetes Deployment", "Runs the Kueue controller manager")
+    Component(service, "Kueue Service", "Kubernetes Service", "Exposes the Kueue webhook and metrics endpoints")
+    Component(configmap, "Kueue ConfigMap", "Kubernetes ConfigMap", "Contains configuration for the Kueue controller manager")
+    Component(rbac, "RBAC Resources", "Kubernetes Roles, RoleBindings, ClusterRoles, ClusterRoleBindings", "Defines permissions for Kueue components")
+    Component(webhooks, "Webhooks", "Kubernetes MutatingWebhookConfiguration, ValidatingWebhookConfiguration", "Intercepts pod creation and other events")
+    Component(certs, "Certificates", "cert-manager.io Certificates and Issuers", "Manages TLS certificates for webhooks")
+}
+
+Rel(reconciler, deployment, "Manages")
+Rel(reconciler, service, "Manages")
+Rel(reconciler, configmap, "Manages")
+Rel(reconciler, rbac, "Manages")
+Rel(reconciler, webhooks, "Manages")
+Rel(reconciler, certs, "Manages")
+
+@enduml
