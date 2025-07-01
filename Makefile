@@ -220,29 +220,22 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: get-kueue-must-gather-image deploy-cert-manager ginkgo
+e2e-ci-test: deploy-cert-manager ginkgo
 	@echo "Running operator e2e tests..."
 	$(GINKGO) -v ./test/e2e/...
-	@echo "Running must-gather to gather diagnostics..."
-	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
-	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
+	make run-must || true
 	make undeploy-ocp
-	@rm -f .must_gather_image
 
 .PHONY: e2e-upstream-test
-e2e-upstream-test: get-kueue-image get-kueue-must-gather-image deploy-cert-manager wait-for-cert-manager
+e2e-upstream-test: get-kueue-image deploy-cert-manager wait-for-cert-manager
 	@echo "Running upstream e2e tests..."
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
-	@echo "Running must-gather to gather diagnostics..."
-	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
-	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
+	make run-must || true
 	make undeploy-ocp
 	@rm -f .kueue_image
-	@rm -f .must_gather_image
-
 
 .PHONY: e2e-tech-preview-test
 e2e-tech-preview-test: wait-for-image deploy-cert-manager ginkgo
@@ -271,9 +264,12 @@ push-must:
 	$(CONTAINER_TOOL) push $(MUST_GATHER_IMAGE)
 
 .PHONY: run-must
-run-must:
+run-must: get-kueue-must-gather-image
+	@echo "Running must-gather to gather diagnostics..."
+	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
 	@mkdir -p $${ARTIFACT_DIR:-must-gather}/must-gather
 	oc adm must-gather --image=$(MUST_GATHER_IMAGE) --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
+	@rm -f .must_gather_image
 
 .PHONY: clean-must
 clean-must:
