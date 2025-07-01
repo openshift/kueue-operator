@@ -222,21 +222,16 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: get-kueue-must-gather-image deploy-cert-manager ginkgo
 	@echo "Running operator e2e tests..."
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
 	$(GINKGO) -v ./test/e2e/...
 	@echo "Running must-gather to gather diagnostics..."
 	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
 	make run-must MUST_GATHER_IMAGE=$$MUST_GATHER_IMAGE || true
 	make undeploy-ocp
-	@rm -f .kueue_image
 	@rm -f .must_gather_image
 
 .PHONY: e2e-upstream-test
-e2e-upstream-test: get-kueue-image wait-for-image get-kueue-must-gather-image deploy-cert-manager wait-for-cert-manager
+e2e-upstream-test: get-kueue-image get-kueue-must-gather-image deploy-cert-manager wait-for-cert-manager
 	@echo "Running upstream e2e tests..."
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
