@@ -266,9 +266,8 @@ push-must:
 .PHONY: run-must
 run-must: get-kueue-must-gather-image
 	@echo "Running must-gather to gather diagnostics..."
-	@MUST_GATHER_IMAGE=$$(cat .must_gather_image); \
 	@mkdir -p $${ARTIFACT_DIR:-must-gather}/must-gather
-	oc adm must-gather --image=$(MUST_GATHER_IMAGE) --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
+	oc adm must-gather --image=$$(cat .must_gather_image) --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
 	@rm -f .must_gather_image
 
 .PHONY: clean-must
