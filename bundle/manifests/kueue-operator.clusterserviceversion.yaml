@@ -28,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-07-01T15:17:59Z"
+    createdAt: "2025-07-02T19:30:21Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -233,7 +233,7 @@ spec:
                         value: openshift-kueue-operator
                       - name: RELATED_IMAGE_OPERAND_IMAGE
                         value: registry.redhat.io/kueue/kueue-rhel9@sha256:73390c4d95bacb5b4d96eac7f82e76fbba4161beb1220e5a4924fdef3e3a8e01
-                    image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:30659b42f5053dd756190211454c01f049bbc7689dddda3ecd8c406b157873a7
+                    image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:fbb70e58b6d9f3b2cee31d824cb799069f1a48e9bf9ea3d6436dfc287e94036b
                     imagePullPolicy: Always
                     name: openshift-kueue-operator
                     ports:
