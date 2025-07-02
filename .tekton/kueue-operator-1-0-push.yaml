@@ -471,6 +471,11 @@ spec:
         operator: in
         values:
         - success
+# Disable coverity check as it takes a long time and is not required yet.
+      - input: "true"
+        operator: in
+        values:
+        - "false"
     - name: coverity-availability-check
       runAfter:
       - build-image-index
