@@ -223,8 +223,6 @@ wait-for-cert-manager:
 e2e-ci-test: deploy-cert-manager ginkgo
 	@echo "Running operator e2e tests..."
 	$(GINKGO) -v ./test/e2e/...
-	make run-must || true
-	make undeploy-ocp
 
 .PHONY: e2e-upstream-test
 e2e-upstream-test: get-kueue-image deploy-cert-manager wait-for-cert-manager
@@ -233,8 +231,6 @@ e2e-upstream-test: get-kueue-image deploy-cert-manager wait-for-cert-manager
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
-	make run-must || true
-	make undeploy-ocp
 	@rm -f .kueue_image
 
 .PHONY: e2e-tech-preview-test
