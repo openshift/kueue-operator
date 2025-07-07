@@ -918,6 +918,13 @@ func deployOperator() error {
 	ctx, cancelFnc := context.WithCancel(context.TODO())
 	defer cancelFnc()
 
+	// Check if Kueue CR already exists for the disconnected use case.
+	_, err := ssClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+	if err == nil {
+		klog.Infof("Kueue CR 'cluster' already exists, skipping creation")
+		return nil
+	}
+
 	assets := []struct {
 		path           string
 		readerAndApply func(objBytes []byte) error
