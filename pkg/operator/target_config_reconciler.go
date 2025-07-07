@@ -186,6 +186,7 @@ func (c TargetConfigReconciler) sync() error {
 			c.cleanUpCertificatesAndIssuers,
 			c.cleanUpClusterRoles,
 			c.cleanUpClusterRoleBindings,
+			c.cleanUpResources,
 		}
 
 		for _, step := range cleanupResources {
@@ -447,6 +448,54 @@ func (c *TargetConfigReconciler) addFinalizerToKueueInstance(kueue *kueuev1.Kueu
 
 func (c *TargetConfigReconciler) removeFinalizerFromKueueInstance(kueue *kueuev1.Kueue) error {
 	return c.updateFinalizer(kueue, false)
+}
+
+func (c *TargetConfigReconciler) cleanUpResources(ctx context.Context) error {
+	var errorList []error
+
+	klog.Infof("Deleting ConfigMap: %s/%s", c.operatorNamespace, "kueue-manager-config")
+	err := retry.OnError(retry.DefaultBackoff, errors.IsTooManyRequests, func() error {
+		return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			return c.kubeClient.CoreV1().ConfigMaps(c.operatorNamespace).Delete(ctx, "kueue-manager-config", metav1.DeleteOptions{})
+		})
+	})
+	if err != nil {
+		klog.Errorf("Failed to delete ConfigMap %s/%s: %v", c.operatorNamespace, "kueue-manager-config", err)
+		errorList = append(errorList, err)
+	} else {
+		klog.Infof("Successfully deleted ConfigMap: %s/%s", c.operatorNamespace, "kueue-manager-config")
+	}
+
+	klog.Infof("Deleting Secret: %s/%s", c.operatorNamespace, "kueue-webhook-server-cert")
+	err = retry.OnError(retry.DefaultBackoff, errors.IsTooManyRequests, func() error {
+		return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			return c.kubeClient.CoreV1().Secrets(c.operatorNamespace).Delete(ctx, "kueue-webhook-server-cert", metav1.DeleteOptions{})
+		})
+	})
+	if err != nil {
+		klog.Errorf("Failed to delete Secret %s/%s: %v", c.operatorNamespace, "kueue-webhook-server-cert", err)
+		errorList = append(errorList, err)
+	} else {
+		klog.Infof("Successfully deleted Secret: %s/%s", c.operatorNamespace, "kueue-webhook-server-cert")
+	}
+
+	klog.Infof("Deleting Secret: %s/%s", c.operatorNamespace, "metrics-server-cert")
+	err = retry.OnError(retry.DefaultBackoff, errors.IsTooManyRequests, func() error {
+		return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			return c.kubeClient.CoreV1().Secrets(c.operatorNamespace).Delete(ctx, "metrics-server-cert", metav1.DeleteOptions{})
+		})
+	})
+	if err != nil {
+		klog.Errorf("Failed to delete Secret %s/%s: %v", c.operatorNamespace, "metrics-server-cert", err)
+		errorList = append(errorList, err)
+	} else {
+		klog.Infof("Successfully deleted Secret: %s/%s", c.operatorNamespace, "metrics-server-cert")
+	}
+
+	if len(errorList) > 0 {
+		return utilerror.NewAggregate(errorList)
+	}
+	return nil
 }
 
 func (c *TargetConfigReconciler) cleanUpWebhooks(ctx context.Context) error {

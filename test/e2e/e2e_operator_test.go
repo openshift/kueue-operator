@@ -732,6 +732,53 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					}
 				}
 
+				klog.Infof("Verifying removal of ConfigMap: kueue-manager-config")
+				_, err = kubeClient.CoreV1().ConfigMaps(operatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				if err == nil {
+					return fmt.Errorf("ConfigMap kueue-manager-config still exists")
+				}
+
+				secretNames := []string{"kueue-webhook-server-cert", "metrics-server-cert"}
+				for _, secretName := range secretNames {
+					klog.Infof("Verifying removal of Secret: %s", secretName)
+					_, err := kubeClient.CoreV1().Secrets(operatorNamespace).Get(ctx, secretName, metav1.GetOptions{})
+					if err == nil {
+						return fmt.Errorf("Secret %s still exists", secretName)
+					}
+				}
+
+				klog.Infof("Verifying removal of ServiceAccount: kueue-controller-manager")
+				_, err = kubeClient.CoreV1().ServiceAccounts(operatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+				if err == nil {
+					return fmt.Errorf("ServiceAccount kueue-controller-manager still exists")
+				}
+
+				klog.Infof("Verifying removal of all NetworkPolicies in namespace: %s", operatorNamespace)
+				networkPolicyList, err := kubeClient.NetworkingV1().NetworkPolicies(operatorNamespace).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list NetworkPolicies: %v", err)
+				}
+				if len(networkPolicyList.Items) > 0 {
+					var networkPolicyNames []string
+					for _, netpl := range networkPolicyList.Items {
+						networkPolicyNames = append(networkPolicyNames, netpl.Name)
+					}
+					return fmt.Errorf("NetworkPolicies still exist in namespace %s: %v", operatorNamespace, networkPolicyNames)
+				}
+
+				klog.Infof("Verifying removal of all Services in namespace: %s", operatorNamespace)
+				serviceList, err := kubeClient.CoreV1().Services(operatorNamespace).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list Services: %v", err)
+				}
+				if len(serviceList.Items) > 0 {
+					var serviceNames []string
+					for _, svc := range serviceList.Items {
+						serviceNames = append(serviceNames, svc.Name)
+					}
+					return fmt.Errorf("Services still exist in namespace %s: %v", operatorNamespace, serviceNames)
+				}
+
 				return nil
 			}, operatorReadyTime, operatorPoll).Should(Succeed(), "Resources were not cleaned up properly")
 		})
