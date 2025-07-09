@@ -26,14 +26,16 @@ import (
 )
 
 type TestResourceBuilder struct {
-	namespace string
-	queueName string
+	namespace      string
+	queueName      string
+	containerImage string
 }
 
 func NewTestResourceBuilder(namespace, queueName string) *TestResourceBuilder {
 	return &TestResourceBuilder{
-		namespace: namespace,
-		queueName: queueName,
+		namespace:      namespace,
+		queueName:      queueName,
+		containerImage: GetContainerImageForWorkloads(),
 	}
 }
 
@@ -57,7 +59,7 @@ func (b *TestResourceBuilder) NewPod() *corev1.Pod {
 			Containers: []corev1.Container{
 				{
 					Name:    "test-container",
-					Image:   "busybox",
+					Image:   b.containerImage,
 					Command: []string{"sh", "-c", "echo Hello Kueue; sleep 3600"},
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
@@ -119,7 +121,7 @@ func (b *TestResourceBuilder) NewStatefulSet() *appsv1.StatefulSet {
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
-							Image:   "busybox",
+							Image:   b.containerImage,
 							Command: []string{"sh", "-c", "sleep 3600"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -164,7 +166,7 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
-							Image:   "busybox",
+							Image:   b.containerImage,
 							Command: []string{"sh", "-c", "sleep 3600"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
