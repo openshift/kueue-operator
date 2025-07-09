@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -10,6 +11,17 @@ import (
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
+
+const (
+	defaultImage = "quay.io/openshift/origin-cli:latest"
+)
+
+func GetContainerImageForWorkloads() string {
+	if image := os.Getenv("CONTAINER_IMAGE"); image != "" {
+		return image
+	}
+	return defaultImage
+}
 
 // PodWrapper wraps a Pod.
 type PodWrapper struct {
@@ -67,7 +79,7 @@ func MakeCurlMetricsPod(namespace string) *PodWrapper {
 	pw := MakePod("curl-metrics-test", namespace)
 	pw.Spec.ServiceAccountName = "kueue-controller-manager"
 	pw.Spec.Containers[0].Name = "curl-metrics"
-	pw.Spec.Containers[0].Image = "quay.io/openshift/origin-cli:latest"
+	pw.Spec.Containers[0].Image = GetContainerImageForWorkloads()
 	pw.Spec.Containers[0].Command = []string{"sleep", "3600"}
 	pw.Spec.Volumes = []corev1.Volume{
 		{
@@ -102,7 +114,7 @@ func MakePod(name, ns string) *PodWrapper {
 			Containers: []corev1.Container{
 				{
 					Name:      "c",
-					Image:     "pause",
+					Image:     GetContainerImageForWorkloads(),
 					Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{}, Limits: corev1.ResourceList{}},
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: ptr.To(false),
@@ -140,7 +152,7 @@ func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName,
 							Containers: []corev1.Container{
 								{
 									Name:  "container",
-									Image: "busybox",
+									Image: GetContainerImageForWorkloads(),
 									Resources: corev1.ResourceRequirements{
 										Requests: corev1.ResourceList{
 											corev1.ResourceCPU:    resource.MustParse("1"),
