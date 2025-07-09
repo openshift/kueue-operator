@@ -22,14 +22,16 @@ import (
 	"github.com/onsi/ginkgo/v2/reporters"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var (
-	kubeClient *kubernetes.Clientset
-	clients    *testutils.TestClients
+	kubeClient    *kubernetes.Clientset
+	genericClient client.Client
+	clients       *testutils.TestClients
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -48,4 +50,5 @@ func TestE2E(t *testing.T) {
 var _ = BeforeSuite(func() {
 	clients = testutils.NewTestClients()
 	kubeClient = clients.KubeClient
+	genericClient = clients.GenericClient
 })
