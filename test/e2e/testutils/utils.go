@@ -2,18 +2,30 @@ package testutils
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
 
 const (
-	defaultImage = "quay.io/openshift/origin-cli:latest"
+	defaultImage               = "quay.io/openshift/origin-cli:latest"
+	deletionTime time.Duration = 2 * time.Minute
+	deletionPoll               = 5 * time.Second
 )
 
 func GetContainerImageForWorkloads() string {
@@ -171,4 +183,48 @@ func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName,
 
 	_, err := client.KueueV1beta1().Workloads(namespace).Create(context.TODO(), workload, v1.CreateOptions{})
 	return err
+}
+
+// CleanUpJob deletes the specified Job in the given namespace.
+func CleanUpJob(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string) {
+	By(fmt.Sprintf("Destroying job %s", name))
+	backgroundPolicy := metav1.DeletePropagationBackground
+	err := kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy})
+	Expect(err).NotTo(HaveOccurred())
+}
+
+// CleanUpWorkload deletes the specified Kueue Workload in the given namespace.
+func CleanUpWorkload(ctx context.Context, kueueClient *upstreamkueueclient.Clientset, namespace, name string) {
+	By(fmt.Sprintf("Destroying Workload %s", name))
+	err := kueueClient.KueueV1beta1().Workloads(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+}
+
+// CleanUpKueuInstance deletes the specified Kueue instance and waits for its removal.
+func CleanUpKueuInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
+	By(fmt.Sprintf("Destroying Kueue %s", name))
+	err := kueueClientset.KueueV1().Kueues().Delete(ctx, name, metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		_, err := kueueClientset.KueueV1().Kueues().Get(ctx, name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("Kueue %s still exists", name)
+	}, deletionTime, deletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
+}
+
+// CleanUpObject deletes the specified kubernetes object and waits for its removal.
+func CleanUpObject(ctx context.Context, kubeClient client.Client, obj client.Object) {
+	By(fmt.Sprintf("Destroying Object %s", obj.GetName()))
+
+	err := kubeClient.Delete(ctx, obj)
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		err := kubeClient.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("Object %s still exists", obj.GetName())
+	}, deletionTime, deletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
 }
