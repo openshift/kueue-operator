@@ -621,7 +621,7 @@ func (c *TargetConfigReconciler) cleanUpClusterRoles(ctx context.Context) error 
 	}
 
 	for _, role := range clusterRoleList.Items {
-		if !strings.Contains(role.Name, "kueue") || strings.Contains(role.Name, "kueue-operator") {
+		if !strings.Contains(role.Name, "kueue") || strings.Contains(role.Name, "kueue-operator") || strings.Contains(role.Name, "openshift.io") {
 			continue
 		}
 
