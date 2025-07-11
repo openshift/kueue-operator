@@ -373,12 +373,82 @@ func (c TargetConfigReconciler) sync() error {
 
 	_, _, err = v1helpers.UpdateStatus(c.ctx, c.kueueClient, func(status *operatorv1.OperatorStatus) error {
 		resourcemerge.SetDeploymentGeneration(&status.Generations, deployment)
+		if deployment != nil {
+			status.ReadyReplicas = deployment.Status.ReadyReplicas
+			status.Conditions = c.buildOperatorConditions(deployment)
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (c *TargetConfigReconciler) buildOperatorConditions(deployment *appsv1.Deployment) []operatorv1.OperatorCondition {
+	desired := int32(1)
+	if deployment.Spec.Replicas != nil {
+		desired = *deployment.Spec.Replicas
+	}
+	ready := deployment.Status.ReadyReplicas
+
+	// Available condition
+	availableStatus := operatorv1.ConditionFalse
+	availableReason := "NotEnoughReplicas"
+	availableMessage := fmt.Sprintf("%d/%d replicas are ready", ready, desired)
+	if ready == desired && ready > 0 {
+		availableStatus = operatorv1.ConditionTrue
+		availableReason = "AllReplicasReady"
+		availableMessage = fmt.Sprintf("All %d replicas are ready", ready)
+	}
+
+	// Progressing condition
+	progressingStatus := operatorv1.ConditionTrue
+	progressingReason := "Reconciling"
+	progressingMessage := "Deployment is reconciling"
+	if ready == desired && ready > 0 {
+		progressingStatus = operatorv1.ConditionFalse
+		progressingReason = "AsExpected"
+		progressingMessage = "Deployment is up to date"
+	}
+
+	// Degraded condition - check for partial failure (some replicas unavailable) or complete failure (no replicas ready).
+	degradedStatus := operatorv1.ConditionFalse
+	degradedReason := "AsExpected"
+	degradedMessage := ""
+	if deployment.Status.UnavailableReplicas > 0 {
+		degradedStatus = operatorv1.ConditionTrue
+		degradedReason = "UnavailableReplicas"
+		degradedMessage = fmt.Sprintf("%d replicas unavailable", deployment.Status.UnavailableReplicas)
+	} else if ready == 0 && desired > 0 {
+		degradedStatus = operatorv1.ConditionTrue
+		degradedReason = "NoReplicasReady"
+		degradedMessage = fmt.Sprintf("No replicas ready (desired: %d)", desired)
+	}
+
+	return []operatorv1.OperatorCondition{
+		{
+			Type:               "Available",
+			Status:             availableStatus,
+			Reason:             availableReason,
+			Message:            availableMessage,
+			LastTransitionTime: metav1.Now(),
+		},
+		{
+			Type:               "Progressing",
+			Status:             progressingStatus,
+			Reason:             progressingReason,
+			Message:            progressingMessage,
+			LastTransitionTime: metav1.Now(),
+		},
+		{
+			Type:               "Degraded",
+			Status:             degradedStatus,
+			Reason:             degradedReason,
+			Message:            degradedMessage,
+			LastTransitionTime: metav1.Now(),
+		},
+	}
 }
 
 func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1.Kueue, add bool) error {
