@@ -134,6 +134,42 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 
 		})
 
+		It("should set ReadyReplicas in operator status and handle degraded condition", func() {
+			ctx := context.TODO()
+			Eventually(func() error {
+				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("Unable to fetch Kueue instance: %v", err)
+				}
+
+				// Check ReadyReplicas is set correctly
+				if kueueInstance.Status.ReadyReplicas == 0 {
+					// If ReadyReplicas is 0, check if the operator properly reports degraded condition.
+					for _, condition := range kueueInstance.Status.Conditions {
+						if condition.Type == "Degraded" && condition.Status == "True" {
+							if strings.Contains(condition.Message, "No replicas ready") {
+								return nil
+							}
+						}
+					}
+					return fmt.Errorf("operator status ReadyReplicas is 0 but Degraded condition is not True or message does not match expected pattern")
+				}
+
+				// If ReadyReplicas is non-zero, verify it matches deployment status.
+				deployment, err := kubeClient.AppsV1().Deployments(operatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("Unable to fetch deployment: %v", err)
+				}
+
+				if kueueInstance.Status.ReadyReplicas != deployment.Status.ReadyReplicas {
+					return fmt.Errorf("operator status ReadyReplicas (%d) does not match deployment ReadyReplicas (%d)",
+						kueueInstance.Status.ReadyReplicas, deployment.Status.ReadyReplicas)
+				}
+
+				return nil
+			}, operatorReadyTime, operatorPoll).Should(Succeed(), "ReadyReplicas not properly set or degraded condition not handled")
+		})
+
 		It("kueue operator deployment should contain priority class", func() {
 			ctx := context.TODO()
 			Eventually(func() error {
