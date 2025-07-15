@@ -49,7 +49,6 @@ test-e2e: ginkgo
 regen-crd:
 	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... output:crd:dir=./manifests
 	cp manifests/kueue.openshift.io_kueues.yaml deploy/crd/kueue-operator.crd.yaml
-	cp deploy/crd/kueue-operator.crd.yaml test/e2e/bindata/assets/00_kueue-operator.crd.yaml
 
 .PHONY: generate
 generate: manifests code-gen generate-clients
