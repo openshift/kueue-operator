@@ -219,12 +219,12 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: deploy-cert-manager ginkgo
+e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
 	$(GINKGO) --no-color -v ./test/e2e/...
 
 .PHONY: e2e-upstream-test
-e2e-upstream-test: get-kueue-image deploy-cert-manager wait-for-cert-manager
+e2e-upstream-test: get-kueue-image
 	@echo "Running upstream e2e tests..."
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp GINKGO_ARGS='--no-color'
