@@ -228,6 +228,7 @@ e2e-ci-test: deploy-cert-manager ginkgo
 e2e-upstream-test: get-kueue-image deploy-cert-manager wait-for-cert-manager
 	@echo "Running upstream e2e tests..."
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
+	./hack/wait-for-kueue-leader-election.sh
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp GINKGO_ARGS='--no-color'
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
