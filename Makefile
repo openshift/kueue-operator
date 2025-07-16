@@ -13,12 +13,13 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 0.0.1
+OPERATOR_VERSION ?= 1.0.0
+OPERATOR_SDK_VERSION ?= v1.37.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
 BUNDLE_IMAGE ?= mustchange
 KUEUE_IMAGE ?= mustchange
-MUST_GATHER_IMAGE ?= https://quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
+MUST_GATHER_IMAGE ?= quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
 
 KUBECONFIG ?= ${HOME}/.kube/config
 
@@ -26,7 +27,7 @@ CONTAINER_TOOL ?= podman
 
 CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
 CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
-CODEGEN_GROUPS_VERSION :=kueue:v1alpha1
+CODEGEN_GROUPS_VERSION :=kueue:v1
 
 KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
 KUEUE_BRANCH := release-0.11
@@ -39,24 +40,22 @@ $(LOCALBIN):
 
 $(call verify-golang-versions,Dockerfile)
 
-$(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1alpha1,./manifests/,./manifests/)
+$(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1,./manifests/,./manifests/)
 
 .PHONY: test-e2e
 test-e2e: ginkgo
 	${GINKGO} -v ./test/e2e/...
 
 regen-crd:
-	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
-	cp config/schemapatch/*.yaml manifests/.
-	cp manifests/operator.openshift.io_kueues.yaml deploy/crd/kueue-operator.crd.yaml
-	cp deploy/crd/kueue-operator.crd.yaml test/e2e/bindata/assets/00_kueue-operator.crd.yaml
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... output:crd:dir=./manifests
+	cp manifests/kueue.openshift.io_kueues.yaml deploy/crd/kueue-operator.crd.yaml
 
 .PHONY: generate
 generate: manifests code-gen generate-clients
 
 .PHONY: manifests
 manifests: ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1alpha1/... schemapatch:manifests=./manifests output:crd:dir=./manifests
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... output:crd:dir=./manifests
 
 .PHONY: code-gen
 code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -78,10 +77,20 @@ get-kueue-image:
 	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
 	@rm -f .kueue_commit_id
 
+.PHONY: get-kueue-must-gather-image
+get-kueue-must-gather-image:
+	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0; \
+	MUST_GATHER_COMMIT=$$(for tag in $$(skopeo list-tags docker://$$REPO | jq -r '.Tags[]' | grep -E '^[a-f0-9]{40}$$' | tail -n 10); do \
+		created=$$(skopeo inspect docker://$$REPO:$$tag 2>/dev/null | jq -r '.Created'); \
+		if [ "$$created" != "null" ] && [ -n "$$created" ]; then echo "$$created $$tag"; fi; \
+	done | sort | tail -n1 | awk '{print $$2}'); \
+	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0:$$MUST_GATHER_COMMIT" > .must_gather_image && \
+	echo "Using must-gather image with tag: $$MUST_GATHER_COMMIT"
+
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
 	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION}
+	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION} 
 	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
 	hack/preserve-bundle-labels.sh
 
@@ -91,7 +100,7 @@ deploy-ocp: get-kueue-image
 	hack/update-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
 	oc apply -f deploy/
 	oc apply -f deploy/crd/
-	oc apply -f deploy/examples/job.yaml
+	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	hack/revert-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
 	echo "Waiting for Kueue Controller Manager..."
 	timeout 300s bash -c 'until oc get deployment kueue-controller-manager -n openshift-kueue-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
@@ -210,25 +219,18 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: get-kueue-image wait-for-image deploy-cert-manager ginkgo
+e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
-	$(GINKGO) -v ./test/e2e/...
-	make undeploy-ocp
-	@rm -f .kueue_image
+	$(GINKGO) --no-color -v ./test/e2e/...
 
 .PHONY: e2e-upstream-test
-e2e-upstream-test: get-kueue-image wait-for-image deploy-cert-manager wait-for-cert-manager deploy-ocp
+e2e-upstream-test: get-kueue-image
 	@echo "Running upstream e2e tests..."
-	@KUEUE_IMAGE=$$(cat .kueue_image); \
-	export KUEUE_IMAGE; \
-	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp
+	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
+	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp GINKGO_ARGS='--no-color'
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
-	make undeploy-ocp
 	@rm -f .kueue_image
-
 
 .PHONY: e2e-tech-preview-test
 e2e-tech-preview-test: wait-for-image deploy-cert-manager ginkgo
@@ -257,9 +259,16 @@ push-must:
 	$(CONTAINER_TOOL) push $(MUST_GATHER_IMAGE)
 
 .PHONY: run-must
-run-must:
-	oc adm must-gather --image=$(MUST_GATHER_IMAGE)
+run-must: get-kueue-must-gather-image
+	@echo "Running must-gather to gather diagnostics..."
+	@mkdir -p $${ARTIFACT_DIR:-must-gather}/must-gather
+	oc adm must-gather --image=$$(cat .must_gather_image) --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
+	@rm -f .must_gather_image
 
 .PHONY: clean-must
 clean-must:
 	-$(CONTAINER_TOOL) rmi $(MUST_GATHER_IMAGE) || true
+
+.PHONY: create_operator_namespace
+create_operator_namespace:
+	oc apply -f deploy/01_namespace.yaml

@@ -16,8 +16,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	applyconfiguration "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
-	kueueapplyconfiguration "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration/kueueoperator/v1alpha1"
-	operatorconfigclientv1alpha1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1alpha1"
+	kueueapplyconfiguration "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration/kueueoperator/v1"
+	operatorconfigclientv1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1"
 )
 
 const (
@@ -30,7 +30,7 @@ var _ v1helpers.OperatorClient = &KueueClient{}
 type KueueClient struct {
 	Ctx            context.Context
 	SharedInformer cache.SharedIndexInformer
-	OperatorClient operatorconfigclientv1alpha1.KueueV1alpha1Interface
+	OperatorClient operatorconfigclientv1.KueueV1Interface
 }
 
 func (c KueueClient) Informer() cache.SharedIndexInformer {

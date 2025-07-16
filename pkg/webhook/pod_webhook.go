@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

@@ -4,7 +4,7 @@ metadata:
   name: openshift-kueue-operator
 rules:
   - apiGroups:
-      - operator.openshift.io
+      - kueue.openshift.io
     resources:
       - kueues
       - kueues/status

@@ -27,7 +27,7 @@ import (
 
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
 
-	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
 func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev1.ConfigMap, error) {
@@ -166,6 +166,10 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 				LeaderElect: ptr.To(true),
 			},
 		},
+		ClientConnection: &configapi.ClientConnection{
+			QPS:   float32Ptr(50),
+			Burst: int32Ptr(100),
+		},
 		Integrations: mapOperatorIntegrationsToKueue(&kueueCfg.Integrations),
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
@@ -173,13 +177,24 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		FeatureGates: map[string]bool{
 			// Disable the HierarchicalCohorts feature gate by default.
 			// related to https://github.com/kubernetes-sigs/kueue/issues/4869
-			"HierarchialCohorts": false,
+			"HierarchicalCohorts": false,
 			// Disable visibilityOnDemand
 			// apiserver is insecure.
 			"VisibilityOnDemand": false,
+		},
+		ManagedJobsNamespaceSelector: &v1.LabelSelector{
+			MatchLabels: map[string]string{"kueue.openshift.io/managed": "true"},
 		},
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 	}
+}
+
+func float32Ptr(f float32) *float32 {
+	return &f
+}
+
+func int32Ptr(i int32) *int32 {
+	return &i
 }

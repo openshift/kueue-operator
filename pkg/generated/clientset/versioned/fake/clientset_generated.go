@@ -20,8 +20,8 @@ package fake
 import (
 	applyconfiguration "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration"
 	clientset "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
-	kueuev1alpha1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1alpha1"
-	fakekueuev1alpha1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1alpha1/fake"
+	kueuev1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1"
+	fakekueuev1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -115,7 +115,7 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
-// KueueV1alpha1 retrieves the KueueV1alpha1Client
-func (c *Clientset) KueueV1alpha1() kueuev1alpha1.KueueV1alpha1Interface {
-	return &fakekueuev1alpha1.FakeKueueV1alpha1{Fake: &c.Fake}
+// KueueV1 retrieves the KueueV1Client
+func (c *Clientset) KueueV1() kueuev1.KueueV1Interface {
+	return &fakekueuev1.FakeKueueV1{Fake: &c.Fake}
 }
