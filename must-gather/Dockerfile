@@ -1,6 +1,6 @@
 FROM quay.io/openshift/origin-must-gather:latest as builder
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.5
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6-1752587672
 
 RUN microdnf update -y && microdnf install tar rsync bash -y && microdnf clean all
 
