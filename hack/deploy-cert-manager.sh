@@ -7,8 +7,44 @@ echo "Detected OCP minor version: ${OCP_MINOR}"
 TARGET=$((OCP_MINOR - 3))
 echo "Target cert-manager minor version: ${TARGET}"
 
-# Get package manifest JSON
-PACKAGE_MANIFEST=$(oc get packagemanifest openshift-cert-manager-operator -n openshift-marketplace -o json)
+# Wait for packagemanifests to be populated
+echo "Waiting for packagemanifests to be available..."
+timeout 300s bash -c '
+  while true; do
+    if oc get packagemanifest openshift-cert-manager-operator -n openshift-marketplace >/dev/null 2>&1; then
+      # Additional check to ensure the packagemanifest has channels populated
+      CHANNELS=$(oc get packagemanifest openshift-cert-manager-operator -n openshift-marketplace -o jsonpath="{.status.channels[*].name}" 2>/dev/null || echo "")
+      if [[ -n "$CHANNELS" ]]; then
+        echo "PackageManifest found with channels: $CHANNELS"
+        break
+      else
+        echo "PackageManifest found but no channels yet, waiting..."
+      fi
+    else
+      echo "PackageManifest not found, waiting..."
+    fi
+    sleep 5
+  done
+'
+
+# Get package manifest JSON with retry mechanism to handle race condition.
+echo "Retrieving package manifest JSON..."
+PACKAGE_MANIFEST=""
+for i in {1..10}; do
+  if PACKAGE_MANIFEST=$(oc get packagemanifest openshift-cert-manager-operator -n openshift-marketplace -o json 2>/dev/null); then
+    echo "Successfully retrieved package manifest on attempt $i"
+    break
+  else
+    echo "Failed to retrieve package manifest on attempt $i, retrying in 3s..."
+    sleep 3
+  fi
+done
+
+if [[ -z "$PACKAGE_MANIFEST" ]]; then
+  echo "ERROR: Failed to retrieve package manifest after 10 attempts"
+  oc get packagemanifests -n openshift-marketplace --no-headers 2>/dev/null | grep -i cert-manager || echo "No cert-manager related packages found"
+  exit 1
+fi
 
 # Find version-specific channels matching pattern stable-vX.Y
 COMPATIBLE_CHANNELS=$(echo "$PACKAGE_MANIFEST" | jq -r --arg target "$TARGET" '

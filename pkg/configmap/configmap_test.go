@@ -23,7 +23,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
 func TestBuildConfigMap(t *testing.T) {
@@ -41,6 +41,9 @@ func TestBuildConfigMap(t *testing.T) {
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -52,7 +55,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -71,6 +74,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -98,6 +104,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -109,7 +118,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -130,6 +139,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -155,6 +167,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -169,7 +184,7 @@ fairSharing:
   - LessThanOrEqualToFinalShare
   - LessThanInitialShare
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -188,6 +203,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: true
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -209,6 +227,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -220,7 +241,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -243,6 +264,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
@@ -269,6 +293,9 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
 controller:
   groupKindConcurrency:
     ClusterQueue.kueue.x-k8s.io: 1
@@ -280,7 +307,7 @@ controller:
 fairSharing:
   enable: false
 featureGates:
-  HierarchialCohorts: false
+  HierarchicalCohorts: false
   VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
@@ -303,6 +330,9 @@ leaderElection:
   resourceNamespace: ""
   retryPeriod: 0s
 manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true

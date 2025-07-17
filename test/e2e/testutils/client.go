@@ -27,10 +27,12 @@ import (
 	"k8s.io/klog/v2"
 
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
 
 type TestClients struct {
+	GenericClient       client.Client
 	KubeClient          *kubernetes.Clientset
 	APIExtClient        *apiextv1.ApiextensionsV1Client
 	KueueClient         *kueueclient.Clientset
@@ -47,6 +49,7 @@ func NewTestClients() *TestClients {
 	}
 
 	return &TestClients{
+		GenericClient:       getGenericClient(config),
 		KubeClient:          getKubeClient(config),
 		APIExtClient:        getAPIExtClient(config),
 		KueueClient:         getKueueClient(config),
@@ -76,6 +79,14 @@ func getKueueClient(config *rest.Config) *kueueclient.Clientset {
 	client, err := kueueclient.NewForConfig(config)
 	if err != nil {
 		klog.Fatalf("Unable to build kueue client: %v", err)
+	}
+	return client
+}
+
+func getGenericClient(config *rest.Config) client.Client {
+	client, err := client.New(config, client.Options{})
+	if err != nil {
+		klog.Fatalf("Unable to build generic kubernetes client: %v", err)
 	}
 	return client
 }

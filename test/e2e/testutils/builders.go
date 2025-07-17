@@ -26,14 +26,16 @@ import (
 )
 
 type TestResourceBuilder struct {
-	namespace string
-	queueName string
+	namespace      string
+	queueName      string
+	containerImage string
 }
 
 func NewTestResourceBuilder(namespace, queueName string) *TestResourceBuilder {
 	return &TestResourceBuilder{
-		namespace: namespace,
-		queueName: queueName,
+		namespace:      namespace,
+		queueName:      queueName,
+		containerImage: GetContainerImageForWorkloads(),
 	}
 }
 
@@ -57,7 +59,7 @@ func (b *TestResourceBuilder) NewPod() *corev1.Pod {
 			Containers: []corev1.Container{
 				{
 					Name:    "test-container",
-					Image:   "busybox",
+					Image:   b.containerImage,
 					Command: []string{"sh", "-c", "echo Hello Kueue; sleep 3600"},
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
@@ -109,22 +111,28 @@ func (b *TestResourceBuilder) NewStatefulSet() *appsv1.StatefulSet {
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: ptr.To(replicas),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
+				MatchLabels: map[string]string{"app": "test-statefulset"},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "test"},
+					Labels: map[string]string{"app": "test-statefulset"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
-							Image:   "busybox",
+							Image:   b.containerImage,
 							Command: []string{"sh", "-c", "sleep 3600"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("200m"),
 									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr.To(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
 								},
 							},
 						},
@@ -148,22 +156,28 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To(replicas),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
+				MatchLabels: map[string]string{"app": "test-deployment"},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "test"},
+					Labels: map[string]string{"app": "test-deployment"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
-							Image:   "busybox",
+							Image:   b.containerImage,
 							Command: []string{"sh", "-c", "sleep 3600"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("200m"),
 									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr.To(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
 								},
 							},
 						},
@@ -172,4 +186,30 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 			},
 		},
 	}
+}
+
+func (b *TestResourceBuilder) NewPodWithoutQueue() *corev1.Pod {
+	pod := b.NewPod()
+	delete(pod.Annotations, "kueue.x-k8s.io/queue-name")
+	return pod
+}
+
+func (b *TestResourceBuilder) NewJobWithoutQueue() *batchv1.Job {
+	job := b.NewJob()
+	if job.Labels != nil {
+		delete(job.Labels, "kueue.x-k8s.io/queue-name")
+	}
+	return job
+}
+
+func (b *TestResourceBuilder) NewDeploymentWithoutQueue() *appsv1.Deployment {
+	deploy := b.NewDeployment()
+	delete(deploy.Annotations, "kueue.x-k8s.io/queue-name")
+	return deploy
+}
+
+func (b *TestResourceBuilder) NewStatefulSetWithoutQueue() *appsv1.StatefulSet {
+	ss := b.NewStatefulSet()
+	delete(ss.Annotations, "kueue.x-k8s.io/queue-name")
+	return ss
 }

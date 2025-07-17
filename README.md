@@ -81,7 +81,7 @@ to deploy operator to $OPERATOR_NAMESPACE
 ## Sample CR
 
 ```yaml
-apiVersion: operator.openshift.io/v1alpha1
+apiVersion: kueue.openshift.io/v1
 kind: Kueue
 metadata:
   labels:

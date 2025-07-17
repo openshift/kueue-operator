@@ -21,7 +21,7 @@ import (
 	fmt "fmt"
 	http "net/http"
 
-	kueuev1alpha1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1alpha1"
+	kueuev1 "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned/typed/kueueoperator/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -29,18 +29,18 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	KueueV1alpha1() kueuev1alpha1.KueueV1alpha1Interface
+	KueueV1() kueuev1.KueueV1Interface
 }
 
 // Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	kueueV1alpha1 *kueuev1alpha1.KueueV1alpha1Client
+	kueueV1 *kueuev1.KueueV1Client
 }
 
-// KueueV1alpha1 retrieves the KueueV1alpha1Client
-func (c *Clientset) KueueV1alpha1() kueuev1alpha1.KueueV1alpha1Interface {
-	return c.kueueV1alpha1
+// KueueV1 retrieves the KueueV1Client
+func (c *Clientset) KueueV1() kueuev1.KueueV1Interface {
+	return c.kueueV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -87,7 +87,7 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 	var cs Clientset
 	var err error
-	cs.kueueV1alpha1, err = kueuev1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	cs.kueueV1, err = kueuev1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.kueueV1alpha1 = kueuev1alpha1.New(c)
+	cs.kueueV1 = kueuev1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

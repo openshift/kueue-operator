@@ -18,9 +18,9 @@ limitations under the License.
 package applyconfiguration
 
 import (
-	v1alpha1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1alpha1"
+	v1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	internal "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration/internal"
-	kueueoperatorv1alpha1 "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration/kueueoperator/v1alpha1"
+	kueueoperatorv1 "github.com/openshift/kueue-operator/pkg/generated/applyconfiguration/kueueoperator/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
@@ -30,29 +30,29 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=operator.openshift.io, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithKind("ByWorkload"):
-		return &kueueoperatorv1alpha1.ByWorkloadApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("ExternalFramework"):
-		return &kueueoperatorv1alpha1.ExternalFrameworkApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("GangScheduling"):
-		return &kueueoperatorv1alpha1.GangSchedulingApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Integrations"):
-		return &kueueoperatorv1alpha1.IntegrationsApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Kueue"):
-		return &kueueoperatorv1alpha1.KueueApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("KueueConfiguration"):
-		return &kueueoperatorv1alpha1.KueueConfigurationApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("KueueOperandSpec"):
-		return &kueueoperatorv1alpha1.KueueOperandSpecApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("KueueStatus"):
-		return &kueueoperatorv1alpha1.KueueStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("LabelKeys"):
-		return &kueueoperatorv1alpha1.LabelKeysApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("Preemption"):
-		return &kueueoperatorv1alpha1.PreemptionApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadManagement"):
-		return &kueueoperatorv1alpha1.WorkloadManagementApplyConfiguration{}
+	// Group=kueue.openshift.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("ByWorkload"):
+		return &kueueoperatorv1.ByWorkloadApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ExternalFramework"):
+		return &kueueoperatorv1.ExternalFrameworkApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("GangScheduling"):
+		return &kueueoperatorv1.GangSchedulingApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("Integrations"):
+		return &kueueoperatorv1.IntegrationsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("Kueue"):
+		return &kueueoperatorv1.KueueApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("KueueConfiguration"):
+		return &kueueoperatorv1.KueueConfigurationApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("KueueOperandSpec"):
+		return &kueueoperatorv1.KueueOperandSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("KueueStatus"):
+		return &kueueoperatorv1.KueueStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("LabelKeys"):
+		return &kueueoperatorv1.LabelKeysApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("Preemption"):
+		return &kueueoperatorv1.PreemptionApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("WorkloadManagement"):
+		return &kueueoperatorv1.WorkloadManagementApplyConfiguration{}
 
 	}
 	return nil

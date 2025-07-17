@@ -133,8 +133,8 @@ github.com/google/go-cmp/cmp/internal/value
 ## explicit; go 1.12
 github.com/google/gofuzz
 github.com/google/gofuzz/bytesource
-# github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad
-## explicit; go 1.22
+# github.com/google/pprof v0.0.0-20250403155104-27863c87afa6
+## explicit; go 1.23
 github.com/google/pprof/profile
 # github.com/google/uuid v1.6.0
 ## explicit
@@ -199,7 +199,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/onsi/ginkgo/v2 v2.23.0
+# github.com/onsi/ginkgo/v2 v2.23.4
 ## explicit; go 1.23.0
 github.com/onsi/ginkgo/v2
 github.com/onsi/ginkgo/v2/config
@@ -221,8 +221,8 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/onsi/gomega v1.36.2
-## explicit; go 1.22.0
+# github.com/onsi/gomega v1.36.3
+## explicit; go 1.23.0
 github.com/onsi/gomega
 github.com/onsi/gomega/format
 github.com/onsi/gomega/internal
@@ -234,7 +234,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20250320170726-75d64d71980b
+# github.com/openshift/api v0.0.0-20250414140316-b7680e188c5e
 ## explicit; go 1.23.0
 github.com/openshift/api
 github.com/openshift/api/apiserver
@@ -250,6 +250,7 @@ github.com/openshift/api/cloudnetwork/v1
 github.com/openshift/api/config
 github.com/openshift/api/config/v1
 github.com/openshift/api/config/v1alpha1
+github.com/openshift/api/config/v1alpha2
 github.com/openshift/api/console
 github.com/openshift/api/console/v1
 github.com/openshift/api/helm
@@ -314,7 +315,7 @@ github.com/openshift/build-machinery-go/make/targets/golang
 github.com/openshift/build-machinery-go/make/targets/openshift
 github.com/openshift/build-machinery-go/make/targets/openshift/operator
 github.com/openshift/build-machinery-go/scripts
-# github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a
+# github.com/openshift/client-go v0.0.0-20250402181141-b3bad3b645f2
 ## explicit; go 1.23.0
 github.com/openshift/client-go/config/applyconfigurations/config/v1
 github.com/openshift/client-go/config/applyconfigurations/internal
@@ -491,6 +492,12 @@ go.opentelemetry.io/proto/otlp/collector/trace/v1
 go.opentelemetry.io/proto/otlp/common/v1
 go.opentelemetry.io/proto/otlp/resource/v1
 go.opentelemetry.io/proto/otlp/trace/v1
+# go.uber.org/automaxprocs v1.6.0
+## explicit; go 1.20
+go.uber.org/automaxprocs
+go.uber.org/automaxprocs/internal/cgroups
+go.uber.org/automaxprocs/internal/runtime
+go.uber.org/automaxprocs/maxprocs
 # go.uber.org/multierr v1.11.0
 ## explicit; go 1.19
 go.uber.org/multierr
@@ -506,7 +513,7 @@ go.uber.org/zap/internal/pool
 go.uber.org/zap/internal/stacktrace
 go.uber.org/zap/zapcore
 go.uber.org/zap/zapgrpc
-# golang.org/x/crypto v0.37.0
+# golang.org/x/crypto v0.36.0
 ## explicit; go 1.23.0
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
@@ -523,7 +530,7 @@ golang.org/x/exp/slices
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.39.0
+# golang.org/x/net v0.37.0
 ## explicit; go 1.23.0
 golang.org/x/net/context
 golang.org/x/net/html
@@ -543,7 +550,7 @@ golang.org/x/net/websocket
 ## explicit; go 1.23.0
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.13.0
+# golang.org/x/sync v0.12.0
 ## explicit; go 1.23.0
 golang.org/x/sync/errgroup
 golang.org/x/sync/singleflight
@@ -554,10 +561,10 @@ golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.31.0
+# golang.org/x/term v0.30.0
 ## explicit; go 1.23.0
 golang.org/x/term
-# golang.org/x/text v0.24.0
+# golang.org/x/text v0.23.0
 ## explicit; go 1.23.0
 golang.org/x/text/cases
 golang.org/x/text/encoding
@@ -1586,5 +1593,5 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250328211251-580788adf8b3
+# github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250410200144-aecd0b7e565a
 # sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250402141027-24f590ca0886
