@@ -22,8 +22,8 @@ LABEL io.openshift.expose-services=""
 LABEL io.openshift.tags="openshift,kueue-operator-bundle"
 LABEL description="kueue-operator-bundle"
 LABEL distribution-scope="public"
-LABEL release=1.0.0
-LABEL version=1.0.0
+LABEL release=1.0.1
+LABEL version=1.0.1
 
 LABEL maintainer="Node team, <aos-node@redhat.com>"
 
