@@ -36,7 +36,7 @@
     "packageRules": [
       {
         "matchFileNames": [
-          "Dockerfile.*",
+          "Dockerfile*",
           "*.Dockerfile"
         ],
         "automerge": true,
