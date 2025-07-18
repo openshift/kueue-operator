@@ -12,6 +12,7 @@ oc get clusterqueues -A -o yaml > "${OUT}/clusterqueues.yaml" || true
 oc get localqueues -A -o yaml > "${OUT}/localqueues.yaml" || true
 oc get resourceflavors -A -o yaml > "${OUT}/resourceflavors.yaml" || true
 oc get admissionchecks -A -o yaml > "${OUT}/admissionchecks.yaml" || true
+oc get kueue cluster -o yaml > "${OUT}/kueue.yaml" || true
 
 echo "[INFO] Collecting CRD Definitions"
 for crd in clusterqueues.kueue.x-k8s.io localqueues.kueue.x-k8s.io workloads.kueue.x-k8s.io resourceflavors.kueue.x-k8s.io admissionchecks.kueue.x-k8s.io; do
