@@ -18,6 +18,7 @@ package configmap
 
 import (
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -162,8 +163,12 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 					"ResourceFlavor.kueue.x-k8s.io": 1,
 				},
 			},
+			// Durations recommended by OCP, taken from https://github.com/openshift/enhancements/blob/0f916a52af1a6fbdab0c5b80ae0e66c7a27efb6a/CONVENTIONS.md#handling-kube-apiserver-disruption
 			LeaderElection: &v1alpha1.LeaderElectionConfiguration{
-				LeaderElect: ptr.To(true),
+				LeaderElect:   ptr.To(true),
+				LeaseDuration: v1.Duration{Duration: 137 * time.Second},
+				RenewDeadline: v1.Duration{Duration: 107 * time.Second},
+				RetryPeriod:   v1.Duration{Duration: 26 * time.Second},
 			},
 		},
 		ClientConnection: &configapi.ClientConnection{
