@@ -46,7 +46,7 @@ metadata:
     operatorframework.io/suggested-namespace: openshift-kueue-operator
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
-  name: kueue-operator.v1.0.0
+  name: kueue-operator.v1.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -300,5 +300,5 @@ spec:
       name: operand-image
     - name: must-gather
       image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:fb8f940032fe2196ecdd1ceee8d62637994de9b91f467029c864fa54c33a42bf
-  version: 1.0.0
+  version: 1.0.1
   minKubeVersion: 1.28.0
