@@ -67,12 +67,12 @@ internalCertManagement:
 kind: Configuration
 leaderElection:
   leaderElect: true
-  leaseDuration: 0s
-  renewDeadline: 0s
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
   resourceLock: ""
   resourceName: ""
   resourceNamespace: ""
-  retryPeriod: 0s
+  retryPeriod: 26s
 manageJobsWithoutQueueName: false
 managedJobsNamespaceSelector:
   matchLabels:
@@ -132,12 +132,12 @@ internalCertManagement:
 kind: Configuration
 leaderElection:
   leaderElect: true
-  leaseDuration: 0s
-  renewDeadline: 0s
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
   resourceLock: ""
   resourceName: ""
   resourceNamespace: ""
-  retryPeriod: 0s
+  retryPeriod: 26s
 manageJobsWithoutQueueName: false
 managedJobsNamespaceSelector:
   matchLabels:
@@ -196,12 +196,12 @@ internalCertManagement:
 kind: Configuration
 leaderElection:
   leaderElect: true
-  leaseDuration: 0s
-  renewDeadline: 0s
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
   resourceLock: ""
   resourceName: ""
   resourceNamespace: ""
-  retryPeriod: 0s
+  retryPeriod: 26s
 manageJobsWithoutQueueName: true
 managedJobsNamespaceSelector:
   matchLabels:
@@ -257,12 +257,12 @@ internalCertManagement:
 kind: Configuration
 leaderElection:
   leaderElect: true
-  leaseDuration: 0s
-  renewDeadline: 0s
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
   resourceLock: ""
   resourceName: ""
   resourceNamespace: ""
-  retryPeriod: 0s
+  retryPeriod: 26s
 manageJobsWithoutQueueName: false
 managedJobsNamespaceSelector:
   matchLabels:
@@ -323,12 +323,12 @@ internalCertManagement:
 kind: Configuration
 leaderElection:
   leaderElect: true
-  leaseDuration: 0s
-  renewDeadline: 0s
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
   resourceLock: ""
   resourceName: ""
   resourceNamespace: ""
-  retryPeriod: 0s
+  retryPeriod: 26s
 manageJobsWithoutQueueName: false
 managedJobsNamespaceSelector:
   matchLabels:
