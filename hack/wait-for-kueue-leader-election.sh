@@ -31,7 +31,7 @@ while true; do
   fi
   
   # Check logs for leader election messages
-  if oc logs deployment/kueue-controller-manager -n openshift-kueue-operator --tail=-1 2>/dev/null | grep "successfully acquired lease"; then
+  if oc logs deployment/kueue-controller-manager -n openshift-kueue-operator --tail=-1 --all-pods=true 2>/dev/null | grep "successfully acquired lease"; then
     ELAPSED=$((CURRENT_TIME - START_TIME))
     echo "SUCCESS: Leader election detected in kueue-controller-manager logs after ${ELAPSED} seconds"
     exit 0
