@@ -200,8 +200,8 @@ func CleanUpWorkload(ctx context.Context, kueueClient *upstreamkueueclient.Clien
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// CleanUpKueuInstance deletes the specified Kueue instance and waits for its removal.
-func CleanUpKueuInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
+// CleanUpKueueInstance deletes the specified Kueue instance and waits for its removal.
+func CleanUpKueueInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
 	By(fmt.Sprintf("Destroying Kueue %s", name))
 	err := kueueClientset.KueueV1().Kueues().Delete(ctx, name, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
