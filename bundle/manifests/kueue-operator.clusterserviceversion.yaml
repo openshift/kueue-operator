@@ -233,7 +233,7 @@ spec:
                         value: openshift-kueue-operator
                       - name: RELATED_IMAGE_OPERAND_IMAGE
                         value: registry.redhat.io/kueue/kueue-rhel9@sha256:16007bd38c480b607b63c82b3ee8721441cc374ee31c04b9e329426314590195
-                    image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:2817177cd9d8700280bd58d33e1b0f3e26b51b31ae206b059870dc837fbf40f8
+                    image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:edaaa2c38aabcbaa14d211fc18f709dc7fbd8e600a679f6a01b026dcac20befe
                     imagePullPolicy: Always
                     name: openshift-kueue-operator
                     ports:
