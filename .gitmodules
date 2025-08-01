@@ -1,0 +1,11 @@
+[submodule "upstream/main/src"]
+	path = upstream/main/src
+	url = https://github.com/kubernetes-sigs/kueue.git
+[submodule "upstream/release-0.11/src"]
+	path = upstream/release-0.11/src
+	url = https://github.com/kubernetes-sigs/kueue.git
+	branch = release-0.11
+[submodule "upstream/release-0.12/src"]
+	path = upstream/release-0.12/src
+	url = https://github.com/kubernetes-sigs/kueue.git
+	branch = release-0.12
