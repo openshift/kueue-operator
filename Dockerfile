@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/openshift/kueue-operator
 COPY . .
 RUN make build --warn-undefined-variables
 
-FROM registry.redhat.io/ubi9/ubi-minimal@sha256:0d7cfb0704f6d389942150a01a20cb182dc8ca872004ebf19010e2b622818926
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:aaf57d07d6e192bcb72190f9841f41501b8b3dffdc5e60db2f7a668c2513ab6b
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/kueue-operator /usr/bin/
 RUN mkdir /licenses
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/LICENSE /licenses/.
