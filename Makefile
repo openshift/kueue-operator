@@ -13,7 +13,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 1.0.0
+OPERATOR_VERSION ?= 1.1.0
 OPERATOR_SDK_VERSION ?= v1.37.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
@@ -30,7 +30,7 @@ CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
 CODEGEN_GROUPS_VERSION :=kueue:v1
 
 KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
-KUEUE_BRANCH := release-0.11
+KUEUE_BRANCH := release-0.12
 TEMP_DIR := $(shell mktemp -d)
 
 ## Location to install dependencies to
