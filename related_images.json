@@ -1,0 +1,18 @@
+[
+  {
+    "name": "kueue-operator",
+    "image": "registry.redhat.io/kueue/kueue-rhel9-operator@sha256:8f9b4167355b6dcbd1fc6ebc159973dd50e88e4b7cf9f046da0f27afebcefe2e"
+  },
+  {
+    "name": "kueue-main",
+    "image": "registry.redhat.io/kueue/kueue-main-rhel9@sha256:73390c4d95bacb5b4d96eac7f82e76fbba4161beb1220e5a4924fdef3e3a8e01"
+  },
+  {
+    "name": "kueue-0.12",
+    "image": "registry.redhat.io/kueue/kueue-0-12-rhel9@sha256:73390c4d95bacb5b4d96eac7f82e76fbba4161beb1220e5a4924fdef3e3a8e01"
+  },
+  {
+    "name": "kueue-0.11",
+    "image": "registry.redhat.io/kueue/kueue-0-11-rhel9@sha256:73390c4d95bacb5b4d96eac7f82e76fbba4161beb1220e5a4924fdef3e3a8e01"
+  }
+]

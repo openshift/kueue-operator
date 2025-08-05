@@ -12,6 +12,9 @@
   "rebaseWhen": "behind-base-branch",
   "recreateWhen": "always",
   "commitMessageSuffix": "{{baseBranch}}",
+  "git-submodules": {
+    "enabled": true
+  },
   "tekton": {
     "enabled": true,
     "packageRules": [
@@ -23,7 +26,10 @@
           "digest"
         ],
         "automerge": true,
-        "addLabels": ["lgtm", "approved"]
+        "addLabels": [
+          "lgtm",
+          "approved"
+        ]
       }
     ]
   },
@@ -36,7 +42,10 @@
           "*.Dockerfile"
         ],
         "automerge": true,
-        "addLabels": ["lgtm", "approved"]
+        "addLabels": [
+          "lgtm",
+          "approved"
+        ]
       }
     ]
   },
