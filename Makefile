@@ -72,7 +72,7 @@ get-kueue-image:
 	KUEUE_COMMIT_ID=$$(cd $(TEMP_DIR) && git rev-parse HEAD) && \
 	echo "$$KUEUE_COMMIT_ID" > .kueue_commit_id
 	@KUEUE_COMMIT_ID=$$(cat .kueue_commit_id) && \
-	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-11:$$KUEUE_COMMIT_ID-linux-x86-64" && \
+	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-12:$$KUEUE_COMMIT_ID-linux-x86-64" && \
 	echo "$$KUEUE_IMAGE" > .kueue_image
 	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
 	@rm -f .kueue_commit_id
