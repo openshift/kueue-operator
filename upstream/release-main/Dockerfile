@@ -12,6 +12,10 @@ ENV GOEXPERIMENT=strictfipsruntime
 
 WORKDIR /workspace
 COPY upstream/release-main/src/ .
+COPY upstream/release-main/patches/ ./patches
+
+RUN ls ./patches
+RUN for file in ./patches/*.patch; do patch -p1 < "$file"; done
 
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags strictfipsruntime -mod=vendor -a -o manager cmd/kueue/main.go
 
