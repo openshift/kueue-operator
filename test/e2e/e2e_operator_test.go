@@ -854,7 +854,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			requiredSS := requiredObj.(*ssv1.Kueue)
 			_, err = kueueClientset.KueueV1().Kueues().Create(ctx, requiredSS, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to create Kueue instance")
-			defer testutils.CleanUpKueuInstance(ctx, kueueClientset, "cluster")
+			defer testutils.CleanUpKueueInstance(ctx, kueueClientset, "cluster")
 
 			Eventually(func() error {
 				_, err := kueueClientset.KueueV1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
