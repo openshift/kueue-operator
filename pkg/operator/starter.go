@@ -88,13 +88,13 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	logLevelController := loglevel.NewClusterOperatorLoggingController(kueueClient, cc.EventRecorder)
 
-	klog.V(2).Infof("Starting informers")
+	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
 
-	klog.V(2).Infof("Starting log level controller")
+	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)
-	klog.V(2).Infof("Starting target config reconciler")
+	klog.Infof("Starting target config reconciler")
 	go targetConfigReconciler.Run(1, ctx.Done())
 
 	<-ctx.Done()
