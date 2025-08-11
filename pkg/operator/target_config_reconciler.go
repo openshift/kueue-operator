@@ -796,7 +796,7 @@ func (c *TargetConfigReconciler) manageMutatingWebhook(kueue *kueuev1.Kueue, own
 	for i := range newWebhook.Webhooks {
 		newWebhook.Webhooks[i].ClientConfig.Service.Namespace = c.operatorNamespace
 	}
-	newWebhook.ObjectMeta.Annotations = cert.InjectCertAnnotation(newWebhook.ObjectMeta.Annotations, c.operatorNamespace)
+	newWebhook.Annotations = cert.InjectCertAnnotation(newWebhook.Annotations, c.operatorNamespace)
 	return resourceapply.ApplyMutatingWebhookConfigurationImproved(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, newWebhook, c.resourceCache)
 }
 
@@ -811,7 +811,7 @@ func (c *TargetConfigReconciler) manageValidatingWebhook(kueue *kueuev1.Kueue, o
 	for i := range newWebhook.Webhooks {
 		newWebhook.Webhooks[i].ClientConfig.Service.Namespace = c.operatorNamespace
 	}
-	newWebhook.ObjectMeta.Annotations = cert.InjectCertAnnotation(newWebhook.ObjectMeta.Annotations, c.operatorNamespace)
+	newWebhook.Annotations = cert.InjectCertAnnotation(newWebhook.Annotations, c.operatorNamespace)
 	return resourceapply.ApplyValidatingWebhookConfigurationImproved(c.ctx, c.kubeClient.AdmissionregistrationV1(), c.eventRecorder, newWebhook, c.resourceCache)
 }
 
@@ -1003,7 +1003,7 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 		required.OwnerReferences = []metav1.OwnerReference{
 			ownerReference,
 		}
-		required.ObjectMeta.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
+		required.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
 		_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(c.ctx, c.crdClient, c.eventRecorder, required)
 		if err != nil {
 			return err
