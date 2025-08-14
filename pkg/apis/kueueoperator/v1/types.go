@@ -70,6 +70,11 @@ type KueueConfiguration struct {
 	// This default could change over time.
 	// +optional
 	Preemption Preemption `json:"preemption"`
+	// resources controls how Kueue manages resource transformations.
+	// Resource transformations allow converting PodSpec resources into Workload resource requests.
+	// This field is optional.
+	// +optional
+	Resources Resources `json:"resources"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -318,3 +323,76 @@ type Preemption struct {
 	// +required
 	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy"`
 }
+
+// Resources controls how Kueue transforms and manages workload resources.
+// Resource transformations allow converting PodSpec resources into different resource requests
+// for admission decisions and resource accounting.
+type Resources struct {
+	// excludedResourcePrefixes defines resource name prefixes that should be ignored by Kueue
+	// and not considered for admission or resource counting.
+	// This is useful for excluding vendor-specific resources, ephemeral storage,
+	// or other resources that should not be managed by Kueue.
+	// Each prefix should be a resource name prefix (e.g., "example.com/", "ephemeral-storage").
+	// +kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:XValidation:rule="self.all(prefix, size(prefix) <= 253 && size(prefix) >= 1)",message="each excludedResourcePrefix must be between 1 and 253 characters"
+	// +listType=set
+	ExcludedResourcePrefixes []string `json:"excludedResourcePrefixes"`
+	// transformations defines a list of resource transformations that can be applied
+	// to workloads on admission. Each transformation converts one input resource
+	// into one or more output resources with specified quantities.
+	// +kubebuilder:validation:MaxItems=100
+	// +listType=map
+	// +listMapKey=input
+	Transformations []ResourceTransformation `json:"transformations"`
+}
+
+// ResourceTransformation defines a single resource transformation rule.
+type ResourceTransformation struct {
+	// input is the name of the resource to be transformed.
+	// Should be a valid Kubernetes resource name (e.g., "cpu", "memory", "example.com/gpu").
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Input string `json:"input"`
+	// strategy defines how the resource transformation should be applied.
+	// Valid values are "Retain" and "Replace".
+	// "Retain" keeps the original resource and adds the outputs.
+	// "Replace" replaces the original resource with the outputs.
+	// Defaults to "Retain" if not specified.
+	// +kubebuilder:validation:Enum=Retain;Replace
+	// +kubebuilder:default=Retain
+	// +optional
+	Strategy *ResourceTransformationStrategy `json:"strategy,omitempty"`
+	// outputs defines the resources that the input resource should be transformed into.
+	// Each output specifies a resource name and quantity that should be generated per unit of input.
+	// +kubebuilder:validation:MaxItems=20
+	// +listType=map
+	// +listMapKey=resource
+	// +optional
+	Outputs []ResourceOutput `json:"outputs,omitempty"`
+}
+
+// ResourceOutput defines a single output resource and its quantity.
+type ResourceOutput struct {
+	// resource is the name of the output resource.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Resource string `json:"resource"`
+	// quantity is the amount of the output resource to generate per unit of input resource.
+	// Must be a valid Kubernetes resource quantity (e.g., "1", "100m", "1Gi").
+	// +kubebuilder:validation:Pattern=`^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$`
+	// +required
+	Quantity string `json:"quantity"`
+}
+
+// ResourceTransformationStrategy defines the strategy for resource transformation.
+// +kubebuilder:validation:Enum=Retain;Replace
+type ResourceTransformationStrategy string
+
+const (
+	// ResourceTransformationStrategyRetain keeps the original resource and adds the outputs.
+	ResourceTransformationStrategyRetain ResourceTransformationStrategy = "Retain"
+	// ResourceTransformationStrategyReplace replaces the original resource with the outputs.
+	ResourceTransformationStrategyReplace ResourceTransformationStrategy = "Replace"
+)

@@ -271,6 +271,99 @@ spec:
                     required:
                     - preemptionPolicy
                     type: object
+                  resources:
+                    description: |-
+                      resources controls how Kueue manages resource transformations.
+                      Resource transformations allow converting PodSpec resources into Workload resource requests.
+                      This field is optional.
+                    properties:
+                      excludedResourcePrefixes:
+                        description: |-
+                          excludedResourcePrefixes defines resource name prefixes that should be ignored by Kueue
+                          and not considered for admission or resource counting.
+                          This is useful for excluding vendor-specific resources, ephemeral storage,
+                          or other resources that should not be managed by Kueue.
+                          Each prefix should be a resource name prefix (e.g., "example.com/", "ephemeral-storage").
+                        items:
+                          type: string
+                        maxItems: 100
+                        type: array
+                        x-kubernetes-list-type: set
+                        x-kubernetes-validations:
+                        - message: each excludedResourcePrefix must be between 1 and
+                            253 characters
+                          rule: self.all(prefix, size(prefix) <= 253 && size(prefix)
+                            >= 1)
+                      transformations:
+                        description: |-
+                          transformations defines a list of resource transformations that can be applied
+                          to workloads on admission. Each transformation converts one input resource
+                          into one or more output resources with specified quantities.
+                        items:
+                          description: ResourceTransformation defines a single resource
+                            transformation rule.
+                          properties:
+                            input:
+                              description: |-
+                                input is the name of the resource to be transformed.
+                                Should be a valid Kubernetes resource name (e.g., "cpu", "memory", "example.com/gpu").
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                            outputs:
+                              description: |-
+                                outputs defines the resources that the input resource should be transformed into.
+                                Each output specifies a resource name and quantity that should be generated per unit of input.
+                              items:
+                                description: ResourceOutput defines a single output
+                                  resource and its quantity.
+                                properties:
+                                  quantity:
+                                    description: |-
+                                      quantity is the amount of the output resource to generate per unit of input resource.
+                                      Must be a valid Kubernetes resource quantity (e.g., "1", "100m", "1Gi").
+                                    pattern: ^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$
+                                    type: string
+                                  resource:
+                                    description: resource is the name of the output
+                                      resource.
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - quantity
+                                - resource
+                                type: object
+                              maxItems: 20
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - resource
+                              x-kubernetes-list-type: map
+                            strategy:
+                              allOf:
+                              - enum:
+                                - Retain
+                                - Replace
+                              - enum:
+                                - Retain
+                                - Replace
+                              default: Retain
+                              description: |-
+                                strategy defines how the resource transformation should be applied.
+                                Valid values are "Retain" and "Replace".
+                                "Retain" keeps the original resource and adds the outputs.
+                                "Replace" replaces the original resource with the outputs.
+                                Defaults to "Retain" if not specified.
+                              type: string
+                          required:
+                          - input
+                          type: object
+                        maxItems: 100
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - input
+                        x-kubernetes-list-type: map
+                    type: object
                   workloadManagement:
                     description: |-
                       workloadManagement controls how Kueue manages workloads.

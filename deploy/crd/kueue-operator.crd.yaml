@@ -271,6 +271,48 @@ spec:
                     required:
                     - preemptionPolicy
                     type: object
+                  resources:
+                    description: |-
+                      resources controls how Kueue manages resource transformations.
+                      Resource transformations allow converting PodSpec resources into Workload resource requests.
+                      This field is optional.
+                    properties:
+                      excludeResourcePrefixes:
+                        description: ExcludedResourcePrefixes defines which resources
+                          should be ignored by Kueue
+                        items:
+                          type: string
+                        type: array
+                      transformations:
+                        description: |-
+                          Transformations defines how to transform PodSpec resources into Workload resource requests.
+                          This is intended to be a map with Input as the key (enforced by validation code)
+                        items:
+                          properties:
+                            input:
+                              description: Input is the name of the input resource.
+                              type: string
+                            outputs:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: |-
+                                Outputs specifies the output resources and quantities per unit of input resource.
+                                An empty Outputs combined with a `Replace` Strategy causes the Input resource to be ignored by Kueue.
+                              type: object
+                            strategy:
+                              description: |-
+                                Strategy specifies if the input resource should be replaced or retained.
+                                Defaults to Retain
+                              type: string
+                          required:
+                          - input
+                          type: object
+                        type: array
+                    type: object
                   workloadManagement:
                     description: |-
                       workloadManagement controls how Kueue manages workloads.
