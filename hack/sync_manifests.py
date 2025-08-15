@@ -137,6 +137,10 @@ for doc in docs:
             if container["name"] == "manager":
                 container["image"] = "${IMAGE}"
 
+    # Add label for network policy for deployment
+    if kind == "Deployment" and doc["metadata"]["name"] == "kueue-controller-manager":
+        doc["spec"]["template"]["metadata"]["labels"]["app.openshift.io/name"] = "kueue"
+
     # Store files in `bindata/assets/kueue-operator/`
     base_filename = file_map[kind]
     if base_filename not in separated_manifests:
