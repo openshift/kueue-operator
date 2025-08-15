@@ -13,7 +13,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 1.0.0
+OPERATOR_VERSION ?= 1.1.0
 OPERATOR_SDK_VERSION ?= v1.37.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
@@ -30,7 +30,7 @@ CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
 CODEGEN_GROUPS_VERSION :=kueue:v1
 
 KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
-KUEUE_BRANCH := release-0.11
+KUEUE_BRANCH := release-0.12
 TEMP_DIR := $(shell mktemp -d)
 
 ## Location to install dependencies to
@@ -72,19 +72,19 @@ get-kueue-image:
 	KUEUE_COMMIT_ID=$$(cd $(TEMP_DIR) && git rev-parse HEAD) && \
 	echo "$$KUEUE_COMMIT_ID" > .kueue_commit_id
 	@KUEUE_COMMIT_ID=$$(cat .kueue_commit_id) && \
-	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-11:$$KUEUE_COMMIT_ID-linux-x86-64" && \
+	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-12:$$KUEUE_COMMIT_ID-linux-x86-64" && \
 	echo "$$KUEUE_IMAGE" > .kueue_image
 	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
 	@rm -f .kueue_commit_id
 
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:
-	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0; \
+	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main; \
 	MUST_GATHER_COMMIT=$$(for tag in $$(skopeo list-tags docker://$$REPO | jq -r '.Tags[]' | grep -E '^[a-f0-9]{40}$$' | tail -n 10); do \
 		created=$$(skopeo inspect docker://$$REPO:$$tag 2>/dev/null | jq -r '.Created'); \
 		if [ "$$created" != "null" ] && [ -n "$$created" ]; then echo "$$created $$tag"; fi; \
 	done | sort | tail -n1 | awk '{print $$2}'); \
-	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0:$$MUST_GATHER_COMMIT" > .must_gather_image && \
+	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main:$$MUST_GATHER_COMMIT" > .must_gather_image && \
 	echo "Using must-gather image with tag: $$MUST_GATHER_COMMIT"
 
 .PHONY: bundle-generate
