@@ -79,12 +79,12 @@ get-kueue-image:
 
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:
-	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0; \
+	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main; \
 	MUST_GATHER_COMMIT=$$(for tag in $$(skopeo list-tags docker://$$REPO | jq -r '.Tags[]' | grep -E '^[a-f0-9]{40}$$' | tail -n 10); do \
 		created=$$(skopeo inspect docker://$$REPO:$$tag 2>/dev/null | jq -r '.Created'); \
 		if [ "$$created" != "null" ] && [ -n "$$created" ]; then echo "$$created $$tag"; fi; \
 	done | sort | tail -n1 | awk '{print $$2}'); \
-	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0:$$MUST_GATHER_COMMIT" > .must_gather_image && \
+	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main:$$MUST_GATHER_COMMIT" > .must_gather_image && \
 	echo "Using must-gather image with tag: $$MUST_GATHER_COMMIT"
 
 .PHONY: bundle-generate
