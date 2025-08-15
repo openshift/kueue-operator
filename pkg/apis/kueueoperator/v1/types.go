@@ -92,7 +92,7 @@ type KueueList struct {
 	Items []Kueue `json:"items"`
 }
 
-// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;XGBoostJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet
+// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet
 type KueueIntegration string
 
 const (
@@ -105,6 +105,7 @@ const (
 	KueueIntegrationPyTorchJob      KueueIntegration = "PyTorchJob"
 	KueueIntegrationTFJob           KueueIntegration = "TFJob"
 	KueueIntegrationXGBoostJob      KueueIntegration = "XGBoostJob"
+	KueueIntegrationJaxJob          KueueIntegration = "JaxJob"
 	KueueIntegrationAppWrapper      KueueIntegration = "AppWrapper"
 	KueueIntegrationPod             KueueIntegration = "Pod"
 	KueueIntegrationDeployment      KueueIntegration = "Deployment"

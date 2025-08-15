@@ -47,6 +47,7 @@ var (
 		string(kueue.KueueIntegrationPyTorchJob):      "pytorchjob",
 		string(kueue.KueueIntegrationTFJob):           "tfjob",
 		string(kueue.KueueIntegrationXGBoostJob):      "xgboostjob",
+		string(kueue.KueueIntegrationJaxJob):          "jaxjob",
 		string(kueue.KueueIntegrationPod):             "pod",
 		string(kueue.KueueIntegrationDeployment):      "deployment",
 		string(kueue.KueueIntegrationStatefulSet):     "statefulset",

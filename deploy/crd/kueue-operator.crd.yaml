@@ -188,6 +188,7 @@ spec:
                           - PyTorchJob
                           - TFJob
                           - XGBoostJob
+                          - JaxJob
                           - AppWrapper
                           - Pod
                           - Deployment
