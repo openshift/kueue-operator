@@ -229,6 +229,11 @@ e2e-upstream-test: get-kueue-image
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	./hack/wait-for-kueue-leader-election.sh
 	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp GINKGO_ARGS='--no-color'
+	@echo "Running upstream e2e custom configs tests..."
+	oc apply -f test/e2e/bindata/assets/09_kueue_label_policy.yaml
+	./hack/wait-for-kueue-leader-election.sh
+	export OPERATOR_RUNNING=true
+	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp-custom-configs GINKGO_ARGS='--no-color'
 	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
 	@rm -rf $(TEMP_DIR)
 	@rm -f .kueue_image
