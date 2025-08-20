@@ -59,7 +59,7 @@ manifests: ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefin
 
 .PHONY: code-gen
 code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./pkg/..."
 
 .PHONY: generate-clients
 generate-clients:
