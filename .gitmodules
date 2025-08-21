@@ -1,0 +1,4 @@
+[submodule "upstream/kueue/src"]
+	path = upstream/kueue/src
+	url = https://github.com/kubernetes-sigs/kueue.git
+	branch = release-0.12
