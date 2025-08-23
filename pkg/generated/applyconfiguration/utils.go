@@ -51,6 +51,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.LabelKeysApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Preemption"):
 		return &kueueoperatorv1.PreemptionApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ResourceOutput"):
+		return &kueueoperatorv1.ResourceOutputApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("Resources"):
+		return &kueueoperatorv1.ResourcesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ResourceTransformation"):
+		return &kueueoperatorv1.ResourceTransformationApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkloadManagement"):
 		return &kueueoperatorv1.WorkloadManagementApplyConfiguration{}
 
