@@ -48,6 +48,9 @@ metadata:
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
   name: kueue-operator.v1.1.0
   namespace: placeholder
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.arm64: supported
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:

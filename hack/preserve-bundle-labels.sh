@@ -103,3 +103,10 @@ if ! grep -q "minKubeVersion" "${CSV_FILE}"; then
 else
   sed -i 's/minKubeVersion:.*/minKubeVersion: 1.28.0/g' "${CSV_FILE}"
 fi
+
+# Ensure .metadata.labels is preserved to support multiarchs
+yq -i '
+  .metadata.labels = (.metadata.labels // {}) |
+  .metadata.labels["operatorframework.io/arch.amd64"] = "supported" |
+  .metadata.labels["operatorframework.io/arch.arm64"] = "supported"
+' "$CSV_FILE"
