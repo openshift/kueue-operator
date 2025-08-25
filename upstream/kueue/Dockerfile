@@ -15,7 +15,7 @@ USER 65532:65532
 
 LABEL com.redhat.component="Kueue"
 LABEL name="kueue"
-LABEL url="https://github.com/openshift/kubernetes-sigs-kueue"
+LABEL url="https://github.com/kubernetes-sigs/kueue"
 LABEL vendor="Red Hat, Inc."
 LABEL description="Kueue is a set of APIs and controller for job queueing. \
                     It is a job-level manager that decides when a job should \ 
