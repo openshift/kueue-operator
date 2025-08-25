@@ -108,5 +108,7 @@ fi
 yq -i '
   .metadata.labels = (.metadata.labels // {}) |
   .metadata.labels["operatorframework.io/arch.amd64"] = "supported" |
-  .metadata.labels["operatorframework.io/arch.arm64"] = "supported"
+  .metadata.labels["operatorframework.io/arch.arm64"] = "supported" |
+  .metadata.labels["operatorframework.io/arch.ppc64le"]= "supported" |
+  .metadata.labels["operatorframework.io/arch.s390x"]  = "supported"
 ' "$CSV_FILE"

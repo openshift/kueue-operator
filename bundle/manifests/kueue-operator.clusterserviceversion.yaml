@@ -51,6 +51,8 @@ metadata:
   labels:
     operatorframework.io/arch.amd64: supported
     operatorframework.io/arch.arm64: supported
+    operatorframework.io/arch.ppc64le: supported
+    operatorframework.io/arch.s390x: supported
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
