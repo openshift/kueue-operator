@@ -14,6 +14,7 @@
   "commitMessageSuffix": "{{baseBranch}}",
   "git-submodules": {
     "enabled": true,
+    "schedule": "5 4 * * 1-5",
     "packageRules": [
       {
         "matchUpdateTypes": [
