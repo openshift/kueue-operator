@@ -29,6 +29,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	controllerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/controller"
@@ -73,6 +74,7 @@ type TargetConfigReconciler struct {
 	queue                      workqueue.TypedRateLimitingInterface[queueItem]
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
 	crdClient                  apiextv1.ApiextensionsV1Interface
+	crdInformer                apiextinformer.SharedInformerFactory
 	operatorNamespace          string
 	resourceCache              resourceapply.ResourceCache
 	kueueImage                 string
@@ -90,6 +92,7 @@ func NewTargetConfigReconciler(
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	crdClient apiextv1.ApiextensionsV1Interface,
+	crdInformer apiextinformer.SharedInformerFactory,
 	eventRecorder events.Recorder,
 	kueueImage string,
 ) (factory.Controller, error) {
@@ -105,6 +108,7 @@ func NewTargetConfigReconciler(
 		queue:                      workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[queueItem](), workqueue.TypedRateLimitingQueueConfig[queueItem]{Name: "TargetConfigReconciler"}),
 		kubeInformersForNamespaces: kubeInformersForNamespaces,
 		crdClient:                  crdClient,
+		crdInformer:                crdInformer,
 		operatorNamespace:          namespace.GetNamespace(),
 		resourceCache:              resourceapply.NewResourceCache(),
 		kueueImage:                 kueueImage,
@@ -153,9 +157,11 @@ func NewTargetConfigReconciler(
 	return factory.New().WithInformers(
 		// for the operator changes
 		kueueClient.Informer(),
+		// CRD informer
+		crdInformer.Apiextensions().V1().CustomResourceDefinitions().Informer(),
 		// for the deployment and its configmap, secret, daemonsets.
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Admissionregistration().V1().MutatingWebhookConfigurations().Informer(),
-		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Apps().V1().DaemonSets().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Admissionregistration().V1().ValidatingWebhookConfigurations().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Apps().V1().Deployments().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().ConfigMaps().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().Secrets().Informer(),
@@ -165,6 +171,7 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().ClusterRoles().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().RoleBindings().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().Roles().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Networking().V1().NetworkPolicies().Informer(),
 	).ResyncEvery(5*time.Minute).
 		WithSync(c.sync).
 		ToController("KueueOperator", c.eventRecorder), nil

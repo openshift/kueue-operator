@@ -8,12 +8,14 @@ import (
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
 	operatorconfigclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions"
-	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	apiextclientsetv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
+	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -36,10 +38,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient,
-		"",
-		namespace.GetNamespace(),
-	)
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient, "", cc.OperatorNamespace)
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cc.KubeConfig)
 	if err != nil {
@@ -67,6 +66,13 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
+	crdClientSet, err := apiextclientsetv1.NewForConfig(cc.ProtoKubeConfig)
+	if err != nil {
+		return err
+	}
+
+	crdInformer := apiextinformer.NewSharedInformerFactoryWithOptions(crdClientSet, 10*time.Minute)
+
 	targetConfigReconciler, err := NewTargetConfigReconciler(
 		ctx,
 		operatorConfigClient.KueueV1(),
@@ -78,6 +84,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		dynamicClient,
 		discoveryClient,
 		crdClient,
+		crdInformer,
 		cc.EventRecorder,
 		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
 	)
@@ -90,6 +97,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	klog.Infof("Starting informers")
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
+	crdInformer.Start(ctx.Done())
 
 	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)
