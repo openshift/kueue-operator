@@ -26,7 +26,6 @@ type queueItem struct {
 }
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
-
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return err
@@ -95,7 +94,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)
 	klog.Infof("Starting target config reconciler")
-	go targetConfigReconciler.Run(1, ctx.Done())
+	go targetConfigReconciler.Run(ctx, 1)
 
 	<-ctx.Done()
 	return nil
