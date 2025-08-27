@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
 	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
 	"github.com/openshift/kueue-operator/pkg/webhook"
+	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
@@ -28,6 +29,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	controllerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/controller"
@@ -45,9 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerror "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -74,9 +74,11 @@ type TargetConfigReconciler struct {
 	queue                      workqueue.TypedRateLimitingInterface[queueItem]
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
 	crdClient                  apiextv1.ApiextensionsV1Interface
+	crdInformer                apiextinformer.SharedInformerFactory
 	operatorNamespace          string
 	resourceCache              resourceapply.ResourceCache
 	kueueImage                 string
+	serviceMonitorSupport      bool
 }
 
 func NewTargetConfigReconciler(
@@ -90,9 +92,10 @@ func NewTargetConfigReconciler(
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	crdClient apiextv1.ApiextensionsV1Interface,
+	crdInformer apiextinformer.SharedInformerFactory,
 	eventRecorder events.Recorder,
 	kueueImage string,
-) (*TargetConfigReconciler, error) {
+) (factory.Controller, error) {
 	c := &TargetConfigReconciler{
 		ctx:                        ctx,
 		operatorClient:             operatorConfigClient,
@@ -105,9 +108,11 @@ func NewTargetConfigReconciler(
 		queue:                      workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[queueItem](), workqueue.TypedRateLimitingQueueConfig[queueItem]{Name: "TargetConfigReconciler"}),
 		kubeInformersForNamespaces: kubeInformersForNamespaces,
 		crdClient:                  crdClient,
+		crdInformer:                crdInformer,
 		operatorNamespace:          namespace.GetNamespace(),
 		resourceCache:              resourceapply.NewResourceCache(),
 		kueueImage:                 kueueImage,
+		serviceMonitorSupport:      false,
 	}
 
 	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
@@ -137,11 +142,42 @@ func NewTargetConfigReconciler(
 	if err != nil {
 		return nil, err
 	}
-	return c, nil
+
+	// check for ServiceMonitor support
+	c.serviceMonitorSupport, err = isResourceRegistered(c.discoveryClient, schema.GroupVersionKind{
+		Kind:    "ServiceMonitor",
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+	})
+	if err != nil {
+		klog.Errorf("unable to check if ServiceMonitor CRD is installed: %v", err)
+		return nil, err
+	}
+
+	return factory.New().WithInformers(
+		// for the operator changes
+		kueueClient.Informer(),
+		// CRD informer
+		crdInformer.Apiextensions().V1().CustomResourceDefinitions().Informer(),
+		// for the deployment and its configmap, secret, daemonsets.
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Admissionregistration().V1().MutatingWebhookConfigurations().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Admissionregistration().V1().ValidatingWebhookConfigurations().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Apps().V1().Deployments().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().ConfigMaps().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().Secrets().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().ServiceAccounts().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().Services().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().ClusterRoleBindings().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().ClusterRoles().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().RoleBindings().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().Roles().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Networking().V1().NetworkPolicies().Informer(),
+	).ResyncEvery(5*time.Minute).
+		WithSync(c.sync).
+		ToController("KueueOperator", c.eventRecorder), nil
 }
 
-func (c TargetConfigReconciler) sync() error {
-
+func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncContext) error {
 	found, err := isResourceRegistered(c.discoveryClient, schema.GroupVersionKind{
 		Group:   "cert-manager.io",
 		Version: "v1",
@@ -224,102 +260,80 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	resourceVersion := "0"
 	cm, _, err := c.manageConfigMap(kueue)
 	if err != nil {
 		return err
 	}
 	if cm != nil {
-		resourceVersion = cm.ResourceVersion
+		specAnnotations["configmap/"+cm.Name] = cm.GetResourceVersion()
 	}
-	specAnnotations["kueue/configmap"] = resourceVersion
 
 	sa, _, err := c.manageServiceAccount(ownerReference)
 	if err != nil {
 		klog.Error("unable to manage service account")
 		return err
 	}
-	if sa != nil {
-		resourceVersion = sa.ResourceVersion
-	}
-	specAnnotations["serviceaccounts/kueue-operator"] = resourceVersion
+	specAnnotations["serviceaccounts/"+sa.Name] = sa.GetResourceVersion()
 
 	leaderRole, _, err := c.manageRole("assets/kueue-operator/role-leader-election.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to create role leader-election")
 		return err
 	}
-	if leaderRole != nil {
-		resourceVersion = leaderRole.ResourceVersion
-	}
-	specAnnotations["role/role-leader-election"] = resourceVersion
+	specAnnotations["role/"+leaderRole.Name] = leaderRole.GetResourceVersion()
 
 	roleBindingLeader, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference, true)
 	if err != nil {
 		klog.Error("unable to bind role leader-election")
 		return err
 	}
-	if roleBindingLeader != nil {
-		resourceVersion = roleBindingLeader.ResourceVersion
-	}
-	specAnnotations["rolebinding/leader-election"] = resourceVersion
+	specAnnotations["rolebinding/"+roleBindingLeader.Name] = roleBindingLeader.GetResourceVersion()
 
-	// TODO: We need to detect if openshift-monitoring exists
-	// If it does then we should create these objects.
-	// Otherwise we skip emitting metrics for microshift or other
-	// services that do not have openshift-monitoring
-	if _, _, err := c.manageRole("assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
-		klog.Error("unable to create role prometheus")
-		return err
-	}
+	if c.serviceMonitorSupport {
+		if _, _, err := c.manageRole("assets/kueue-operator/role-prometheus.yaml", ownerReference); err != nil {
+			klog.Error("unable to create role prometheus")
+			return err
+		}
 
-	if _, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
-		klog.Error("unable to bind role prometheus")
-		return err
-	}
+		if _, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false); err != nil {
+			klog.Error("unable to bind role prometheus")
+			return err
+		}
 
-	controllerService, _, err := c.manageService("assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
-	if err != nil {
-		klog.Error("unable to manage metrics service")
-		return err
+		controllerService, _, err := c.manageService("assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
+		if err != nil {
+			klog.Error("unable to manage metrics service")
+			return err
+		}
+		specAnnotations["service/"+controllerService.Name] = controllerService.GetResourceVersion()
 	}
-	if controllerService != nil {
-		resourceVersion = controllerService.ResourceVersion
-	}
-	specAnnotations["service/controller-manager-metrics-service"] = resourceVersion
 
 	visbilityService, _, err := c.manageService("assets/kueue-operator/visibility-server.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage visbility service")
 		return err
 	}
-	if visbilityService != nil {
-		resourceVersion = visbilityService.ResourceVersion
-	}
-	specAnnotations["service/visibility-service"] = resourceVersion
+	specAnnotations["service/"+visbilityService.Name] = visbilityService.GetResourceVersion()
 
 	webhookService, _, err := c.manageService("assets/kueue-operator/webhook-service.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage webhook service")
 		return err
 	}
-	if webhookService != nil {
-		resourceVersion = webhookService.ResourceVersion
-	}
-	specAnnotations["service/webhook-service"] = resourceVersion
+	specAnnotations["service/"+webhookService.Name] = webhookService.GetResourceVersion()
 
 	// From here, we will create our cluster wide resources.
-	if err := c.manageCustomResources(ownerReference); err != nil {
+	if err := c.manageCustomResources(specAnnotations, ownerReference); err != nil {
 		klog.Error("unable to manage custom resource")
 		return err
 	}
 
-	if err := c.manageNetworkPolicies(ownerReference); err != nil {
+	if err := c.manageNetworkPolicies(specAnnotations, ownerReference); err != nil {
 		klog.Error("unable to manage network policies")
 		return err
 	}
 
-	if err := c.manageClusterRoles(ownerReference); err != nil {
+	if err := c.manageClusterRoles(specAnnotations, ownerReference); err != nil {
 		klog.Error("unable to manage cluster roles")
 		return err
 	}
@@ -334,35 +348,49 @@ func (c TargetConfigReconciler) sync() error {
 		return err
 	}
 
-	if _, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-proxy.yaml", ownerReference); err != nil {
+	proxyRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-proxy.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to manage kube proxy cluster roles")
 		return err
 	}
+	specAnnotations["clusterrolebinding/"+proxyRB.Name] = proxyRB.GetResourceVersion()
 
-	if _, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-manager.yaml", ownerReference); err != nil {
+	managerRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-manager.yaml", ownerReference)
+	if err != nil {
 		klog.Error("unable to manage cluster role kueue-manager")
 		return err
 	}
+	specAnnotations["clusterrolebinding/"+managerRB.Name] = managerRB.GetResourceVersion()
 
-	if _, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference); err != nil {
-		klog.Error("unable to manage cluster role kueue-manager")
-		return err
+	if c.serviceMonitorSupport {
+		metricsRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference)
+		if err != nil {
+			klog.Error("unable to manage cluster role kueue-manager")
+			return err
+		}
+		specAnnotations["clusterrolebinding/"+metricsRB.Name] = metricsRB.GetResourceVersion()
 	}
 
-	if _, _, err := c.manageMutatingWebhook(kueue, ownerReference); err != nil {
+	kueueWH, _, err := c.manageMutatingWebhook(kueue, ownerReference)
+	if err != nil {
 		klog.Error("unable to manage mutating webhook")
 		return err
 	}
+	specAnnotations["mutatingwebhook/"+kueueWH.Name] = kueueWH.GetResourceVersion()
 
-	if _, _, err := c.manageValidatingWebhook(kueue, ownerReference); err != nil {
+	kueueVWH, _, err := c.manageValidatingWebhook(kueue, ownerReference)
+	if err != nil {
 		klog.Error("unable to manage validating webhook")
 		return err
 	}
+	specAnnotations["validatingwebhook/"+kueueVWH.Name] = kueueVWH.GetResourceVersion()
 
-	// TODO: metrics should autodetected if openshift-monitoring exists
-	// For microshift we cannot assume monitoring apis exist.
-	if _, _, err := c.manageServiceMonitor(c.ctx, kueue); err != nil {
-		return err
+	if c.serviceMonitorSupport {
+		serviceMonitor, _, err := c.manageServiceMonitor(c.ctx, kueue)
+		if err != nil {
+			return err
+		}
+		specAnnotations["servicemonitor/"+serviceMonitor.GetName()] = serviceMonitor.GetResourceVersion()
 	}
 
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
@@ -838,7 +866,6 @@ func (c *TargetConfigReconciler) manageClusterRoleBindings(assetDir string, owne
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
-	required.Namespace = c.operatorNamespace
 	for i := range required.Subjects {
 		required.Subjects[i].Namespace = c.operatorNamespace
 	}
@@ -863,7 +890,7 @@ func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference 
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageClusterRoles(ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageClusterRoles(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	clusterRoleDir := "assets/kueue-operator/clusterroles"
 
 	files, err := bindata.AssetDir(clusterRoleDir)
@@ -881,15 +908,16 @@ func (c *TargetConfigReconciler) manageClusterRoles(ownerReference metav1.OwnerR
 			ownerReference,
 		}
 
-		_, _, err := resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
+		role, _, err := resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, required)
 		if err != nil {
 			return err
 		}
+		specAnnotations["clusterrole/"+role.Name] = role.GetResourceVersion()
 	}
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageNetworkPolicies(ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageNetworkPolicies(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	networkPolicyDir := "assets/kueue-operator/networkpolicy"
 
 	files, err := bindata.AssetDir(networkPolicyDir)
@@ -917,9 +945,11 @@ func (c *TargetConfigReconciler) manageNetworkPolicies(ownerReference metav1.Own
 			ownerReference,
 		}
 
-		if _, _, err := utilresourceapply.ApplyNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, want); err != nil {
+		policy, _, err := utilresourceapply.ApplyNetworkPolicy(c.ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, want)
+		if err != nil {
 			return err
 		}
+		specAnnotations["networkpolicy"+policy.Name] = policy.GetResourceVersion()
 	}
 	return nil
 }
@@ -975,7 +1005,7 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ownerRefere
 	return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, clusterRole)
 }
 
-func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	crdDir := "assets/kueue-operator/crds"
 
 	files, err := bindata.AssetDir(crdDir)
@@ -996,7 +1026,7 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 		}
 
 		if isAlphaVersion {
-			klog.Infof("Skipping installation of alpha CRD: %s", required.Name)
+			klog.V(3).Infof("Skipping installation of alpha CRD: %s", required.Name)
 			continue
 		}
 
@@ -1004,10 +1034,11 @@ func (c *TargetConfigReconciler) manageCustomResources(ownerReference metav1.Own
 			ownerReference,
 		}
 		required.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
-		_, _, err := resourceapply.ApplyCustomResourceDefinitionV1(c.ctx, c.crdClient, c.eventRecorder, required)
+		crd, _, err := resourceapply.ApplyCustomResourceDefinitionV1(c.ctx, c.crdClient, c.eventRecorder, required)
 		if err != nil {
 			return err
 		}
+		specAnnotations["crd/"+crd.Name] = crd.GetResourceVersion()
 	}
 	return nil
 }
@@ -1097,7 +1128,7 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1.Kueue, 
 
 	resourcemerge.MergeMap(ptr.To(false), &required.Spec.Template.Annotations, specAnnotations)
 
-	deploy, flag, err := resourceapply.ApplyDeployment(
+	deploy, updated, err := resourceapply.ApplyDeployment(
 		c.ctx,
 		c.kubeClient.AppsV1(),
 		c.eventRecorder,
@@ -1105,45 +1136,12 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1.Kueue, 
 		resourcemerge.ExpectedDeploymentGeneration(required, kueueoperator.Status.Generations))
 	if err != nil {
 		klog.InfoS("Deployment error", "Deployment", deploy)
+		return nil, false, err
 	}
-	return deploy, flag, err
-}
-
-// Run starts the kube-scheduler and blocks until stopCh is closed.
-func (c *TargetConfigReconciler) Run(workers int, stopCh <-chan struct{}) {
-	defer utilruntime.HandleCrash()
-	defer c.queue.ShutDown()
-
-	klog.Infof("Starting TargetConfigReconciler")
-	defer klog.Infof("Shutting down TargetConfigReconciler")
-
-	// doesn't matter what workers say, only start one.
-	go wait.Until(c.runWorker, time.Second, stopCh)
-
-	<-stopCh
-}
-
-func (c *TargetConfigReconciler) runWorker() {
-	for c.processNextWorkItem() {
+	if updated {
+		resourcemerge.SetDeploymentGeneration(&kueueoperator.Status.Generations, deploy)
 	}
-}
-
-func (c *TargetConfigReconciler) processNextWorkItem() bool {
-	dsKey, quit := c.queue.Get()
-	if quit {
-		return false
-	}
-	defer c.queue.Done(dsKey)
-	err := c.sync()
-	if err == nil {
-		c.queue.Forget(dsKey)
-		return true
-	}
-
-	utilruntime.HandleError(fmt.Errorf("%v failed with : %v", dsKey, err))
-	c.queue.AddRateLimited(dsKey)
-
-	return true
+	return deploy, updated, err
 }
 
 func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
@@ -1260,7 +1258,6 @@ func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context,
 }
 
 func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
-
 	// Create ServiceMonitor object
 	serviceMonitor := monitoringv1.ServiceMonitor{
 		TypeMeta: metav1.TypeMeta{
