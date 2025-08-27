@@ -8,8 +8,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release-1.1"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "release-1.1" && files.all.exists(path, path.matches('bundle/|bundle.Dockerfile|.tekton/kueue-bundle-1-1-*'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kueue-operator-1-1
@@ -56,7 +55,7 @@ spec:
         path-context
       name: dockerfile
       type: string
-    - default: "false"
+    - default: "true"
       description: Force rebuild image
       name: rebuild
       type: string
@@ -64,7 +63,7 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: "false"
+    - default: "true"
       description: Execute the build with network isolation
       name: hermetic
       type: string
@@ -77,7 +76,7 @@ spec:
         1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
       type: string
-    - default: "false"
+    - default: "true"
       description: Build a source image.
       name: build-source-image
       type: string
