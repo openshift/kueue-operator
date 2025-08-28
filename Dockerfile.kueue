@@ -3,7 +3,6 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.24 AS bui
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETPLATFORM
-ARG GO_BUILD_ENV=""
 
 WORKDIR /workspace
 COPY . .
