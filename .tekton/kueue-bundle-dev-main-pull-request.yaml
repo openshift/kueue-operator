@@ -8,8 +8,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" && files.all.exists(path, path.matches('bundle/|bundle.developer.Dockerfile|.tekton/kueue-bundle-dev-main-pull-*|related_images.developer.json'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kueue-operator-dev-main
@@ -29,6 +28,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: bundle.developer.Dockerfile
+  - name: skip-checks
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
