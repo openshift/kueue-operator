@@ -32,9 +32,7 @@ spec:
     - linux/arm64
     - linux/ppc64le
   - name: dockerfile
-    value: Dockerfile
-  - name: path-context
-    value: upstream/kueue
+    value: Dockerfile.kueue
   - name: hermetic
     value: "true"
   - name: build-source-image

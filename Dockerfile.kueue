@@ -5,12 +5,13 @@ ARG TARGETARCH
 ARG TARGETPLATFORM
 
 WORKDIR /workspace
-COPY src/ .
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=vendor -a -o manager cmd/kueue/main.go
+COPY . .
+WORKDIR /workspace/upstream/kueue
+RUN ./build.sh
 
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:2f06ae0e6d3d9c4f610d32c480338eef474867f435d8d28625f2985e8acde6e8
 WORKDIR /
-COPY --from=build /workspace/manager /
+COPY --from=build /workspace/upstream/kueue/src/bin/manager /
 USER 65532:65532
 
 LABEL com.redhat.component="Kueue"
