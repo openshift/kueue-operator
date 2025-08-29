@@ -47,6 +47,8 @@ spec:
               value: "openshift-kueue-operator"
             - name: RELATED_IMAGE_OPERAND_IMAGE
               value: KUEUE_IMAGE
+            - name: RELATED_IMAGE_MUST_GATHER
+              value: MUST_GATHER_IMAGE
       serviceAccountName: openshift-kueue-operator
       volumes:
         - name: tmp
