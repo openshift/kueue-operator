@@ -64,10 +64,10 @@ func CreateClusterQueue(client *upstreamkueueclient.Clientset) error {
 	return err
 }
 
-func CreateLocalQueue(client *upstreamkueueclient.Clientset, namespace string) error {
+func CreateLocalQueue(client *upstreamkueueclient.Clientset, namespace, name string) error {
 	lq := &kueuev1beta1.LocalQueue{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-queue",
+			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: kueuev1beta1.LocalQueueSpec{ClusterQueue: "test-clusterqueue"},
