@@ -947,6 +947,7 @@ func fetchWorkload(kueueClient *upstreamkueueclient.Clientset, namespace, uid st
 }
 
 func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) string {
+	By("verifying workload created")
 	// Verify that a Workload with the expected label is created and admitted
 	var workload *kueuev1beta1.Workload
 	Eventually(func() error {

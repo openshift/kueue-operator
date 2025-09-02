@@ -19,10 +19,12 @@ package testutils
 import "time"
 
 const (
-	// sometimes kueue deployment takes a while
-	OperatorReadyTime time.Duration = 3 * time.Minute
-	OperatorPoll                    = 10 * time.Second
-	OperatorNamespace               = "openshift-kueue-operator"
-	LabelKey          string        = "kueue.openshift.io/managed"
-	QueueLabel                      = "kueue.x-k8s.io/queue-name"
+	OperatorReadyTime     = 3 * time.Minute
+	OperatorPoll          = 10 * time.Second
+	OperatorNamespace     = "openshift-kueue-operator"
+	OpenShiftManagedLabel = "kueue.openshift.io/managed"
+	QueueLabel            = "kueue.x-k8s.io/queue-name"
+	DefaultLocalQueueName = "default"
+	DeletionTime          = 2 * time.Minute
+	DeletionPoll          = 5 * time.Second
 )

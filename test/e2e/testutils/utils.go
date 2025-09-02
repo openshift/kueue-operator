@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,9 +22,7 @@ import (
 )
 
 const (
-	defaultImage               = "quay.io/openshift/origin-cli:latest"
-	deletionTime time.Duration = 2 * time.Minute
-	deletionPoll               = 5 * time.Second
+	defaultImage = "quay.io/openshift/origin-cli:latest"
 )
 
 func GetContainerImageForWorkloads() string {
@@ -211,7 +208,7 @@ func CleanUpKueuInstance(ctx context.Context, kueueClientset *kueueclient.Client
 			return nil
 		}
 		return fmt.Errorf("Kueue %s still exists", name)
-	}, deletionTime, deletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
+	}, DeletionTime, DeletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
 }
 
 // CleanUpObject deletes the specified kubernetes object and waits for its removal.
@@ -226,5 +223,13 @@ func CleanUpObject(ctx context.Context, kubeClient client.Client, obj client.Obj
 			return nil
 		}
 		return fmt.Errorf("Object %s still exists", obj.GetName())
-	}, deletionTime, deletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
+	}, DeletionTime, DeletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
+}
+
+func WaitForAllPodsInNamespaceDeleted(ctx context.Context, c client.Client, ns *corev1.Namespace) {
+	pods := corev1.PodList{}
+	Eventually(func(g Gomega) {
+		g.Expect(c.List(ctx, &pods, client.InNamespace(ns.Name))).Should(Succeed())
+		g.Expect(len(pods.Items)).Should(BeZero())
+	}, OperatorReadyTime, OperatorPoll).Should(Succeed())
 }
