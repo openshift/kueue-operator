@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main" && files.all.exists(path, !path.matches('bundle/|bundle.Dockerfile|bundle.developer.Dockerfile|.tekton/kueue-bundle-*|must-gather/|.tekton/kueue-must-gather-*|related_images.json|related_images.developer.json'))
+      == "main" && files.all.exists(path, !path.matches('bundle/|bundle.Dockerfile|bundle.developer.Dockerfile|.tekton/kueue-bundle-*|must-gather/|.tekton/kueue-must-gather-*|related_images.json|related_images.developer.json|bundle/manifests/kueue-operator.clusterserviceversion.yaml'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kueue-operator-main
