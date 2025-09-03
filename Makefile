@@ -89,10 +89,9 @@ get-kueue-must-gather-image:
 
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION} 
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-	hack/preserve-bundle-labels.sh
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE $$MUST_GATHER_IMAGE
+	${OPERATOR_SDK} generate bundle --input-dir deploy/ --manifests --version ${OPERATOR_VERSION} 
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE $$MUST_GATHER_IMAGE
 
 .PHONY: deploy-ocp
 deploy-ocp: get-kueue-image
