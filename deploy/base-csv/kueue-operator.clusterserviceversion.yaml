@@ -88,7 +88,7 @@ spec:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
   relatedImages:
-    - image: registry.redhat.io/kueue/kueue-rhel9@sha256:8b8dba33cda9023d9797755c773935fd53ca366a48f8825a282682ddc0476ac9
+    - image: registry.redhat.io/kueue/kueue-rhel9@sha256:b30c9bc73ef5b4419e9bca38bd886a470c00d14e750bb53d02d272a019ce891f
       name: operand-image
     - name: must-gather
       image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:eb731aa0b54736df84b894238537715111dcd76721795d704628ac3bdfcb658d
