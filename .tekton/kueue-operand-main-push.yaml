@@ -41,6 +41,8 @@ spec:
     value: "true"
   - name: depth
     value: 100
+  - name: fetch-tags
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
@@ -159,6 +161,8 @@ spec:
         value: $(params.image-expires-after)
       - name: depth
         value: $(params.depth)
+      - name: fetchTags
+        value: $(params.fetch-tags)
       runAfter:
       - init
       taskRef:
