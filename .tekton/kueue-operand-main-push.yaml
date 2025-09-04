@@ -39,6 +39,8 @@ spec:
     value: "true"
   - name: build-source-image
     value: "true"
+  - name: depth
+    value: 100
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
@@ -155,6 +157,8 @@ spec:
         value: $(params.output-image).git
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
+      - name: depth
+        value: $(params.depth)
       runAfter:
       - init
       taskRef:
