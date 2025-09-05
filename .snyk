@@ -3,5 +3,20 @@
 # https://docs.snyk.io/snyk-cli/commands/ignore
 exclude:
   global:
+    - upstream/kueue/src/hack/internal/tools/**
+    # Disable kueue-viz as openshift does not support.
+    - upstream/kueue/src/cmd/experimental/kueue-viz/**
+    # Disable kueuectl as openshift does not support.
+    - upstream/kueue/src/cmd/kueuectl/**
+    - upstream/kueue/src/site/**
+    - upstream/kueue/src/vendor/**
+    - upstream/kueue/src/"**/*_test.go"
+    # sha1 hash not used for cryptographic purposes
+    - upstream/kueue/src/pkg/controller/admissionchecks/provisioning/controller.go
+    - upstream/kueue/src/pkg/controller/jobframework/workload_names.go
+    # Disable test code
+    - upstream/kueue/src/test/**
+    # ginkgo-top is used for displaying test results
+    - pkg/openshift/ginkgo-top/**
     - vendor/**
     - "**/*_test.go"

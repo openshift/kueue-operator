@@ -10,7 +10,7 @@ metadata:
   namespace: openshift-kueue-operator
 spec:
   ports:
-  - name: metrics
+  - name: https
     port: 8443
     protocol: TCP
     targetPort: 8443
