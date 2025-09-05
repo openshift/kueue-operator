@@ -13,7 +13,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 1.0.0
+OPERATOR_VERSION ?= 1.1.0
 OPERATOR_SDK_VERSION ?= v1.37.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= mustchange
@@ -30,7 +30,7 @@ CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
 CODEGEN_GROUPS_VERSION :=kueue:v1
 
 KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
-KUEUE_BRANCH := release-0.11
+KUEUE_BRANCH := release-0.12
 TEMP_DIR := $(shell mktemp -d)
 
 ## Location to install dependencies to
@@ -59,11 +59,11 @@ manifests: ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefin
 
 .PHONY: code-gen
 code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./pkg/..."
 
 .PHONY: generate-clients
 generate-clients:
-	GO=GO111MODULE=on GOTOOLCHAIN=go1.23.4 GOFLAGS=-mod=readonly hack/update-codegen.sh
+	GO=GO111MODULE=on GOTOOLCHAIN=go1.24.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
 
 .PHONY: get-kueue-image
 get-kueue-image:
@@ -72,27 +72,26 @@ get-kueue-image:
 	KUEUE_COMMIT_ID=$$(cd $(TEMP_DIR) && git rev-parse HEAD) && \
 	echo "$$KUEUE_COMMIT_ID" > .kueue_commit_id
 	@KUEUE_COMMIT_ID=$$(cat .kueue_commit_id) && \
-	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-11:$$KUEUE_COMMIT_ID-linux-x86-64" && \
+	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-12:$$KUEUE_COMMIT_ID-linux-x86-64" && \
 	echo "$$KUEUE_IMAGE" > .kueue_image
 	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
 	@rm -f .kueue_commit_id
 
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:
-	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0; \
+	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main; \
 	MUST_GATHER_COMMIT=$$(for tag in $$(skopeo list-tags docker://$$REPO | jq -r '.Tags[]' | grep -E '^[a-f0-9]{40}$$' | tail -n 10); do \
 		created=$$(skopeo inspect docker://$$REPO:$$tag 2>/dev/null | jq -r '.Created'); \
 		if [ "$$created" != "null" ] && [ -n "$$created" ]; then echo "$$created $$tag"; fi; \
 	done | sort | tail -n1 | awk '{print $$2}'); \
-	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-1-0:$$MUST_GATHER_COMMIT" > .must_gather_image && \
+	echo "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main:$$MUST_GATHER_COMMIT" > .must_gather_image && \
 	echo "Using must-gather image with tag: $$MUST_GATHER_COMMIT"
 
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-	${OPERATOR_SDK} generate bundle --input-dir deploy/ --version ${OPERATOR_VERSION} 
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE
-	hack/preserve-bundle-labels.sh
+	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE $$MUST_GATHER_IMAGE
+	${OPERATOR_SDK} generate bundle --input-dir deploy/ --manifests --version ${OPERATOR_VERSION} 
+	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE $$MUST_GATHER_IMAGE
 
 .PHONY: deploy-ocp
 deploy-ocp: get-kueue-image
@@ -157,7 +156,7 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.61.0
+GOLANGCI_LINT_VERSION ?= v2.3.1
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 	set -e ;\
