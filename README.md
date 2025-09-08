@@ -113,3 +113,110 @@ oc label namespace <namespace> kueue.openshift.io/managed=true
 ```
 
 This label instructs the Kueue Operator that the namespace should be managed by its webhook admission controllers. As a result, any Kueue resources within that namespace will be properly validated and mutated.
+
+## Git Submodule Management
+
+This project uses a git submodule to track the upstream Kueue repository. The submodule is located in the `upstream/kueue` directory and is used to synchronize manifests and configurations.
+
+### Updating the Git Submodule
+
+To update the git submodule to the latest commit:
+
+```sh
+# Update the submodule to the latest commit on its tracked branch
+git submodule update --remote upstream/kueue
+
+# Commit the submodule update
+git add upstream/kueue
+git commit -m "Update upstream/kueue submodule"
+```
+
+### Changing the Submodule Branch
+
+To change which branch the submodule tracks:
+
+```sh
+# Navigate to the submodule directory
+cd upstream/kueue
+
+# Switch to the desired branch
+git checkout <branch-name>
+
+# Return to the main repository root
+cd ../..
+
+# Update the submodule configuration to track the new branch
+git config -f .gitmodules submodule.upstream/kueue.branch <branch-name>
+
+# Update the submodule to the latest commit on the new branch
+git submodule update --remote upstream/kueue
+
+# Commit the changes
+git add .gitmodules upstream/kueue
+git commit -m "Update submodule to track <branch-name> branch"
+```
+
+### Tracking Main Branch
+
+To configure the submodule to track the main branch:
+
+```sh
+# Set the submodule to track the main branch
+git config -f .gitmodules submodule.upstream/kueue.branch main
+
+# Update to the latest commit on main
+git submodule update --remote upstream/kueue
+
+# Commit the configuration change
+git add .gitmodules upstream/kueue
+git commit -m "Configure submodule to track main branch"
+```
+
+### Synchronizing Manifests from Submodule
+
+After updating the git submodule, you should synchronize the manifests using:
+
+```sh
+hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
+```
+
+This command processes the manifests from the submodule and prepares them for use by the operator.
+
+## Manifest Synchronization
+
+The `hack/sync_manifests.py` script is used to synchronize Kueue manifests from upstream releases or local development builds into the operator's bindata directory. This script handles the downloading, processing, and organization of Kueue manifests for operator deployment.
+
+### Usage
+
+```sh
+# Sync latest Kueue release
+./hack/sync_manifests.py
+
+# Sync specific version
+./hack/sync_manifests.py 0.7.1
+
+# Use local kustomize build
+./hack/sync_manifests.py --src-dir path/to/kustomize/source
+
+# Specify custom bindata directory
+./hack/sync_manifests.py --bindata-dir custom/path
+```
+
+### Features
+
+- **Automatic Latest Version**: Fetches the latest Kueue release from GitHub if no version is specified
+- **Local Development**: Supports building manifests from local kustomize sources using `--src-dir`
+- **OpenShift Integration**: Automatically updates namespaces from `kueue-system` to `openshift-kueue-operator`
+- **Webhook Configuration**: Updates webhook configurations for OpenShift namespace conventions
+- **Image Parameterization**: Replaces deployment images with `${IMAGE}` placeholder for operator templating
+- **Network Policy Labels**: Adds required OpenShift labels for network policies
+- **Organized Output**: Separates manifests into appropriate files (CRDs, ClusterRoles, etc.) in the bindata directory
+
+The script processes the following Kubernetes resources:
+- Custom Resource Definitions (CRDs)
+- ClusterRoles and ClusterRoleBindings
+- Roles and RoleBindings
+- Services and ServiceAccounts
+- Deployments
+- Webhook Configurations (Validating/Mutating)
+- API Services
