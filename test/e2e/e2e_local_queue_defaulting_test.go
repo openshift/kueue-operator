@@ -161,6 +161,69 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdPod.UID))
 		})
+
+		It("should allow to label pod and job with default localqueue after they're created", func() {
+			ctx := context.TODO()
+
+			// Job creation when there is no LocalQueue Default
+			By("Creating a new job without localQueue")
+			err := kueueClient.KueueV1beta1().LocalQueues(ns.Name).Delete(ctx, testutils.DefaultLocalQueueName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			jobWithoutQueue := builder.NewJobWithoutQueue()
+			createdJobWithoutQueue, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			// Verify job did not start (Kueue interference)
+			Eventually(func() bool {
+				return testutils.JobIsSuspended(ctx, kubeClient, ns.Name, createdJobWithoutQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Job not in 'Suspended' condition")
+			Expect(createdJobWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
+
+			// Pod creation when there is no LocalQueue Default
+			By("Creating a new pod without localQueue")
+			podWithoutQueue := builder.NewPodWithoutQueue()
+			createdPodWithoutQueue, err := kubeClient.CoreV1().Pods(ns.Name).Create(ctx, podWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			// Verify pod did not start (Kueue interference)
+			Eventually(func() bool {
+				return testutils.PodIsScheduled(ctx, kubeClient, ns.Name, createdPodWithoutQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Pod not in 'Scheduling' condition")
+			Expect(createdPodWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
+
+			//Creation of LocalQueue Default with new Job
+			By("Creating localQueue Default")
+			Expect(testutils.CreateLocalQueue(kueueClient, ns.Name, testutils.DefaultLocalQueueName)).To(Succeed())
+			job := builder.NewJobWithoutQueue()
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(context.TODO(), job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdJob.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
+			verifyWorkloadCreated(kueueClient, ns.Name, string(createdJob.UID))
+
+			//Checking that pod and job did not get labeled
+			By("Checking that Job and Pod were not automatically labeled")
+			updatedJobWithoutQueue, err := kubeClient.BatchV1().Jobs(ns.Name).Get(ctx, createdJobWithoutQueue.Name, metav1.GetOptions{})
+			Expect(updatedJobWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
+			Expect(err).NotTo(HaveOccurred())
+			updatedPodWithoutQueue, err := kubeClient.CoreV1().Pods(ns.Name).Get(ctx, createdPodWithoutQueue.Name, metav1.GetOptions{})
+			Expect(updatedPodWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
+			Expect(err).NotTo(HaveOccurred())
+
+			//Adding LocalQueue Default label to Pod Scheduled
+			By(fmt.Sprintf("Adding localQueue Default label to Pod scheduled: %s", updatedPodWithoutQueue.Name))
+			err = testutils.AddLabelAndPatch(ctx, kubeClient, ns.Name, updatedPodWithoutQueue.Name, "pod")
+			Expect(err).NotTo(HaveOccurred())
+			podPatched, err := kubeClient.CoreV1().Pods(ns.Name).Get(ctx, updatedPodWithoutQueue.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			verifyWorkloadCreated(kueueClient, ns.Name, string(podPatched.UID))
+
+			//Adding LocalQueue Default label to Job Suspended
+			By(fmt.Sprintf("Adding localQueue Default label to Job suspended: %s", updatedJobWithoutQueue.Name))
+			err = testutils.AddLabelAndPatch(ctx, kubeClient, ns.Name, updatedJobWithoutQueue.Name, "job")
+			Expect(err).NotTo(HaveOccurred())
+			jobPatched, err := kubeClient.BatchV1().Jobs(ns.Name).Get(ctx, updatedJobWithoutQueue.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			verifyWorkloadCreated(kueueClient, ns.Name, string(jobPatched.UID))
+
+		})
 	})
 
 })
