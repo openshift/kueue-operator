@@ -3,6 +3,9 @@
 # https://docs.snyk.io/snyk-cli/commands/ignore
 exclude:
   global:
+    # sync generation script
+    - hack/sync_manifests.py
+    # upstream ignores
     - upstream/kueue/src/hack/internal/tools/**
     # Disable kueue-viz as openshift does not support.
     - upstream/kueue/src/cmd/experimental/kueue-viz/**

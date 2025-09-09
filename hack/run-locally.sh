@@ -22,7 +22,7 @@ function setup_operator_env() {
 	# library-go controller needs to write stuff here
 	if [[ ! -w "/var/run/secrets" ]]; then
 		echo "Need /var/run/secrets to be writable, please execute"
-		echo sudo /bin/bash -c "'mkdir -p /var/run/secrets && chown ${USER} /var/run/secrets'"
+		echo sudo /usr/bin/env bash -c "'mkdir -p /var/run/secrets && chown ${USER} /var/run/secrets'"
 	fi
 
 	mkdir -p /var/run/secrets/kubernetes.io/serviceaccount/
