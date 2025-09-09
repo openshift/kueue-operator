@@ -124,10 +124,10 @@ To update the git submodule to the latest commit:
 
 ```sh
 # Update the submodule to the latest commit on its tracked branch
-git submodule update --remote upstream/kueue
+git submodule update --remote upstream/kueue/src
 
 # Commit the submodule update
-git add upstream/kueue
+git add upstream/kueue/src
 git commit -m "Update upstream/kueue submodule"
 ```
 
@@ -137,7 +137,7 @@ To change which branch the submodule tracks:
 
 ```sh
 # Navigate to the submodule directory
-cd upstream/kueue
+cd upstream/kueue/src
 
 # Switch to the desired branch
 git checkout <branch-name>
@@ -168,7 +168,7 @@ git config -f .gitmodules submodule.upstream/kueue.branch main
 git submodule update --remote upstream/kueue
 
 # Commit the configuration change
-git add .gitmodules upstream/kueue
+git add .gitmodules upstream/kueue/src
 git commit -m "Configure submodule to track main branch"
 ```
 
