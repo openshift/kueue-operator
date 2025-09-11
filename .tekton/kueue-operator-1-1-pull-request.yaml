@@ -8,7 +8,8 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "release-1.1" && files.all.exists(path, !path.matches('bundle/|bundle.Dockerfile|.tekton/kueue-bundle-*|fbc/|.tekton/kueue-fbc-*|must-gather/|.tekton/kueue-must-gather-*'))
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
+      == "release-1.1" && files.all.exists(path, !path.matches('upstream/kueue/src|bundle/|bundle.Dockerfile|.tekton/kueue-bundle-*|bundle.developer.Dockerfile|must-gather/|.tekton/kueue-must-gather-*|related_images.json|related_images.developer.json|bundle/manifests/kueue-operator.clusterserviceversion.yaml'))
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kueue-operator-1-1
