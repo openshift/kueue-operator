@@ -273,7 +273,7 @@ func AddLabelAndPatch(ctx context.Context, kubeClient *kubernetes.Clientset, nam
 	}
 	patchData, err := json.Marshal(patch)
 	if err != nil {
-		return fmt.Errorf("Error to create JSON patch : %w", err)
+		return fmt.Errorf("error to create JSON patch : %w", err)
 	}
 	switch resourceType {
 	case "job":
@@ -281,10 +281,10 @@ func AddLabelAndPatch(ctx context.Context, kubeClient *kubernetes.Clientset, nam
 	case "pod":
 		_, err = kubeClient.CoreV1().Pods(namespace).Patch(ctx, resourceName, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
 	default:
-		return fmt.Errorf("Resource not supported: %s", resourceType)
+		return fmt.Errorf("resource not supported: %s", resourceType)
 	}
 	if err != nil {
-		return fmt.Errorf("Error to apply %s patch on %s: %w", resourceType, resourceName, err)
+		return fmt.Errorf("error to apply %s patch on %s: %w", resourceType, resourceName, err)
 	}
 	return nil
 }
