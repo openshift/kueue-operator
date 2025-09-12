@@ -236,21 +236,20 @@ func WaitForAllPodsInNamespaceDeleted(ctx context.Context, c client.Client, ns *
 	}, OperatorReadyTime, OperatorPoll).Should(Succeed())
 }
 
-func PodIsScheduled(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, podName string) bool {
+func IsPodScheduled(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, podName string) bool {
 	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return false
 	}
 	for _, condition := range pod.Status.Conditions {
-		if condition.Type == "PodScheduled" && condition.Status == "False" {
-
+		if condition.Type == "PodScheduled" && condition.Status == "True" {
 			return true
 		}
 	}
 	return false
 }
 
-func JobIsSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, jobName string) bool {
+func IsJobSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, jobName string) bool {
 	job, err := kubeClient.BatchV1().Jobs(namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
 	if err != nil {
 		return false
