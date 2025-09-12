@@ -172,9 +172,8 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 			jobWithoutQueue := builder.NewJobWithoutQueue()
 			createdJobWithoutQueue, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobWithoutQueue, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			// Verify job did not start (Kueue interference)
 			Eventually(func() bool {
-				return testutils.JobIsSuspended(ctx, kubeClient, ns.Name, createdJobWithoutQueue.Name)
+				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobWithoutQueue.Name)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Job not in 'Suspended' condition")
 			Expect(createdJobWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
 
@@ -183,10 +182,9 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 			podWithoutQueue := builder.NewPodWithoutQueue()
 			createdPodWithoutQueue, err := kubeClient.CoreV1().Pods(ns.Name).Create(ctx, podWithoutQueue, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			// Verify pod did not start (Kueue interference)
 			Eventually(func() bool {
-				return testutils.PodIsScheduled(ctx, kubeClient, ns.Name, createdPodWithoutQueue.Name)
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Pod not in 'Scheduling' condition")
+				return testutils.IsPodScheduled(ctx, kubeClient, ns.Name, createdPodWithoutQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeFalse(), "Pod in 'Scheduling' condition")
 			Expect(createdPodWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
 
 			//Creation of LocalQueue Default with new Job
@@ -207,20 +205,26 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 			Expect(updatedPodWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
 			Expect(err).NotTo(HaveOccurred())
 
-			//Adding LocalQueue Default label to Pod Scheduled
+			//Adding LocalQueue Default label to Pod
 			By(fmt.Sprintf("Adding localQueue Default label to Pod scheduled: %s", updatedPodWithoutQueue.Name))
 			err = testutils.AddLabelAndPatch(ctx, kubeClient, ns.Name, updatedPodWithoutQueue.Name, "pod")
 			Expect(err).NotTo(HaveOccurred())
 			podPatched, err := kubeClient.CoreV1().Pods(ns.Name).Get(ctx, updatedPodWithoutQueue.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() bool {
+				return testutils.IsPodScheduled(ctx, kubeClient, ns.Name, createdPodWithoutQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Pod not in 'Scheduling' condition")
 			verifyWorkloadCreated(kueueClient, ns.Name, string(podPatched.UID))
 
-			//Adding LocalQueue Default label to Job Suspended
+			//Adding LocalQueue Default label to Job
 			By(fmt.Sprintf("Adding localQueue Default label to Job suspended: %s", updatedJobWithoutQueue.Name))
 			err = testutils.AddLabelAndPatch(ctx, kubeClient, ns.Name, updatedJobWithoutQueue.Name, "job")
 			Expect(err).NotTo(HaveOccurred())
 			jobPatched, err := kubeClient.BatchV1().Jobs(ns.Name).Get(ctx, updatedJobWithoutQueue.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobWithoutQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeFalse(), "Job in 'Suspended' condition")
 			verifyWorkloadCreated(kueueClient, ns.Name, string(jobPatched.UID))
 
 		})
