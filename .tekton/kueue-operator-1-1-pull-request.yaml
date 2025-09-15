@@ -34,6 +34,8 @@ spec:
     - linux/s390x
   - name: dockerfile
     value: Dockerfile
+  - name: skip-coverity-checks
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
@@ -481,7 +483,7 @@ spec:
           value: task
         resolver: bundles
       when:
-      - input: $(params.skip-checks)
+      - input: $(params.skip-coverity-checks)
         operator: in
         values:
         - "false"
