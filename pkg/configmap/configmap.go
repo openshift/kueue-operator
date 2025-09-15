@@ -21,6 +21,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/config/v1alpha1"
 	"k8s.io/utils/ptr"
@@ -136,6 +137,50 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
+func buildResources(resources kueue.Resources) *configapi.Resources {
+	// If no transformations or exclusions are configured, return nil
+	if len(resources.ExcludedResourcePrefixes) == 0 && len(resources.Transformations) == 0 {
+		return nil
+	}
+
+	upstreamResources := &configapi.Resources{
+		ExcludeResourcePrefixes: resources.ExcludedResourcePrefixes,
+	}
+
+	// Convert downstream transformations to upstream transformations
+	for _, transformation := range resources.Transformations {
+		upstreamTransformation := configapi.ResourceTransformation{
+			Input: corev1.ResourceName(transformation.Input),
+		}
+
+		// Convert our ResourceOutput slice to upstream ResourceList
+		if len(transformation.Outputs) > 0 {
+			upstreamTransformation.Outputs = make(corev1.ResourceList)
+			for _, output := range transformation.Outputs {
+				// Parse the quantity string into a resource.Quantity
+				if quantity, err := resource.ParseQuantity(output.Quantity); err == nil {
+					upstreamTransformation.Outputs[corev1.ResourceName(output.Resource)] = quantity
+				}
+				// Note: We silently skip invalid quantities here - the upstream validation will catch them
+			}
+		}
+
+		// Convert strategy if provided
+		if transformation.Strategy != nil {
+			switch *transformation.Strategy {
+			case kueue.ResourceTransformationStrategyRetain:
+				upstreamTransformation.Strategy = (*configapi.ResourceTransformationStrategy)(ptr.To(configapi.Retain))
+			case kueue.ResourceTransformationStrategyReplace:
+				upstreamTransformation.Strategy = (*configapi.ResourceTransformationStrategy)(ptr.To(configapi.Replace))
+			}
+		}
+
+		upstreamResources.Transformations = append(upstreamResources.Transformations, upstreamTransformation)
+	}
+
+	return upstreamResources
+}
+
 func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
@@ -193,6 +238,7 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
+		Resources:                  buildResources(kueueCfg.Resources),
 	}
 }
 
