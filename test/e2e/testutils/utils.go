@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -232,4 +234,56 @@ func WaitForAllPodsInNamespaceDeleted(ctx context.Context, c client.Client, ns *
 		g.Expect(c.List(ctx, &pods, client.InNamespace(ns.Name))).Should(Succeed())
 		g.Expect(len(pods.Items)).Should(BeZero())
 	}, OperatorReadyTime, OperatorPoll).Should(Succeed())
+}
+
+func IsPodScheduled(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, podName string) bool {
+	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == "PodScheduled" && condition.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+func IsJobSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, jobName string) bool {
+	job, err := kubeClient.BatchV1().Jobs(namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == "Suspended" && condition.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+func AddLabelAndPatch(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, resourceName, resourceType string) error {
+	patch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]string{
+				QueueLabel: DefaultLocalQueueName,
+			},
+		},
+	}
+	patchData, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("error to create JSON patch : %w", err)
+	}
+	switch resourceType {
+	case "job":
+		_, err = kubeClient.BatchV1().Jobs(namespace).Patch(ctx, resourceName, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	case "pod":
+		_, err = kubeClient.CoreV1().Pods(namespace).Patch(ctx, resourceName, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+	default:
+		return fmt.Errorf("resource not supported: %s", resourceType)
+	}
+	if err != nil {
+		return fmt.Errorf("error to apply %s patch on %s: %w", resourceType, resourceName, err)
+	}
+	return nil
 }
