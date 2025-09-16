@@ -12,8 +12,7 @@ metadata:
               "app.kubernetes.io/managed-by": "kustomize",
               "app.kubernetes.io/name": "kueue-operator"
             },
-            "name": "cluster",
-            "namespace": "openshift-kueue-operator"
+            "name": "cluster"
           },
           "spec": {
             "config": {
@@ -29,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2025-09-15T17:12:27Z"
+    createdAt: "2025-09-16T15:49:16Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -44,7 +43,7 @@ metadata:
     operatorframework.io/suggested-namespace: openshift-kueue-operator
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
       Container Platform", "OpenShift Platform Plus"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.37.0
+    operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   labels:
     operatorframework.io/arch.amd64: supported
