@@ -3,9 +3,9 @@ RUN dnf -y install jq
 
 ARG RELATED_IMAGE_FILE=related_images.developer.json
 ARG CSV_FILE=bundle/manifests/kueue-operator.clusterserviceversion.yaml
-ARG OPERATOR_IMAGE_ORIGINAL=registry.redhat.io/kueue/kueue-rhel9-operator
-ARG OPERAND_IMAGE_ORIGINAL=registry.redhat.io/kueue/kueue-rhel9
-ARG MUSTGATHER_IMAGE_ORIGINAL=registry.redhat.io/kueue/kueue-must-gather-rhel9
+ARG OPERATOR_IMAGE_ORIGINAL=registry.redhat.io/kueue/kueue-rhel9-operator:latest
+ARG OPERAND_IMAGE_ORIGINAL=registry.redhat.io/kueue/kueue-rhel9:latest
+ARG MUSTGATHER_IMAGE_ORIGINAL=registry.redhat.io/kueue/kueue-must-gather-rhel9:latest
 
 COPY ${CSV_FILE} /manifests/kueue-operator.clusterserviceversion.yaml
 COPY ${RELATED_IMAGE_FILE} /${RELATED_IMAGE_FILE}

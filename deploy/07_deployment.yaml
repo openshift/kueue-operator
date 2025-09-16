@@ -26,7 +26,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ "ALL" ]
-          image: OPERATOR_IMAGE
+          image: registry.redhat.io/kueue/kueue-rhel9-operator:latest
           volumeMounts:
             - name: tmp
               mountPath: "/tmp"
@@ -46,9 +46,9 @@ spec:
             - name: OPERATOR_NAME
               value: "openshift-kueue-operator"
             - name: RELATED_IMAGE_OPERAND_IMAGE
-              value: KUEUE_IMAGE
+              value: registry.redhat.io/kueue/kueue-rhel9:latest 
             - name: RELATED_IMAGE_MUST_GATHER
-              value: MUST_GATHER_IMAGE
+              value: registry.redhat.io/kueue/kueue-must-gather-rhel9:latest
       serviceAccountName: openshift-kueue-operator
       volumes:
         - name: tmp
