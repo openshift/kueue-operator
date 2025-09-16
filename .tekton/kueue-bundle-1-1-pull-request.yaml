@@ -28,6 +28,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: bundle.Dockerfile
+  - name: skip-coverity-checks
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
@@ -452,7 +454,7 @@ spec:
           value: task
         resolver: bundles
       when:
-      - input: $(params.skip-checks)
+      - input: $(params.skip-coverity-checks)
         operator: in
         values:
         - "false"
