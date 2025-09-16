@@ -16,10 +16,10 @@ IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 OPERATOR_VERSION ?= 1.1.0
 OPERATOR_SDK_VERSION ?= v1.37.0
 # These are targets for pushing images
-OPERATOR_IMAGE ?= mustchange
+OPERATOR_IMAGE ?= registry.redhat.io/kueue/kueue-rhel9-operator:latest
 BUNDLE_IMAGE ?= mustchange
-KUEUE_IMAGE ?= mustchange
-MUST_GATHER_IMAGE ?= quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather:latest
+KUEUE_IMAGE ?= registry.redhat.io/kueue/kueue-rhel9:latest
+MUST_GATHER_IMAGE ?= registry.redhat.io/kueue/kueue-must-gather-rhel9:latest
 
 KUBECONFIG ?= ${HOME}/.kube/config
 
@@ -89,9 +89,7 @@ get-kueue-must-gather-image:
 
 .PHONY: bundle-generate
 bundle-generate: operator-sdk regen-crd manifests
-	hack/update-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE $$MUST_GATHER_IMAGE
 	${OPERATOR_SDK} generate bundle --input-dir deploy/ --manifests --version ${OPERATOR_VERSION} 
-	hack/revert-deploy-files.sh ${OPERATOR_IMAGE} $$KUEUE_IMAGE $$MUST_GATHER_IMAGE
 
 .PHONY: deploy-ocp
 deploy-ocp: get-kueue-image
