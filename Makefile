@@ -192,6 +192,12 @@ sync-manifests:
 			echo 'Running sync_manifests.py...'; \
 			python3 hack/sync_manifests.py $(VERSION) \
 		"
+
+# Use this target like make sync-manifests-from-submodule
+.PHONY: sync-manifests-from-submodule
+sync-manifests-from-submodule:
+	hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
+
 GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
