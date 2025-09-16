@@ -1,6 +1,6 @@
 **Note:** This project is under active development. During development, we use container images hosted on [Quay.io](https://quay.io):
 - Operator: `quay.io/repository/redhat-user-workloads/kueue-operator-tenant/kueue-operator`
-- Operand: `quay.io/repository/redhat-user-workloads/kueue-operator-tenant/kueue-0-11`
+- Operand: `quay.io/repository/redhat-user-workloads/kueue-operator-tenant/kueue-0-12`
 # Kueue Operator
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/openshift/kueue-operator)](https://goreportcard.com/report/github.com/openshift/kueue-operator)
@@ -16,7 +16,8 @@ The Kueue Operator needs CertManager installed to operate correctly
 
 | ko version   | ocp version         |kueue version  | k8s version | golang |
 | ------------ | ------------------- |---------------| ----------- | ------ |
-| 1.0.0        | 4.19 - 4.20         |0.11.z         | 1.32        | 1.23   |
+| 1.0.0        | 4.18 - 4.19         |0.11.z         | 1.32        | 1.23   |
+| 1.1.0        | 4.18 - 4.19         |0.12.8         | 1.33        | 1.24   |
 
 Kueue releases around 6 times a year.
 For the latest Openshift version, we will take the latest version that was build with that underlying
