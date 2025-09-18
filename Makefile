@@ -29,10 +29,6 @@ CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
 CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
 CODEGEN_GROUPS_VERSION :=kueue:v1
 
-KUEUE_REPO := https://github.com/openshift/kubernetes-sigs-kueue.git
-KUEUE_BRANCH := release-0.12
-TEMP_DIR := $(shell mktemp -d)
-
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
@@ -65,18 +61,6 @@ code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject
 generate-clients:
 	GO=GO111MODULE=on GOTOOLCHAIN=go1.24.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
 
-.PHONY: get-kueue-image
-get-kueue-image:
-	@echo "Cloning Kueue repository into $(TEMP_DIR)..."
-	@git clone --depth 1 --branch $(KUEUE_BRANCH) $(KUEUE_REPO) $(TEMP_DIR) && \
-	KUEUE_COMMIT_ID=$$(cd $(TEMP_DIR) && git rev-parse HEAD) && \
-	echo "$$KUEUE_COMMIT_ID" > .kueue_commit_id
-	@KUEUE_COMMIT_ID=$$(cat .kueue_commit_id) && \
-	KUEUE_IMAGE="quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-0-12:$$KUEUE_COMMIT_ID-linux-x86-64" && \
-	echo "$$KUEUE_IMAGE" > .kueue_image
-	@echo "KUEUE_IMAGE set to $$(cat .kueue_image)"
-	@rm -f .kueue_commit_id
-
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:
 	@REPO=quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main; \
@@ -92,7 +76,7 @@ bundle-generate: operator-sdk regen-crd manifests
 	${OPERATOR_SDK} generate bundle --input-dir deploy/ --manifests --version ${OPERATOR_VERSION} 
 
 .PHONY: deploy-ocp
-deploy-ocp: get-kueue-image
+deploy-ocp:
 	@KUEUE_IMAGE=$$(cat .kueue_image); \
 	hack/update-deploy-files.sh $(OPERATOR_IMAGE) $$KUEUE_IMAGE
 	oc apply -f deploy/
@@ -227,14 +211,15 @@ e2e-ci-test: ginkgo
 	$(GINKGO) --no-color -v ./test/e2e/...
 
 .PHONY: e2e-upstream-test
-e2e-upstream-test: get-kueue-image
+e2e-upstream-test: ginkgo
 	@echo "Running upstream e2e tests..."
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	./hack/wait-for-kueue-leader-election.sh
-	cd $(TEMP_DIR) && KUEUE_NAMESPACE="openshift-kueue-operator" make -f Makefile-test-ocp.mk test-e2e-upstream-ocp GINKGO_ARGS='--no-color'
-	@echo "Cleaning up TEMP_DIR: $(TEMP_DIR)"
-	@rm -rf $(TEMP_DIR)
-	@rm -f .kueue_image
+	@echo "Running e2e tests on OpenShift cluster ($(shell oc whoami --show-server))"
+	ARTIFACTS="$(LOCALBIN)/$@" IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS)" \
+	E2E_TARGET_FOLDER="singlecluster" \
+	SKIP_DEPLOY=true \
+	./upstream/kueue/e2e-test-ocp.sh
 
 .PHONY: build-must
 build-must:
