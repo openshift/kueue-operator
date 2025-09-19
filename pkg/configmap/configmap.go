@@ -184,9 +184,6 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 			// Disable the HierarchicalCohorts feature gate by default.
 			// related to https://github.com/kubernetes-sigs/kueue/issues/4869
 			"HierarchicalCohorts": false,
-			// Disable visibilityOnDemand
-			// apiserver is insecure.
-			"VisibilityOnDemand": false,
 		},
 		ManagedJobsNamespaceSelector: &v1.LabelSelector{
 			MatchLabels: map[string]string{"kueue.openshift.io/managed": "true"},
