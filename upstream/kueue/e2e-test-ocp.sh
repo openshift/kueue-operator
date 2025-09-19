@@ -6,7 +6,7 @@ set -o nounset
 set -o pipefail
 
 export OC=$(which oc) # OpenShift CLI
-export GINKGO=$(shell pwd)/bin/ginkgo
+export GINKGO=$(pwd)/bin/ginkgo
 SOURCE_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$SOURCE_DIR/.."
 DEFAULT_NAMESPACE="openshift-kueue-operator"
@@ -38,6 +38,13 @@ function allow_privileged_access {
     $OC adm policy add-scc-to-group anyuid system:authenticated system:serviceaccounts
 }
 
+function apply_patches {
+    CWD=$(pwd)
+    cd src
+    git apply $CWD/patch/e2e.patch
+    cd $CWD
+}
+
 skips=(
         # do not deploy AppWrapper in OCP
         AppWrapper
@@ -67,6 +74,8 @@ skips=(
         "StatefulSet created with WorkloadPriorityClass"
         # For tests that rely on CPU setup, we need to fix upstream to get cpu allocatables from node
         # rather than hardcoding CPU limits.
+        # We do not have kueuectl in our operator
+        "Kueuectl"
 )
 skipsRegex=$(
         IFS="|"
@@ -75,6 +84,8 @@ skipsRegex=$(
 
 GINKGO_SKIP_PATTERN="($skipsRegex)"
 
+# apply patches
+apply_patches
 
 # Label two worker nodes for e2e tests (similar to the Kind setup).
 label_worker_nodes
