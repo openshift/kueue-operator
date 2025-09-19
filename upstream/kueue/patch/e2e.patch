@@ -1,0 +1,40 @@
+diff --git a/test/e2e/singlecluster/suite_test.go b/test/e2e/singlecluster/suite_test.go
+index 3154cdd1d..9e735bf79 100644
+--- a/test/e2e/singlecluster/suite_test.go
++++ b/test/e2e/singlecluster/suite_test.go
+@@ -72,10 +72,10 @@ var _ = ginkgo.BeforeSuite(func() {
+ 
+ 	waitForAvailableStart := time.Now()
+ 	util.WaitForKueueAvailability(ctx, k8sClient)
+-	util.WaitForJobSetAvailability(ctx, k8sClient)
+-	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
+-	util.WaitForAppWrapperAvailability(ctx, k8sClient)
+-	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
++	//	util.WaitForJobSetAvailability(ctx, k8sClient)
++	//	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
++	//	util.WaitForAppWrapperAvailability(ctx, k8sClient)
++	//	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
+ 	ginkgo.GinkgoLogr.Info(
+ 		"Kueue and all required operators are available in the cluster",
+ 		"waitingTime", time.Since(waitForAvailableStart),
+diff --git a/test/util/e2e.go b/test/util/e2e.go
+index cc7d1f901..a68b8b9f4 100644
+--- a/test/util/e2e.go
++++ b/test/util/e2e.go
+@@ -473,8 +473,14 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
+ }
+ 
+ func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
+-	MustCreate(ctx, k8sClient, ns)
+-	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns.Name)
++	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns)
++	// Add label to the namespace to mark it as managed by Kueue.
++	if ns.Labels == nil {
++		ns.Labels = make(map[string]string)
++	}
++	ns.Labels["kueue.openshift.io/managed"] = "true"
++	gomega.Expect(k8sClient.Create(ctx, ns)).To(gomega.Succeed())
++	ginkgo.GinkgoLogr.Info(fmt.Sprintf("Created namespace: %s", ns.Name))
+ 	return ns
+ }
+ 
