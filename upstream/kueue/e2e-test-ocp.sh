@@ -39,10 +39,9 @@ function allow_privileged_access {
 }
 
 function apply_patches {
-    CWD=$(pwd)
-    cd upstream/kueue/src
+    pushd upstream/kueue/src
     git apply ../patch/e2e.patch
-    cd $CWD
+    popd
 }
 
 skips=(
