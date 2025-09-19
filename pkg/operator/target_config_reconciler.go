@@ -31,6 +31,7 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	apiregistrationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
 	controllerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/controller"
@@ -80,6 +81,7 @@ type TargetConfigReconciler struct {
 	resourceCache              resourceapply.ResourceCache
 	kueueImage                 string
 	serviceMonitorSupport      bool
+	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
 }
 
 func NewTargetConfigReconciler(
@@ -93,6 +95,7 @@ func NewTargetConfigReconciler(
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	crdClient apiextv1.ApiextensionsV1Interface,
+	apiRegistrationClient apiregistrationv1client.ApiregistrationV1Interface,
 	crdInformer apiextinformer.SharedInformerFactory,
 	eventRecorder events.Recorder,
 	kueueImage string,
@@ -114,6 +117,7 @@ func NewTargetConfigReconciler(
 		resourceCache:              resourceapply.NewResourceCache(),
 		kueueImage:                 kueueImage,
 		serviceMonitorSupport:      false,
+		apiRegistrationClient:      apiRegistrationClient,
 	}
 
 	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
@@ -249,16 +253,47 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 		return err
 	}
 
-	_, _, err = c.manageCertificateWebhookCR(c.ctx, kueue)
-	if err != nil {
-		klog.Errorf("unable to manage webhook certificate err: %v", err)
-		return err
+	certificateData := []struct {
+		dnsNames        []interface{}
+		commonName      string
+		secretName      string
+		certificateName string
+	}{
+		{
+			dnsNames: []interface{}{
+				fmt.Sprintf("kueue-webhook-service.%s.svc", c.operatorNamespace),
+				fmt.Sprintf("kueue-webhook-service.%s.svc.cluster.local", c.operatorNamespace),
+			},
+			commonName:      "",
+			secretName:      "kueue-webhook-server-cert",
+			certificateName: "webhook-cert",
+		},
+		{
+			dnsNames: []interface{}{
+				fmt.Sprintf("kueue-controller-manager-metrics-service.%s.svc", c.operatorNamespace),
+				fmt.Sprintf("kueue-controller-manager-metrics-service.%s.svc.cluster.local", c.operatorNamespace),
+			},
+			commonName:      "kueue-metrics",
+			secretName:      "metrics-server-cert",
+			certificateName: "metrics-certs",
+		},
+		{
+			dnsNames: []interface{}{
+				fmt.Sprintf("kueue-visibility-server.%s.svc", c.operatorNamespace),
+				fmt.Sprintf("kueue-visibility-server.%s.svc.cluster.local", c.operatorNamespace),
+			},
+			commonName:      "kueue-visibility-server",
+			secretName:      "kueue-visibility-server-cert",
+			certificateName: "kueue-visibility-server-cert",
+		},
 	}
 
-	_, _, err = c.manageMetricsCertificateCR(c.ctx, kueue)
-	if err != nil {
-		klog.Errorf("unable to manage metrics certificate err: %v", err)
-		return err
+	for _, certificate := range certificateData {
+		err = c.manageCertificateCR(c.ctx, kueue, certificate.dnsNames, certificate.commonName, certificate.secretName, certificate.certificateName)
+		if err != nil {
+			klog.Errorf("unable to manage certificate err: %v", err)
+			return err
+		}
 	}
 
 	cm, _, err := c.manageConfigMap(kueue)
@@ -324,6 +359,24 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 	specAnnotations["service/"+webhookService.Name] = webhookService.GetResourceVersion()
 
 	// From here, we will create our cluster wide resources.
+	err = c.manageAPIService(ownerReference)
+	if err != nil {
+		klog.Error("unable to manage visibility apiservice")
+		return err
+	}
+
+	err = c.managePriorityLevelConfiguration(ownerReference)
+	if err != nil {
+		klog.Error("unable to manage visibility prioritylevelconfiguration ####")
+		return err
+	}
+
+	err = c.manageFlowSchema(ownerReference)
+	if err != nil {
+		klog.Error("unable to manage visibility flowschema")
+		return err
+	}
+
 	if err := c.manageCustomResources(specAnnotations, ownerReference); err != nil {
 		klog.Error("unable to manage custom resource")
 		return err
@@ -818,6 +871,38 @@ func (c *TargetConfigReconciler) manageServiceAccount(ownerReference metav1.Owne
 	return resourceapply.ApplyServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
+func (c *TargetConfigReconciler) manageFlowSchema(ownerReference metav1.OwnerReference) error {
+	flowSchemaFilePath := "assets/kueue-operator/flowschema.yaml"
+
+	// TODO: move these resource helper functions to library-go
+	want := utilresourceapply.ReadFlowSchemaV1OrDie(bindata.MustAsset(flowSchemaFilePath))
+	want.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+
+	_, _, err := utilresourceapply.ApplyFlowSchema(c.ctx, c.kubeClient.FlowcontrolV1(), c.eventRecorder, want)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *TargetConfigReconciler) managePriorityLevelConfiguration(ownerReference metav1.OwnerReference) error {
+	priorityLevelConfigurationFilePath := "assets/kueue-operator/prioritylevelconfiguration.yaml"
+
+	// TODO: move these resource helper functions to library-go
+	want := utilresourceapply.ReadPriorityLevelConfigurationV1OrDie(bindata.MustAsset(priorityLevelConfigurationFilePath))
+	want.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+
+	_, _, err := utilresourceapply.ApplyPriorityLevelConfiguration(c.ctx, c.kubeClient.FlowcontrolV1(), c.eventRecorder, want)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *TargetConfigReconciler) manageMutatingWebhook(kueue *kueuev1.Kueue, ownerReference metav1.OwnerReference) (*admissionregistrationv1.MutatingWebhookConfiguration, bool, error) {
 	required := resourceread.ReadMutatingWebhookConfigurationV1OrDie(bindata.MustAsset("assets/kueue-operator/mutatingwebhook.yaml"))
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -892,6 +977,28 @@ func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference 
 	}
 	required.Namespace = c.operatorNamespace
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
+}
+
+func (c *TargetConfigReconciler) manageAPIService(ownerReference metav1.OwnerReference) error {
+	required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset("assets/kueue-operator/apiservice.yaml"))
+	required.Spec.InsecureSkipTLSVerify = false
+	required.Spec.Service.Namespace = c.operatorNamespace
+	required.Spec.Service.Name = "kueue-visibility-server"
+	required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
+	newAnnotation := required.Annotations
+	if newAnnotation == nil {
+		newAnnotation = map[string]string{}
+	}
+	newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
+	required.Annotations = newAnnotation
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	_, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageClusterRoles(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
@@ -1064,6 +1171,33 @@ func (c *TargetConfigReconciler) manageDeployment(kueueoperator *kueuev1.Kueue, 
 			},
 		},
 	}
+	// Replace the visibility volume with the secret volume.
+	for i, volume := range required.Spec.Template.Spec.Volumes {
+		if volume.Name == "visibility" {
+			required.Spec.Template.Spec.Volumes[i].EmptyDir = nil
+			required.Spec.Template.Spec.Volumes[i].VolumeSource = v1.VolumeSource{
+				Secret: &v1.SecretVolumeSource{
+					SecretName: "kueue-visibility-server-cert",
+					Optional:   ptr.To(false),
+					Items: []v1.KeyToPath{
+						{
+							Key:  "ca.crt",
+							Path: "ca.crt",
+						},
+						{
+							Key:  "tls.crt",
+							Path: "tls.crt",
+						},
+						{
+							Key:  "tls.key",
+							Path: "tls.key",
+						},
+					},
+				},
+			}
+			break
+		}
+	}
 	required.Spec.Template.Spec.Volumes = append(required.Spec.Template.Spec.Volumes, metricsCertVolume)
 
 	// Add volume mount to the container.
@@ -1180,14 +1314,12 @@ func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueu
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
-func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
+func (c *TargetConfigReconciler) manageCertificateCR(ctx context.Context, kueue *kueuev1.Kueue, dnsNames []interface{}, commonName, secretName, certificateName string) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "cert-manager.io",
 		Version:  "v1",
 		Resource: "certificates",
 	}
-
-	kueueServiceName := fmt.Sprintf("kueue-webhook-service.%s.svc", c.operatorNamespace)
 	required := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "cert-manager.io/v1",
@@ -1201,64 +1333,27 @@ func (c *TargetConfigReconciler) manageCertificateWebhookCR(ctx context.Context,
 						"uid":        string(kueue.UID),
 					},
 				},
-				"name":      "webhook-cert",
+				"name":      certificateName,
 				"namespace": c.operatorNamespace,
 			},
 			"spec": map[string]interface{}{
-				"secretName": "kueue-webhook-server-cert",
-				"dnsNames": []interface{}{
-					kueueServiceName,
-				},
-				"issuerRef": map[string]interface{}{
-					"name": "selfsigned",
-				},
-			},
-		},
-	}
-
-	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
-}
-
-func (c *TargetConfigReconciler) manageMetricsCertificateCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
-	gvr := schema.GroupVersionResource{
-		Group:    "cert-manager.io",
-		Version:  "v1",
-		Resource: "certificates",
-	}
-
-	metricsServiceName := fmt.Sprintf("kueue-controller-manager-metrics-service.%s.svc", c.operatorNamespace)
-	required := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "cert-manager.io/v1",
-			"kind":       "Certificate",
-			"metadata": map[string]interface{}{
-				"ownerReferences": []interface{}{
-					map[string]interface{}{
-						"apiVersion": "kueue.openshift.io/v1",
-						"kind":       "Kueue",
-						"name":       kueue.Name,
-						"uid":        string(kueue.UID),
-					},
-				},
-				"name":      "metrics-certs",
-				"namespace": c.operatorNamespace,
-			},
-			"spec": map[string]interface{}{
-				"dnsNames": []interface{}{
-					metricsServiceName,
-					metricsServiceName + ".cluster.local",
-				},
-				"commonName": "kueue-metrics",
+				"dnsNames": dnsNames,
 				"issuerRef": map[string]interface{}{
 					"kind": "Issuer",
 					"name": "selfsigned",
 				},
-				"secretName": "metrics-server-cert",
+				"secretName": secretName,
 			},
 		},
 	}
-
-	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
+	if commonName != "" {
+		required.Object["spec"].(map[string]interface{})["commonName"] = commonName
+	}
+	_, _, err := resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {

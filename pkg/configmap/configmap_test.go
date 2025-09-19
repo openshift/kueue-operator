@@ -56,7 +56,6 @@ fairSharing:
   enable: false
 featureGates:
   HierarchicalCohorts: false
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -119,7 +118,6 @@ fairSharing:
   enable: false
 featureGates:
   HierarchicalCohorts: false
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -185,7 +183,6 @@ fairSharing:
   - LessThanInitialShare
 featureGates:
   HierarchicalCohorts: false
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -242,7 +239,6 @@ fairSharing:
   enable: false
 featureGates:
   HierarchicalCohorts: false
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -308,7 +304,6 @@ fairSharing:
   enable: false
 featureGates:
   HierarchicalCohorts: false
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
