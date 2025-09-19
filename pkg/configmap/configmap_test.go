@@ -54,8 +54,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 fairSharing:
   enable: false
-featureGates:
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -116,8 +114,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 fairSharing:
   enable: false
-featureGates:
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -181,8 +177,6 @@ fairSharing:
   preemptionStrategies:
   - LessThanOrEqualToFinalShare
   - LessThanInitialShare
-featureGates:
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -237,8 +231,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 fairSharing:
   enable: false
-featureGates:
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -302,8 +294,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 fairSharing:
   enable: false
-featureGates:
-  VisibilityOnDemand: false
 health:
   healthProbeBindAddress: :8081
 integrations:

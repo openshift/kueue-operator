@@ -15,6 +15,7 @@ import (
 	apiextclientsetv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	apiregistrationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
 
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -71,6 +72,11 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
+	apiRegistrationClient, err := apiregistrationv1client.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+
 	crdInformer := apiextinformer.NewSharedInformerFactoryWithOptions(crdClientSet, 10*time.Minute)
 
 	targetConfigReconciler, err := NewTargetConfigReconciler(
@@ -84,6 +90,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		dynamicClient,
 		discoveryClient,
 		crdClient,
+		apiRegistrationClient,
 		crdInformer,
 		cc.EventRecorder,
 		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
