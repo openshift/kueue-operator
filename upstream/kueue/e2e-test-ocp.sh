@@ -40,8 +40,8 @@ function allow_privileged_access {
 
 function apply_patches {
     CWD=$(pwd)
-    cd src
-    git apply $CWD/patch/e2e.patch
+    cd upstream/kueue/src
+    git apply ../patch/e2e.patch
     cd $CWD
 }
 
