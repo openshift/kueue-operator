@@ -9,7 +9,6 @@ export OC=$(which oc) # OpenShift CLI
 export GINKGO=$(pwd)/bin/ginkgo
 SOURCE_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$SOURCE_DIR/.."
-DEFAULT_NAMESPACE="openshift-kueue-operator"
 export KUEUE_NAMESPACE="openshift-kueue-operator"
 # This is required to reuse the exisiting code.
 # Set this to empty value for OCP tests.
