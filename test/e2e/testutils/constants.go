@@ -25,6 +25,6 @@ const (
 	OpenShiftManagedLabel = "kueue.openshift.io/managed"
 	QueueLabel            = "kueue.x-k8s.io/queue-name"
 	DefaultLocalQueueName = "default"
-	DeletionTime          = 2 * time.Minute
+	DeletionTime          = 3 * time.Minute
 	DeletionPoll          = 5 * time.Second
 )
