@@ -75,6 +75,7 @@ func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
 	conversionMap[string(kueue.KueueIntegrationDeployment)] = "deployment"
 	conversionMap[string(kueue.KueueIntegrationLeaderWorkerSet)] = "leaderworkerset.x-k8s.io/leaderworkerset"
 	conversionMap[string(kueue.KueueIntegrationStatefulSet)] = "statefulset"
+	conversionMap[string(kueue.KueueIntegrationTrainJob)] = "trainer.kubeflow.org/trainjob"
 
 	ret := []string{}
 	for _, val := range kueuelist {
