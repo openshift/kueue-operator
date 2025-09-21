@@ -92,7 +92,7 @@ type KueueList struct {
 	Items []Kueue `json:"items"`
 }
 
-// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet
+// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet
 type KueueIntegration string
 
 const (
@@ -104,6 +104,7 @@ const (
 	KueueIntegrationPaddleJob       KueueIntegration = "PaddleJob"
 	KueueIntegrationPyTorchJob      KueueIntegration = "PyTorchJob"
 	KueueIntegrationTFJob           KueueIntegration = "TFJob"
+	KueueIntegrationTrainJob        KueueIntegration = "TrainJob"
 	KueueIntegrationXGBoostJob      KueueIntegration = "XGBoostJob"
 	KueueIntegrationJaxJob          KueueIntegration = "JaxJob"
 	KueueIntegrationAppWrapper      KueueIntegration = "AppWrapper"
@@ -155,7 +156,7 @@ type ExternalFramework struct {
 // which jobs will be managed by Kueue.
 type Integrations struct {
 	// frameworks are a list of frameworks that Kueue has support for.
-	// The allowed values are BatchJob, RayJob, RayCluster, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
+	// The allowed values are BatchJob, RayJob, RayCluster, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
 	// frameworks are required and must have at least one element.
 	// frameworks can not have more than 14 elements.
 	// Each framework represents a type of job that Kueue will manage.

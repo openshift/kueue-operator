@@ -29,7 +29,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2025-08-26T18:40:24Z"
+    createdAt: "2025-09-21T20:58:09Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -242,10 +242,10 @@ spec:
                 - name: OPERATOR_NAME
                   value: openshift-kueue-operator
                 - name: RELATED_IMAGE_OPERAND_IMAGE
-                  value: registry.redhat.io/kueue/kueue-rhel9@sha256:b30c9bc73ef5b4419e9bca38bd886a470c00d14e750bb53d02d272a019ce891f
+                  value: registry.redhat.io/kueue/kueue-rhel9@sha256:02fa8d8d4592648fc767caf59ebd895716c6ed080e12da10c313375538b4ffe8
                 - name: RELATED_IMAGE_MUST_GATHER
-                  value: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:b5332b99d1f4f917001820896491816e5b7ed9394787e00bdc05c878198ce551
-                image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:3f4d40204adc10caeb287fe6ddd93ddc0dcb07a2fae847d5ea2183ca7b94940f
+                  value: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:5034498295027b7db9cea651724dc41dbb33907fecfc96fd23f57217ffc5924e
+                image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:ea2a66aebc44a6045e3499b099965d7866e5e1bf559d8f85e067a690ae1096a4
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
@@ -309,8 +309,8 @@ spec:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
   relatedImages:
-  - image: registry.redhat.io/kueue/kueue-rhel9@sha256:b30c9bc73ef5b4419e9bca38bd886a470c00d14e750bb53d02d272a019ce891f
+  - image: registry.redhat.io/kueue/kueue-rhel9@sha256:02fa8d8d4592648fc767caf59ebd895716c6ed080e12da10c313375538b4ffe8
     name: operand-image
-  - image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:b5332b99d1f4f917001820896491816e5b7ed9394787e00bdc05c878198ce551
+  - image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:5034498295027b7db9cea651724dc41dbb33907fecfc96fd23f57217ffc5924e
     name: must-gather
   version: 1.1.0
