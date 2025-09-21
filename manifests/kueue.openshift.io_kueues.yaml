@@ -173,7 +173,7 @@ spec:
                       frameworks:
                         description: |-
                           frameworks are a list of frameworks that Kueue has support for.
-                          The allowed values are BatchJob, RayJob, RayCluster, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
+                          The allowed values are BatchJob, RayJob, RayCluster, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
                           frameworks are required and must have at least one element.
                           frameworks can not have more than 14 elements.
                           Each framework represents a type of job that Kueue will manage.
@@ -187,6 +187,7 @@ spec:
                           - PaddleJob
                           - PyTorchJob
                           - TFJob
+                          - TrainJob
                           - XGBoostJob
                           - JaxJob
                           - AppWrapper
