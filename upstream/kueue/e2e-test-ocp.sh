@@ -49,6 +49,8 @@ skips=(
         # do not deploy PyTorch in OCP
         PyTorch
         # do not deploy JobSet in OCP
+        TrainJob
+        # do not deploy TrainJob in OCP
         JobSet
         # do not deploy LWS in OCP
         LeaderWorkerSet
