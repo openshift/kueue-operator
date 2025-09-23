@@ -51,6 +51,7 @@ var (
 		string(kueue.KueueIntegrationPod):             "pod",
 		string(kueue.KueueIntegrationDeployment):      "deployment",
 		string(kueue.KueueIntegrationStatefulSet):     "statefulset",
+		string(kueue.KueueIntegrationTrainJob):        "trainjob",
 		string(kueue.KueueIntegrationLeaderWorkerSet): "leaderworkerset",
 		annotationClusterQueue:                        "clusterqueue",
 		annotationWorkload:                            "workload",
