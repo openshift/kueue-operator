@@ -56,7 +56,8 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: Kueue
+    - displayName: Kueue
+      kind: Kueue
       name: kueues.kueue.openshift.io
       version: v1
   description: Red Hat build of Kueue is a collection of APIs, based on the [Kueue](https://kueue.sigs.k8s.io/docs/)
