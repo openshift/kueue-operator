@@ -31,84 +31,54 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	ns          *corev1.Namespace
+	kueueClient *upstreamkueueclient.Clientset
+	builder     *testutils.TestResourceBuilder
+)
+
 var _ = Describe("LocalQueueDefaulting", Ordered, func() {
+
 	BeforeAll(func() {
 		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 	})
-	AfterAll(func() {
-		testutils.CleanUpKueuInstance(context.TODO(), clients.KueueClient, "cluster")
+	AfterAll(func(ctx context.Context) {
+		testutils.CleanUpKueuInstance(ctx, clients.KueueClient, "cluster")
 	})
 
-	When("labelPolicy=None and LocalQueue default", func() {
-		var (
-			ns                   *corev1.Namespace
-			initialKueueInstance *kueueoperatorv1.Kueue
-			kueueClient          *upstreamkueueclient.Clientset
-			builder              *testutils.TestResourceBuilder
-		)
+	When("labelPolicy=None and LocalQueue default in a managed namespace", func() {
+		var initialKueueInstance *kueueoperatorv1.Kueue
 
-		BeforeAll(func() {
-			ctx := context.TODO()
+		BeforeAll(func(ctx context.Context) {
 			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance = kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = kueueoperatorv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
-			kueueClient = clients.UpstreamKueueClient
-			Expect(testutils.CreateClusterQueue(kueueClient)).To(Succeed(), "Failed to create cluster queue")
-			Expect(testutils.CreateResourceFlavor(kueueClient)).To(Succeed(), "Failed to create resource flavor")
+			createClusterQueueAndResourceFlavor()
 		})
 
-		AfterAll(func() {
-			By("deleting cluster queue")
-			err := kueueClient.KueueV1beta1().ClusterQueues().Delete(context.TODO(), "test-clusterqueue", metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() error {
-				_, err := kueueClient.KueueV1beta1().ClusterQueues().Get(context.TODO(), "test-clusterqueue", metav1.GetOptions{})
-				if apierrors.IsNotFound(err) {
-					return nil
-				}
-				return fmt.Errorf("ClusterQueue test-clusterqueue still exists")
-			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "ClusterQueue was not cleaned up properly")
-			By("deleting resource flavor")
-			err = kueueClient.KueueV1beta1().ResourceFlavors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() error {
-				_, err := kueueClient.KueueV1beta1().ResourceFlavors().Get(context.TODO(), "default", metav1.GetOptions{})
-				if apierrors.IsNotFound(err) {
-					return nil
-				}
-				return fmt.Errorf("ResourceFlavor default still exists")
-			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "ResourceFlavor was not cleaned up properly")
-			applyKueueConfig(context.TODO(), initialKueueInstance.Spec.Config, kubeClient)
-		})
-		BeforeEach(func() {
-			var err error
-			ns, err = kubeClient.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "e2e-kueue-",
-					Labels: map[string]string{
-						testutils.OpenShiftManagedLabel: "true",
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			By(fmt.Sprintf("Created namespace %s", ns.Name))
-			builder = testutils.NewTestResourceBuilder(ns.Name, testutils.DefaultLocalQueueName)
-			Expect(testutils.CreateLocalQueue(kueueClient, ns.Name, testutils.DefaultLocalQueueName)).To(Succeed())
-		})
-		AfterEach(func() {
-			By(fmt.Sprintf("Deleting namespace %s", ns.Name))
-			err := kubeClient.CoreV1().Namespaces().Delete(context.TODO(), ns.Name, metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			testutils.WaitForAllPodsInNamespaceDeleted(context.TODO(), clients.GenericClient, ns)
+		AfterAll(func(ctx context.Context) {
+			deleteClusterQueueAndResourceFlavor(ctx, kueueClient)
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		})
 
-		It("should label and admit Pod and Job", func() {
-			ctx := context.TODO()
+		BeforeEach(func(ctx context.Context) {
+			namespaceLabel := map[string]string{
+				testutils.OpenShiftManagedLabel: "true",
+			}
+			createNamespaceAndLocalQueueDefault(ctx, namespaceLabel)
+		})
+
+		AfterEach(func(ctx context.Context) {
+			deleteNamespace(ctx, ns)
+		})
+
+		It("should label and admit Pod and Job", func(ctx context.Context) {
 			By("creating job without queue name")
 			job := builder.NewJobWithoutQueue()
-			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(context.TODO(), job, metav1.CreateOptions{})
+			By(fmt.Sprintf("namespace with labels: %s\n", ns.Name))
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdJob.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdJob.UID))
@@ -121,13 +91,12 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdPod.UID))
 		})
 
-		It("should allow other local queues in same namespace without interfering", func() {
-			ctx := context.TODO()
+		It("should allow other local queues in same namespace without interfering", func(ctx context.Context) {
 			secondQueueName := "test-queue-2"
 
 			By("creating job without queue name")
 			job := builder.NewJobWithoutQueue()
-			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(context.TODO(), job, metav1.CreateOptions{})
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdJob.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
 
@@ -162,9 +131,7 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdPod.UID))
 		})
 
-		It("should allow to label pod and job with default localqueue after they're created", func() {
-			ctx := context.TODO()
-
+		It("should allow to label pod and job with default localqueue after they're created", func(ctx context.Context) {
 			// Job creation when there is no LocalQueue Default
 			By("Creating a new job without localQueue")
 			err := kueueClient.KueueV1beta1().LocalQueues(ns.Name).Delete(ctx, testutils.DefaultLocalQueueName, metav1.DeleteOptions{})
@@ -191,7 +158,7 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 			By("Creating localQueue Default")
 			Expect(testutils.CreateLocalQueue(kueueClient, ns.Name, testutils.DefaultLocalQueueName)).To(Succeed())
 			job := builder.NewJobWithoutQueue()
-			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(context.TODO(), job, metav1.CreateOptions{})
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdJob.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdJob.UID))
@@ -230,4 +197,115 @@ var _ = Describe("LocalQueueDefaulting", Ordered, func() {
 		})
 	})
 
+	When("labelPolicy is not defined and default LocalQueue is in a managed namespace", func() {
+		BeforeEach(func(ctx context.Context) {
+			//Initial configuration - creating clusterQueue, resourceFlavor, namespace and localqueue
+			createClusterQueueAndResourceFlavor()
+			namespaceLabel := map[string]string{
+				testutils.OpenShiftManagedLabel: "true",
+			}
+			createNamespaceAndLocalQueueDefault(ctx, namespaceLabel)
+		})
+		AfterEach(func(ctx context.Context) {
+			//Clean Up - resources deprovision
+			deleteNamespace(ctx, ns)
+			deleteClusterQueueAndResourceFlavor(ctx, kueueClient)
+		})
+		It("should label and admit Job", func(ctx context.Context) {
+			By("Creating job without queue name")
+			//Job creation and validation
+			jobWithoutQueue := builder.NewJobWithoutQueue()
+			createdJobWithoutQueue, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobWithoutQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeFalse(), "Job in 'Suspended' condition")
+			Expect(createdJobWithoutQueue.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
+			verifyWorkloadCreated(kueueClient, ns.Name, string(createdJobWithoutQueue.UID))
+
+		})
+	})
+
+	When("labelPolicy is not defined and default LocalQueue is in an unmanaged namespace", func() {
+
+		BeforeEach(func(ctx context.Context) {
+			//Initial configuration - creating clusterQueue, resourceFlavor, namespace and localqueue
+			createClusterQueueAndResourceFlavor()
+			createNamespaceAndLocalQueueDefault(ctx, nil)
+		})
+		AfterEach(func(ctx context.Context) {
+			//Clean Up - resources deprovision
+			deleteNamespace(ctx, ns)
+			deleteClusterQueueAndResourceFlavor(ctx, kueueClient)
+		})
+		It("should label and admit Pod", func(ctx context.Context) {
+			By("creating pod without queue name")
+			//Pod creation and validation
+			podWithoutQueue := builder.NewPodWithoutQueue()
+			createdPodWithoutQueue, err := kubeClient.CoreV1().Pods(ns.Name).Create(ctx, podWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdPodWithoutQueue.Labels).NotTo(HaveKey(testutils.QueueLabel))
+			Eventually(func() bool {
+				pod, err := kubeClient.CoreV1().Pods(ns.Name).Get(ctx, createdPodWithoutQueue.Name, metav1.GetOptions{})
+				if err != nil {
+					return false
+				}
+				return pod.Status.Phase == corev1.PodRunning
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Pod did not reach expected state (Successfully Scheduled and currently Running)")
+
+		})
+	})
 })
+
+func deleteClusterQueueAndResourceFlavor(ctx context.Context, kueueClient *upstreamkueueclient.Clientset) {
+	By("deleting cluster queue")
+	err := kueueClient.KueueV1beta1().ClusterQueues().Delete(ctx, "test-clusterqueue", metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		_, err := kueueClient.KueueV1beta1().ClusterQueues().Get(ctx, "test-clusterqueue", metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("ClusterQueue test-clusterqueue still exists")
+	}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "ClusterQueue was not cleaned up properly")
+	By("deleting resource flavor")
+	err = kueueClient.KueueV1beta1().ResourceFlavors().Delete(ctx, "default", metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		_, err := kueueClient.KueueV1beta1().ResourceFlavors().Get(ctx, "default", metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("ResourceFlavor default still exists")
+	}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "ResourceFlavor was not cleaned up properly")
+}
+
+func deleteNamespace(ctx context.Context, namespace *corev1.Namespace) {
+	By(fmt.Sprintf("Deleting namespace %s", namespace.Name))
+	err := kubeClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	testutils.WaitForAllPodsInNamespaceDeleted(ctx, clients.GenericClient, namespace)
+}
+
+func createClusterQueueAndResourceFlavor() {
+	kueueClient = clients.UpstreamKueueClient
+	Expect(testutils.CreateClusterQueue(kueueClient)).To(Succeed(), "Failed to create cluster queue")
+	Expect(testutils.CreateResourceFlavor(kueueClient)).To(Succeed(), "Failed to create resource flavor")
+}
+
+func createNamespaceAndLocalQueueDefault(ctx context.Context, labels map[string]string) {
+	var err error
+	namespaceSpec := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "e2e-kueue-",
+		},
+	}
+	if labels != nil {
+		namespaceSpec.ObjectMeta.Labels = labels
+	}
+	ns, err = kubeClient.CoreV1().Namespaces().Create(ctx, namespaceSpec, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	By(fmt.Sprintf("Created namespace %s", ns.Name))
+	builder = testutils.NewTestResourceBuilder(ns.Name, testutils.DefaultLocalQueueName)
+	Expect(testutils.CreateLocalQueue(kueueClient, ns.Name, testutils.DefaultLocalQueueName)).To(Succeed())
+}
