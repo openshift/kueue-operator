@@ -33,6 +33,7 @@ spec:
   customresourcedefinitions:
     owned:
       - displayName: Kueue
+        description: Kueue is a cluster resource for configuration of the Kueue operand
         kind: Kueue
         name: kueues.kueue.openshift.io
         version: v1
