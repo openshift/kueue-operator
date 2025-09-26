@@ -35,3 +35,4 @@ LABEL distribution-scope="public"
 LABEL release=0.1.0
 LABEL version=0.1.0
 LABEL maintainer="Node team, <aos-node@redhat.com>"
+LABEL test_me="Node team, <aos-node@redhat.com>"

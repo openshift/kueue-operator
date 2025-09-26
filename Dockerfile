@@ -23,5 +23,6 @@ LABEL vendor="Red Hat, Inc."
 LABEL version=0.1.0
 LABEL release=0.1.0
 LABEL maintainer="Node team, <aos-node@redhat.com>"
+LABEL test_me="Node team, <aos-node@redhat.com>"
 
 USER 1001

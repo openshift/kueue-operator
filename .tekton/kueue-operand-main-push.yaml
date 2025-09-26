@@ -9,7 +9,7 @@ metadata:
       related_images.json, related_images.developer.json
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main" && ( "upstream/kueue/***".pathChanged() || ".tekton/kueue-operand-main-push.yaml".pathChanged() )
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main" && ( "upstream/kueue/***".pathChanged() || ".tekton/kueue-operand-main-push.yaml".pathChanged()  || "Dockerfile.kueue".pathChanged() )
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: kueue-operator-main
