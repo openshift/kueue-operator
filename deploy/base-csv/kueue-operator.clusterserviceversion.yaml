@@ -32,7 +32,9 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-      - kind: Kueue
+      - displayName: Kueue
+        description: Kueue is a cluster resource for configuration of the Kueue operand
+        kind: Kueue
         name: kueues.kueue.openshift.io
         version: v1
   description: Red Hat build of Kueue is a collection of APIs, based on the [Kueue](https://kueue.sigs.k8s.io/docs/) open source project, that extends Kubernetes to manage access to resources for jobs. Red Hat build of Kueue does not replace any existing components in a Kubernetes cluster, but instead integrates with the existing Kubernetes API server, scheduler, and cluster autoscaler components to determine when a job waits, is admitted to start by creating pods, or should be preempted.
