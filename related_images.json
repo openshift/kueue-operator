@@ -1,7 +1,7 @@
 [
   {
     "name": "operator",
-    "image": "registry.redhat.io/kueue/kueue-rhel9-operator@sha256:76c8ab387ac7cae2f624ef7de0c275ef796c72383aea4fa4cd3cde32058aaa76"
+    "image": "registry.redhat.io/kueue/kueue-rhel9-operator@sha256:9952bdaf34607e3ab660d72c2040a2c1b2592234647ae9354c8fc8bead8dddcb"
   },
   {
     "name": "must-gather",
