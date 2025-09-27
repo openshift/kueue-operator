@@ -8,11 +8,8 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression:
-      event == "pull_request" &&
-      target_branch == "main" &&
-      files.all.exists(path, path.matches('fbc/|.tekton/kueue-fbc-418-*'))
-  creationTimestamp: null
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" && files.all.exists(path, path.matches('fbc/|.tekton/kueue-fbc-418-*'))
+  creationTimestamp:
   labels:
     appstudio.openshift.io/application: kueue-fbc-418
     appstudio.openshift.io/component: kueue-fbc-418
@@ -34,8 +31,8 @@ spec:
     - linux/amd64
   - name: dockerfile
     value: /fbc/v4.18/Containerfile.catalog
-  - name: path-context 
-    value: fbc/v4.18 
+  - name: path-context
+    value: fbc/v4.18
   pipelineSpec:
     description: |
       This pipeline is ideal for building and verifying [file-based catalogs](https://konflux-ci.dev/docs/end-to-end/building-olm/#building-the-file-based-catalog).
@@ -68,13 +65,11 @@ spec:
       name: output-image
       type: string
     - default: .
-      description: Path to the source code of an application's component from where
-        to build image.
+      description: Path to the source code of an application's component from where to build image.
       name: path-context
       type: string
     - default: Dockerfile
-      description: Path to the Dockerfile inside the context specified by parameter
-        path-context
+      description: Path to the Dockerfile inside the context specified by parameter path-context
       name: dockerfile
       type: string
     - default: "false"
@@ -94,8 +89,7 @@ spec:
       name: prefetch-input
       type: string
     - default: ""
-      description: Image tag expiration time, time values could be something like
-        1h, 2d, 3w for hours, days, and weeks, respectively.
+      description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
     - default: "false"
       description: Build a source image.
@@ -115,10 +109,13 @@ spec:
       type: string
     - default:
       - linux/x86_64
-      description: List of platforms to build the container images on. The available
-        set of values is determined by the configuration of the multi-platform-controller.
+      description: List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
       name: build-platforms
       type: array
+    - name: buildah-format
+      default: docker
+      type: string
+      description: The format for the resulting image's mediaType. Valid values are oci or docker.
     results:
     - description: ""
       name: IMAGE_URL
@@ -146,7 +143,7 @@ spec:
         - name: name
           value: init
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:ec962d0be18f36ca7d331c99bf243800f569fc0a2ea6f8c8c3d3a574b71c44dc
+          value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:abf231cfc5a68b56f68a8ac9bb26dca3c3e434c88dd9627c72bdec0b8c335c67
         - name: kind
           value: task
         resolver: bundles
@@ -237,6 +234,8 @@ spec:
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: IMAGE_APPEND_PLATFORM
         value: "true"
+      - name: BUILDAH_FORMAT
+        value: $(params.buildah-format)
       runAfter:
       - clone-repository
       taskRef:
@@ -244,7 +243,7 @@ spec:
         - name: name
           value: buildah-remote-oci-ta
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.5@sha256:a60e433e02bfda6811719690edbf1e924820d107ad658c8a9690498d4c7e9c7b
+          value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.5@sha256:650b0bca57c626c1e82f35cdfadf44a7792230b2b992aaa9c369d615aae6590d
         - name: kind
           value: task
         resolver: bundles
@@ -266,6 +265,8 @@ spec:
       - name: IMAGES
         value:
         - $(tasks.build-images.results.IMAGE_REF[*])
+      - name: BUILDAH_FORMAT
+        value: $(params.buildah-format)
       runAfter:
       - build-images
       taskRef:
