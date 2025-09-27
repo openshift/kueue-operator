@@ -46,7 +46,7 @@ spec:
             - name: OPERATOR_NAME
               value: "openshift-kueue-operator"
             - name: RELATED_IMAGE_OPERAND_IMAGE
-              value: registry.redhat.io/kueue/kueue-rhel9:latest 
+              value: registry.redhat.io/kueue/kueue-rhel9:latest
             - name: RELATED_IMAGE_MUST_GATHER
               value: registry.redhat.io/kueue/kueue-must-gather-rhel9:latest
       serviceAccountName: openshift-kueue-operator
