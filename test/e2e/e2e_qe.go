@@ -19,57 +19,40 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
+
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/klog/v2"
 )
 
-var _ = Describe("QETesting", Ordered, func() {
+var _ = Describe("TESTQE", Ordered, func() {
 
-	BeforeAll(func() {
-		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
-	})
-	AfterAll(func(ctx context.Context) {
-		testutils.CleanUpKueuInstance(ctx, clients.KueueClient, "cluster")
-	})
-
-	When("QE testing", func() {
-		var testNamespace *corev1.Namespace
-
-		BeforeEach(func(ctx context.Context) {
-			// Create a test namespace for this test
-			testNamespace = &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "qe-test-",
-					Labels: map[string]string{
-						testutils.OpenShiftManagedLabel: "true",
-					},
-				},
-			}
-			var err error
-			testNamespace, err = kubeClient.CoreV1().Namespaces().Create(ctx, testNamespace, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+	When("TESTQE", func() {
+		It("operator pods should be ready", func() {
+			Eventually(func() error {
+				ctx := context.TODO()
+				podItems, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					klog.Errorf("Unable to list pods: %v", err)
+					return nil
+				}
+				for _, pod := range podItems.Items {
+					if !strings.HasPrefix(pod.Name, testutils.OperatorNamespace+"-") {
+						continue
+					}
+					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
+					if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && pod.Status.ContainerStatuses[0].Ready {
+						return nil
+					}
+				}
+				return fmt.Errorf("pod is not ready")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "operator pod failed to be ready")
 		})
 
-		AfterEach(func(ctx context.Context) {
-			if testNamespace != nil {
-				err := kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespace.Name, metav1.DeleteOptions{})
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
-
-		It("should label and admit Pod and Job", func(ctx context.Context) {
-			By(fmt.Sprintf("Testing in namespace: %s", testNamespace.Name))
-			// TODO: Add actual test logic here
-			// Example commented code shows what could be implemented:
-			// job := builder.NewJobWithoutQueue()
-			// createdJob, err := kubeClient.BatchV1().Jobs(testNamespace.Name).Create(ctx, job, metav1.CreateOptions{})
-			// Expect(err).NotTo(HaveOccurred())
-			// Expect(createdJob.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
-		})
 	})
-
 })
