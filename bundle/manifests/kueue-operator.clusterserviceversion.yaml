@@ -299,6 +299,6 @@ spec:
     - image: registry.redhat.io/kueue/kueue-rhel9@sha256:5726b0fa8b8f8d2410a6847350e7711f5e8aa52e43496ec4c22f40062ddec7d7
       name: operand-image
     - name: must-gather
-      image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:b6777ffd45002f8ca496bc8fea798e2404e357f117b56e05a429809ece0b1cf8
+      image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:363e616fcc3fad90cebd81d44a8042cc34ca02b42432465fbcd359348a59963a
   version: 1.0.1
   minKubeVersion: 1.28.0
