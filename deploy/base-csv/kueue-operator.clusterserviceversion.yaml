@@ -60,7 +60,7 @@ spec:
   maintainers:
     - email: aos-node@redhat.com
       name: Node team
-  maturity: alpha
+  maturity: stable
   provider:
     name: Red Hat, Inc
     url: https://github.com/openshift/kueue-operator
