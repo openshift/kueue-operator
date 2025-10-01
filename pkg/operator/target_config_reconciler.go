@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -717,9 +718,12 @@ func (c *TargetConfigReconciler) cleanUpClusterRoles(ctx context.Context) error 
 		klog.Errorf("Failed to list ClusterRoles: %v", err)
 		return err
 	}
-
+	bundleClusterRoleNames := []string{
+		"kueue-batch-user-role",
+		"kueue-batch-admin-role",
+	}
 	for _, role := range clusterRoleList.Items {
-		if !strings.Contains(role.Name, "kueue") || strings.Contains(role.Name, "kueue-operator") || strings.Contains(role.Name, "openshift.io") {
+		if !strings.Contains(role.Name, "kueue") || strings.Contains(role.Name, "kueue-operator") || strings.Contains(role.Name, "openshift.io") || slices.Contains(bundleClusterRoleNames, role.Name) {
 			continue
 		}
 
