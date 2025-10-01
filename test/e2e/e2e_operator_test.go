@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -710,8 +711,12 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					return fmt.Errorf("Failure on fetching cluster roles: %v", err)
 				}
 				klog.Infof("Verifying removal of Cluster Roles")
+				bundleClusterRoleNames := []string{
+					"kueue-batch-user-role",
+					"kueue-batch-admin-role",
+				}
 				for _, role := range clusterRoles.Items {
-					if strings.Contains(role.Name, "kueue") && !strings.Contains(role.Name, "kueue-operator") && !strings.Contains(role.Name, "openshift.io") {
+					if strings.Contains(role.Name, "kueue") && !strings.Contains(role.Name, "kueue-operator") && !strings.Contains(role.Name, "openshift.io") && !slices.Contains(bundleClusterRoleNames, role.Name) {
 						return fmt.Errorf("ClusterRole %s still exists", role.Name)
 					}
 				}
