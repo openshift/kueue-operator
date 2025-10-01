@@ -181,9 +181,6 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 			Enable: ptr.To(false),
 		},
 		FeatureGates: map[string]bool{
-			// Disable the HierarchicalCohorts feature gate by default.
-			// related to https://github.com/kubernetes-sigs/kueue/issues/4869
-			"HierarchicalCohorts": false,
 			// Disable visibilityOnDemand
 			// apiserver is insecure.
 			"VisibilityOnDemand": false,
