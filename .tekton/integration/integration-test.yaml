@@ -116,9 +116,9 @@ spec:
         - image: registry.redhat.io/openshift4/ose-cli:latest
           resources:
             requests:
-              memory: 2Gi
+              memory: 4Gi
             limits:
-              memory: 2Gi
+              memory: 4Gi
           env:
           - name: SNAPSHOT
             value: $(params.SNAPSHOT)
