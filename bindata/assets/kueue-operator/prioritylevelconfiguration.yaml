@@ -4,6 +4,7 @@ metadata:
   name: kueue-visibility
 spec:
   limited:
+    borrowingLimitPercent: 0
     lendablePercent: 90
     limitResponse:
       queuing:
