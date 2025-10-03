@@ -208,7 +208,7 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	$(GINKGO) --no-color -v ./test/e2e/...
+	$(GINKGO) --junit-report=report.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-upstream-test
 e2e-upstream-test: ginkgo
