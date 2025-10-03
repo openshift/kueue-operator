@@ -21,7 +21,7 @@ var (
 	resource      *unstructured.Unstructured // Global object to store the latest created resource
 )
 
-var _ = Describe("QETest", Ordered, func() {
+var _ = Describe("KueueOperator - QE suite", Ordered, func() {
 
 	AfterAll(func(ctx context.Context) {
 		deleteNamespace(ctx, ns)
@@ -29,8 +29,8 @@ var _ = Describe("QETest", Ordered, func() {
 		testutils.CleanUpKueuInstance(ctx, clients.KueueClient, "cluster")
 	})
 
-	When("Kueue Operator - QE test", func() {
-		It("LocalQueueDefaulting should label and admit Job and Pod", func(ctx context.Context) {
+	When("LocalQueueDefaulting ", func() {
+		It("Should label and admit Job and Pod", func(ctx context.Context) {
 			kueueClient = clients.UpstreamKueueClient
 			Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
@@ -48,12 +48,10 @@ var _ = Describe("QETest", Ordered, func() {
 			createResource("assets/12_job.yaml")
 			verifyResourceExists("Job", "kueuejob2", namespaceName)
 			Expect(resource.GetLabels()).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
-			By(fmt.Sprintf("resource.GetLabels(): %s", resource.GetLabels()))
 			verifyWorkloadCreated(kueueClient, ns.Name, string(resource.GetUID()))
 			createResource("assets/13_pod.yaml")
 			verifyResourceExists("Pod", "pod1", namespaceName)
 			Expect(resource.GetLabels()).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
-			By(fmt.Sprintf("resource.GetLabels(): %s", resource.GetLabels()))
 			verifyWorkloadCreated(kueueClient, ns.Name, string(resource.GetUID()))
 		})
 	})
@@ -61,13 +59,10 @@ var _ = Describe("QETest", Ordered, func() {
 })
 
 func createResource(assetPath string) {
-	By(fmt.Sprintf("Applying yaml file: %v", assetPath))
 	yamlBytes := bindata.MustAsset(assetPath)
 	resource = &unstructured.Unstructured{}
-
 	err := yaml.Unmarshal(yamlBytes, resource)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal YAML from %s: %v", assetPath, err))
-
 	if resource.GetKind() == "Namespace" {
 		randomSuffix := rand.String(5)
 		namespaceName = fmt.Sprintf("e2e-kueue-%s", randomSuffix)
@@ -78,11 +73,9 @@ func createResource(assetPath string) {
 			},
 		}
 	}
-
 	if resource.GetKind() == "LocalQueue" || resource.GetKind() == "Job" || resource.GetKind() == "Pod" {
 		resource.SetNamespace(namespaceName)
 	}
-
 	err = clients.GenericClient.Create(context.Background(), resource)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create %s: %v", resource.GetKind(), err))
 }
@@ -92,8 +85,5 @@ func verifyResourceExists(kind, name, namespace string) {
 	Expect(resource.GetName()).To(Equal(name), "Resource name mismatch")
 	if namespace != "" {
 		Expect(resource.GetNamespace()).To(Equal(namespace), "Resource namespace mismatch")
-		By(fmt.Sprintf("Verified %s exists: %s/%s", kind, namespace, name))
-	} else {
-		By(fmt.Sprintf(" Verified %s exists: %s", kind, name))
 	}
 }
