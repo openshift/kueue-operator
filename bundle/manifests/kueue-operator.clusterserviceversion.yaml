@@ -321,7 +321,7 @@ spec:
   maintainers:
   - email: aos-node@redhat.com
     name: Node team
-  maturity: alpha
+  maturity: stable
   minKubeVersion: 1.28.0
   provider:
     name: Red Hat, Inc
