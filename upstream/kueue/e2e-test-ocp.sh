@@ -64,8 +64,6 @@ skips=(
         Fair
         # we do not enable this feature in our operator
         TopologyAwareScheduling
-        # we do not enable VisibilityOnDemand in our operator
-        "Kueue visibility server"
         # relies on particular CPU setup to force pods to not schedule
         "Failed Pod can be replaced in group"
         # relies on particular CPU setup

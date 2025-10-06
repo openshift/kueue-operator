@@ -180,11 +180,6 @@ func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *confi
 		InternalCertManagement: &configapi.InternalCertManagement{
 			Enable: ptr.To(false),
 		},
-		FeatureGates: map[string]bool{
-			// Disable visibilityOnDemand
-			// apiserver is insecure.
-			"VisibilityOnDemand": false,
-		},
 		ManagedJobsNamespaceSelector: &v1.LabelSelector{
 			MatchLabels: map[string]string{"kueue.openshift.io/managed": "true"},
 		},
