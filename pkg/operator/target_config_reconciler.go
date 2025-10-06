@@ -377,7 +377,7 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 		return err
 	}
 
-	if err := c.manageCustomResources(specAnnotations, ownerReference); err != nil {
+	if err := c.manageCustomResources(specAnnotations); err != nil {
 		klog.Error("unable to manage custom resource")
 		return err
 	}
@@ -1116,7 +1116,7 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ownerRefere
 	return resourceapply.ApplyClusterRole(c.ctx, c.kubeClient.RbacV1(), c.eventRecorder, clusterRole)
 }
 
-func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[string]string) error {
 	crdDir := "assets/kueue-operator/crds"
 
 	files, err := bindata.AssetDir(crdDir)
@@ -1141,9 +1141,6 @@ func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[strin
 			continue
 		}
 
-		required.OwnerReferences = []metav1.OwnerReference{
-			ownerReference,
-		}
 		required.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
 		crd, _, err := resourceapply.ApplyCustomResourceDefinitionV1(c.ctx, c.crdClient, c.eventRecorder, required)
 		if err != nil {

@@ -694,7 +694,86 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		It("should delete Kueue instance and verify cleanup", func() {
 			ctx := context.TODO()
 
-			_, err := kueueClientset.KueueV1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
+			// First, create some Kueue Custom Resources to test that they are NOT deleted
+			// This addresses OCPBUGS-62254: Kueue uninstall does not delete all Kueue CRs
+			klog.Infof("Creating Kueue Custom Resources to test they are NOT deleted when Kueue CR is deleted")
+
+			By("create a resourceFlavor")
+			Expect(testutils.CreateResourceFlavor(clients.UpstreamKueueClient)).To(Succeed(), "Failed to create ResourceFlavor")
+			defer func() {
+				Expect(clients.UpstreamKueueClient.KueueV1beta1().ResourceFlavors().Delete(ctx, "default", metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete resourceFlavor default")
+			}()
+
+			By("create clusterQueue")
+			Expect(testutils.CreateClusterQueue(clients.UpstreamKueueClient)).To(Succeed(), "Failed to create ClusterQueue")
+			defer func() {
+				Expect(clients.UpstreamKueueClient.KueueV1beta1().ClusterQueues().Delete(ctx, "test-clusterqueue", metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete clusterQueue test-clusterqueue")
+			}()
+
+			// Create a test namespace for LocalQueue
+			testNamespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kueue-test-namespace",
+					Labels: map[string]string{
+						"kueue.x-k8s.io/managed": "true",
+					},
+				},
+			}
+			_, err := kubeClient.CoreV1().Namespaces().Create(ctx, testNamespace, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
+			defer func() {
+				Expect(kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespace.Name, metav1.DeleteOptions{})).ToNot(HaveOccurred(), "Failed to delete test namespace")
+			}()
+
+			By("create a LocalQueue in the test namespace")
+			Expect(testutils.CreateLocalQueue(clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")).To(Succeed(), "Failed to create LocalQueue")
+			defer func() {
+				Expect(clients.UpstreamKueueClient.KueueV1beta1().LocalQueues(testNamespace.Name).Delete(ctx, "test-localqueue", metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete localQueue test-localqueue")
+			}()
+
+			job := &batchv1.Job{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-job",
+					Namespace: testNamespace.Name,
+					Labels: map[string]string{
+						"kueue.x-k8s.io/queue-name": "test-localqueue",
+					},
+				},
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							RestartPolicy: corev1.RestartPolicyNever,
+							Containers: []corev1.Container{
+								{
+									Name:    "test-container",
+									Image:   "busybox",
+									Command: []string{"sh", "-c", "echo 'Hello World'"},
+								},
+							},
+						},
+					},
+				},
+			}
+			_, err = kubeClient.BatchV1().Jobs(testNamespace.Name).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to create test job")
+			defer func() {
+				Expect(kubeClient.BatchV1().Jobs(testNamespace.Name).Delete(ctx, job.Name, metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete job")
+			}()
+
+			By("wait for workload to be created")
+			Eventually(func() error {
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list workloads: %v", err)
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("No workloads found for job")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for job")
+
+			By("verify the Kueue instance exists and delete it")
+			_, err = kueueClientset.KueueV1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 
 			err = kueueClientset.KueueV1().Kueues().Delete(ctx, kueueName, metav1.DeleteOptions{})
@@ -705,6 +784,44 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 				if err == nil {
 					return fmt.Errorf("Kueue instance %s still exists", kueueName)
 				}
+
+				By("verify that Kueue Custom Resources are NOT deleted when Kueue CR is deleted")
+
+				clusterQueues, err := clients.UpstreamKueueClient.KueueV1beta1().ClusterQueues().List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list ClusterQueues: %v", err)
+				}
+				if len(clusterQueues.Items) == 0 {
+					return fmt.Errorf("Expected ClusterQueues to still exist after Kueue CR deletion, but none found")
+				}
+				klog.Infof("Found %d ClusterQueues still existing after Kueue CR deletion", len(clusterQueues.Items))
+
+				resourceFlavors, err := clients.UpstreamKueueClient.KueueV1beta1().ResourceFlavors().List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list ResourceFlavors: %v", err)
+				}
+				if len(resourceFlavors.Items) == 0 {
+					return fmt.Errorf("Expected ResourceFlavors to still exist after Kueue CR deletion, but none found")
+				}
+				klog.Infof("Found %d ResourceFlavors still existing after Kueue CR deletion", len(resourceFlavors.Items))
+
+				localQueues, err := clients.UpstreamKueueClient.KueueV1beta1().LocalQueues(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list LocalQueues: %v", err)
+				}
+				if len(localQueues.Items) == 0 {
+					return fmt.Errorf("Expected LocalQueues to still exist after Kueue CR deletion, but none found")
+				}
+				klog.Infof("Found %d LocalQueues still existing after Kueue CR deletion", len(localQueues.Items))
+
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list Workloads: %v", err)
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("Expected Workloads to still exist after Kueue CR deletion, but none found")
+				}
+				klog.Infof("Found %d Workloads still existing after Kueue CR deletion", len(workloads.Items))
 
 				clusterRoles, err := kubeClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
 				if err != nil {
