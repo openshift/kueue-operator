@@ -1,0 +1,12 @@
+diff --git i/go.mod w/go.mod
+index 1b4551e45..aa8b3ebc6 100644
+--- i/go.mod
++++ w/go.mod
+@@ -1,6 +1,6 @@
+ module sigs.k8s.io/kueue
+ 
+-go 1.25.0
++go 1.24.0
+ 
+ require (
+ 	github.com/cert-manager/cert-manager v1.18.2
