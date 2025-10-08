@@ -15,7 +15,10 @@ import (
 	apiextclientsetv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	"k8s.io/client-go/informers"
+	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	apiregistrationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
+	apiregistrationinformers "k8s.io/kube-aggregator/pkg/client/informers/externalversions"
 
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -78,6 +81,9 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	}
 
 	crdInformer := apiextinformer.NewSharedInformerFactoryWithOptions(crdClientSet, 10*time.Minute)
+	apiregistrationInformer := apiregistrationinformers.NewSharedInformerFactory(clientset.NewForConfigOrDie(cc.KubeConfig), 5*time.Minute)
+
+	kubeInformer := informers.NewSharedInformerFactory(kubeClient, 5*time.Minute)
 
 	targetConfigReconciler, err := NewTargetConfigReconciler(
 		ctx,
@@ -92,6 +98,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		crdClient,
 		apiRegistrationClient,
 		crdInformer,
+		apiregistrationInformer,
+		kubeInformer,
 		cc.EventRecorder,
 		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
 	)
@@ -105,6 +113,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	operatorConfigInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
 	crdInformer.Start(ctx.Done())
+	apiregistrationInformer.Start(ctx.Done())
+	kubeInformer.Start(ctx.Done())
 
 	klog.Infof("Starting log level controller")
 	go logLevelController.Run(ctx, 1)

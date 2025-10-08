@@ -32,6 +32,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	apiregistrationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
+	apiregistrationinformers "k8s.io/kube-aggregator/pkg/client/informers/externalversions"
 	controllerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/library-go/pkg/controller"
@@ -52,6 +53,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
@@ -77,6 +79,7 @@ type TargetConfigReconciler struct {
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
 	crdClient                  apiextv1.ApiextensionsV1Interface
 	crdInformer                apiextinformer.SharedInformerFactory
+	kubeInformer               informers.SharedInformerFactory
 	operatorNamespace          string
 	resourceCache              resourceapply.ResourceCache
 	kueueImage                 string
@@ -97,6 +100,8 @@ func NewTargetConfigReconciler(
 	crdClient apiextv1.ApiextensionsV1Interface,
 	apiRegistrationClient apiregistrationv1client.ApiregistrationV1Interface,
 	crdInformer apiextinformer.SharedInformerFactory,
+	apiregistrationInformer apiregistrationinformers.SharedInformerFactory,
+	kubeInformer informers.SharedInformerFactory,
 	eventRecorder events.Recorder,
 	kueueImage string,
 ) (factory.Controller, error) {
@@ -113,6 +118,7 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces: kubeInformersForNamespaces,
 		crdClient:                  crdClient,
 		crdInformer:                crdInformer,
+		kubeInformer:               kubeInformer,
 		operatorNamespace:          namespace.GetNamespace(),
 		resourceCache:              resourceapply.NewResourceCache(),
 		kueueImage:                 kueueImage,
@@ -177,6 +183,9 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().RoleBindings().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Rbac().V1().Roles().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Networking().V1().NetworkPolicies().Informer(),
+		kubeInformer.Flowcontrol().V1().FlowSchemas().Informer(),
+		kubeInformer.Flowcontrol().V1().PriorityLevelConfigurations().Informer(),
+		apiregistrationInformer.Apiregistration().V1().APIServices().Informer(),
 	).ResyncEvery(5*time.Minute).
 		WithSync(c.sync).
 		ToController("KueueOperator", c.eventRecorder), nil
