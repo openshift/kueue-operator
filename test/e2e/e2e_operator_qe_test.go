@@ -12,18 +12,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/yaml"
 )
 
-var (
-	namespaceName string
-)
-
 var _ = Describe("KueueOperatorQE", Ordered, func() {
+	var namespaceName string
 
 	AfterAll(func(ctx context.Context) {
-		deleteNamespace(ctx, ns)
+		deleteNamespace(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}})
 		deleteClusterQueueAndResourceFlavor(ctx, kueueClient)
 		testutils.CleanUpKueuInstance(ctx, clients.KueueClient, "cluster")
 	})
@@ -36,44 +32,36 @@ var _ = Describe("KueueOperatorQE", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = kueueoperatorv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
-			namespace := createResource("assets/01_namespace.yaml")
-			verifyResourceExists(namespace, "Namespace", namespaceName, "")
-			resourceFlavor := createResource("assets/10_resource_flavor.yaml")
-			verifyResourceExists(resourceFlavor, "ResourceFlavor", "default", "")
-			clusterQueue := createResource("assets/09_cluster_queue.yaml")
-			verifyResourceExists(clusterQueue, "ClusterQueue", "test-clusterqueue", "")
-			localQueue := createResource("assets/11_local_queue.yaml")
-			verifyResourceExists(localQueue, "LocalQueue", "default", namespaceName)
-			job := createResource("assets/12_job.yaml")
-			verifyResourceExists(job, "Job", "kueuejob2", namespaceName)
+			namespace := createResource("assets/qe/01_namespace.yaml")
+			namespaceName = namespace.GetName()
+			verifyResourceExists(namespace, "Namespace", namespaceName)
+			resourceFlavor := createResource("assets/qe/10_resource_flavor.yaml")
+			verifyResourceExists(resourceFlavor, "ResourceFlavor", "default")
+			clusterQueue := createResource("assets/qe/09_cluster_queue.yaml")
+			verifyResourceExists(clusterQueue, "ClusterQueue", "test-clusterqueue")
+			localQueue := createResource("assets/qe/11_local_queue.yaml", namespaceName)
+			verifyResourceExistsInNamespace(localQueue, "LocalQueue", "default", namespaceName)
+			job := createResource("assets/qe/12_job.yaml", namespaceName)
+			verifyResourceExistsInNamespace(job, "Job", "kueuejob2", namespaceName)
 			Expect(job.GetLabels()).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
-			verifyWorkloadCreated(kueueClient, ns.Name, string(job.GetUID()))
-			pod := createResource("assets/13_pod.yaml")
-			verifyResourceExists(pod, "Pod", "pod1", namespaceName)
+			verifyWorkloadCreated(kueueClient, namespaceName, string(job.GetUID()))
+			pod := createResource("assets/qe/13_pod.yaml", namespaceName)
+			verifyResourceExistsInNamespace(pod, "Pod", "pod1", namespaceName)
 			Expect(pod.GetLabels()).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
-			verifyWorkloadCreated(kueueClient, ns.Name, string(pod.GetUID()))
+			verifyWorkloadCreated(kueueClient, namespaceName, string(pod.GetUID()))
 		})
 	})
 
 })
 
-func createResource(assetPath string) *unstructured.Unstructured {
+func createResource(assetPath string, namespaceName ...string) *unstructured.Unstructured {
 	yamlBytes := bindata.MustAsset(assetPath)
 	resource := &unstructured.Unstructured{}
 	err := yaml.Unmarshal(yamlBytes, resource)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal YAML from %s: %v", assetPath, err))
-	if resource.GetKind() == "Namespace" {
-		randomSuffix := rand.String(5)
-		namespaceName = fmt.Sprintf("e2e-kueue-%s", randomSuffix)
-		resource.SetName(namespaceName)
-		ns = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespaceName,
-			},
-		}
-	}
 	if resource.GetKind() == "LocalQueue" || resource.GetKind() == "Job" || resource.GetKind() == "Pod" {
-		resource.SetNamespace(namespaceName)
+		Expect(namespaceName).NotTo(BeEmpty(), fmt.Sprintf("%s resource must have a namespace provided", resource.GetKind()))
+		resource.SetNamespace(namespaceName[0])
 	}
 	err = clients.GenericClient.Create(context.Background(), resource)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create %s: %v", resource.GetKind(), err))
@@ -81,10 +69,13 @@ func createResource(assetPath string) *unstructured.Unstructured {
 	return resource
 }
 
-func verifyResourceExists(resource *unstructured.Unstructured, kind, name, namespace string) {
+func verifyResourceExistsInNamespace(resource *unstructured.Unstructured, kind, name, namespace string) {
 	Expect(resource.GetKind()).To(Equal(kind), "Resource kind mismatch")
 	Expect(resource.GetName()).To(Equal(name), "Resource name mismatch")
-	if namespace != "" {
-		Expect(resource.GetNamespace()).To(Equal(namespace), "Resource namespace mismatch")
-	}
+	Expect(resource.GetNamespace()).To(Equal(namespace), "Resource namespace mismatch")
+}
+
+func verifyResourceExists(resource *unstructured.Unstructured, kind, name string) {
+	Expect(resource.GetKind()).To(Equal(kind), "Resource kind mismatch")
+	Expect(resource.GetName()).To(Equal(name), "Resource name mismatch")
 }
