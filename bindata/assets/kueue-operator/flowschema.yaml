@@ -5,7 +5,7 @@ metadata:
 spec:
   distinguisherMethod:
     type: ByUser
-  matchingPrecedence: 9000
+  matchingPrecedence: 8900
   priorityLevelConfiguration:
     name: kueue-visibility
   rules:
