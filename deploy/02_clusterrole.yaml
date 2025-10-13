@@ -148,6 +148,8 @@ rules:
     resources:
       - apiservices
     verbs:
+      - list
+      - watch
       - get
       - create
       - update
@@ -157,6 +159,8 @@ rules:
       - flowschemas
       - prioritylevelconfigurations
     verbs:
+      - list
+      - watch
       - get
       - create
       - update
