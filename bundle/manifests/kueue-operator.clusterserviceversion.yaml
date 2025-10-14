@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2025-10-08T16:12:38Z"
+    createdAt: "2025-10-13T15:25:56Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -220,6 +220,8 @@ spec:
           resources:
           - apiservices
           verbs:
+          - list
+          - watch
           - get
           - create
           - update
@@ -229,6 +231,8 @@ spec:
           - flowschemas
           - prioritylevelconfigurations
           verbs:
+          - list
+          - watch
           - get
           - create
           - update
