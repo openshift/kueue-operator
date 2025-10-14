@@ -434,6 +434,13 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 		specAnnotations["clusterrolebinding/"+metricsRB.Name] = metricsRB.GetResourceVersion()
 	}
 
+	roleBindingVisibility, _, err := c.manageSystemRoleBindings("assets/kueue-operator/rolebinding-visibility-server-auth-reader.yaml", ownerReference, true)
+	if err != nil {
+		klog.Error("unable to bind role binding for visibility")
+		return err
+	}
+	specAnnotations["rolebinding/"+roleBindingVisibility.Name] = roleBindingVisibility.GetResourceVersion()
+
 	kueueWH, _, err := c.manageMutatingWebhook(kueue, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage mutating webhook")
@@ -942,12 +949,19 @@ func (c *TargetConfigReconciler) manageValidatingWebhook(kueue *kueuev1.Kueue, o
 }
 
 func (c *TargetConfigReconciler) manageRoleBindings(assetPath string, ownerReference metav1.OwnerReference, setServiceAccountToOperatorNamespace bool) (*rbacv1.RoleBinding, bool, error) {
+	return c.manageRoleBindingsByNamespace(c.operatorNamespace, assetPath, ownerReference, setServiceAccountToOperatorNamespace)
+}
+
+func (c *TargetConfigReconciler) manageSystemRoleBindings(assetPath string, ownerReference metav1.OwnerReference, setServiceAccountToOperatorNamespace bool) (*rbacv1.RoleBinding, bool, error) {
+	return c.manageRoleBindingsByNamespace("kube-system", assetPath, ownerReference, setServiceAccountToOperatorNamespace)
+}
+
+func (c *TargetConfigReconciler) manageRoleBindingsByNamespace(namespace string, assetPath string, ownerReference metav1.OwnerReference, setServiceAccountToOperatorNamespace bool) (*rbacv1.RoleBinding, bool, error) {
 	required := resourceread.ReadRoleBindingV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
-
-	required.Namespace = c.operatorNamespace
+	required.Namespace = namespace
 	if setServiceAccountToOperatorNamespace {
 		for i := range required.Subjects {
 			if required.Subjects[i].Kind != "ServiceAccount" {
@@ -1467,8 +1481,8 @@ func convertObj2Unstructured(k8sObj interface{}, u *unstructured.Unstructured) (
 	var tmp []byte
 	tmp, err = json.Marshal(k8sObj)
 	if err != nil {
-		return
+		return err
 	}
 	err = u.UnmarshalJSON(tmp)
-	return
+	return err
 }
