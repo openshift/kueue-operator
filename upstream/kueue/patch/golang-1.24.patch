@@ -1,5 +1,5 @@
 diff --git i/go.mod w/go.mod
-index 1b4551e45..aa8b3ebc6 100644
+index 41a31750d..1363bc18f 100644
 --- i/go.mod
 +++ w/go.mod
 @@ -1,6 +1,6 @@
@@ -9,4 +9,17 @@ index 1b4551e45..aa8b3ebc6 100644
 +go 1.24.0
  
  require (
- 	github.com/cert-manager/cert-manager v1.18.2
+ 	github.com/cert-manager/cert-manager v1.19.0
+diff --git i/vendor/modules.txt w/vendor/modules.txt
+index 6b58d8331..ae0eb4211 100644
+--- i/vendor/modules.txt
++++ w/vendor/modules.txt
+@@ -27,7 +27,7 @@ github.com/blang/semver/v4
+ ## explicit; go 1.23
+ github.com/cenkalti/backoff/v5
+ # github.com/cert-manager/cert-manager v1.19.0
+-## explicit; go 1.25.0
++## explicit; go 1.24.0
+ github.com/cert-manager/cert-manager/pkg/apis/acme
+ github.com/cert-manager/cert-manager/pkg/apis/acme/v1
+ github.com/cert-manager/cert-manager/pkg/apis/certmanager
