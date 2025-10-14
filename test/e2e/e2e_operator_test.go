@@ -32,6 +32,7 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/bindata"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -76,7 +77,7 @@ func findKueuePods(list *corev1.PodList) []*corev1.Pod {
 	return pods
 }
 
-var _ = Describe("Kueue Operator", Ordered, func() {
+var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 	// AfterEach(func() {
 	// 	Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
 	// })
@@ -104,7 +105,9 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		It("kueue pods should be ready", func() {
 			Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 		})
+	})
 
+	When("installs", func() {
 		It("should set ReadyReplicas in operator status and handle degraded condition", func() {
 			ctx := context.TODO()
 			Eventually(func() error {
@@ -312,6 +315,9 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			testQueue                 = "test-queue"
 			builderWithLabel          *testutils.TestResourceBuilder
 			builderWithoutLabel       *testutils.TestResourceBuilder
+			cleanupClusterQueue       func()
+			cleanupLocalQueue         func()
+			cleanupResourceFlavor     func()
 		)
 
 		BeforeAll(func() {
@@ -337,12 +343,15 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(testutils.CreateClusterQueue(kueueClient)).To(Succeed())
+			cleanupClusterQueue, err = testutils.CreateClusterQueue(kueueClient)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Create LocalQueue in managed namespace
-			Expect(testutils.CreateLocalQueue(kueueClient, testNamespaceWithLabel, testQueue)).To(Succeed())
+			cleanupLocalQueue, err = testutils.CreateLocalQueue(kueueClient, testNamespaceWithLabel, testQueue)
+			Expect(err).NotTo(HaveOccurred())
 
-			Expect(testutils.CreateResourceFlavor(kueueClient)).To(Succeed())
+			cleanupResourceFlavor, err = testutils.CreateResourceFlavor(kueueClient)
+			Expect(err).NotTo(HaveOccurred())
 
 			nodes, err := kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -373,12 +382,12 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			_ = kubeClient.CoreV1().Namespaces().Delete(context.TODO(), testNamespaceWithLabel, metav1.DeleteOptions{})
-			_ = kubeClient.CoreV1().Namespaces().Delete(context.TODO(), testNamespaceWithoutLabel, metav1.DeleteOptions{})
-			_ = kueueClient.KueueV1beta1().ClusterQueues().Delete(context.TODO(), "test-clusterqueue", metav1.DeleteOptions{})
-			_ = kueueClient.KueueV1beta1().LocalQueues(testNamespaceWithLabel).Delete(context.TODO(), testQueue, metav1.DeleteOptions{})
-			_ = kueueClient.KueueV1beta1().ResourceFlavors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
-			_ = kubeClient.CoreV1().Pods(testutils.OperatorNamespace).Delete(context.TODO(), "curl-metrics-test", metav1.DeleteOptions{})
+			ctx := context.TODO()
+			cleanupLocalQueue()
+			cleanupClusterQueue()
+			cleanupResourceFlavor()
+			_ = kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespaceWithLabel, metav1.DeleteOptions{})
+			_ = kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespaceWithoutLabel, metav1.DeleteOptions{})
 		})
 
 		It("should suspend jobs only in labeled namespaces when labelPolicy=None", func() {
@@ -426,7 +435,6 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not started in unlabeled namespace")
 
 			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
-
 		})
 
 		It("should manage jobs only in labeled namespaces", func() {
@@ -634,16 +642,17 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			)
 
 			By("creating workloads")
-			Expect(testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload")).To(Succeed())
-			defer testutils.CleanUpWorkload(ctx, kueueClient, testNamespaceWithLabel, "test-workload")
-			Expect(testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload-2")).To(Succeed())
-			defer testutils.CleanUpWorkload(ctx, kueueClient, testNamespaceWithLabel, "test-workload-2")
+			_, err = testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload-2")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating curl test pod")
 			curlPod := testutils.MakeCurlMetricsPod(testutils.OperatorNamespace)
-			pod, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).Create(ctx, curlPod.Obj(), metav1.CreateOptions{})
+			podCleanupFn, err := testutils.CreatePod(kubeClient, curlPod.Obj())
 			Expect(err).NotTo(HaveOccurred(), "failed to create curl metrics test pod")
-			defer testutils.CleanUpObject(ctx, genericClient, pod)
+			defer podCleanupFn()
 
 			Eventually(func() error {
 				pod, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).Get(ctx, podName, metav1.GetOptions{})
@@ -679,7 +688,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
-	When("cleaning up Kueue resources", func() {
+	When("cleaning up Kueue resources", Label("disruptive"), func() {
 		var (
 			kueueName      = "cluster"
 			kueueClientset *kueueclient.Clientset
@@ -699,16 +708,14 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			klog.Infof("Creating Kueue Custom Resources to test they are NOT deleted when Kueue CR is deleted")
 
 			By("create a resourceFlavor")
-			Expect(testutils.CreateResourceFlavor(clients.UpstreamKueueClient)).To(Succeed(), "Failed to create ResourceFlavor")
-			defer func() {
-				Expect(clients.UpstreamKueueClient.KueueV1beta1().ResourceFlavors().Delete(ctx, "default", metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete resourceFlavor default")
-			}()
+			cleanupResourceFlavorFn, err := testutils.CreateResourceFlavor(clients.UpstreamKueueClient)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create ResourceFlavor")
+			defer cleanupResourceFlavorFn()
 
 			By("create clusterQueue")
-			Expect(testutils.CreateClusterQueue(clients.UpstreamKueueClient)).To(Succeed(), "Failed to create ClusterQueue")
-			defer func() {
-				Expect(clients.UpstreamKueueClient.KueueV1beta1().ClusterQueues().Delete(ctx, "test-clusterqueue", metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete clusterQueue test-clusterqueue")
-			}()
+			cleanupClusterQueueFn, err := testutils.CreateClusterQueue(clients.UpstreamKueueClient)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create ClusterQueue")
+			defer cleanupClusterQueueFn()
 
 			// Create a test namespace for LocalQueue
 			testNamespace := &corev1.Namespace{
@@ -719,17 +726,13 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					},
 				},
 			}
-			_, err := kubeClient.CoreV1().Namespaces().Create(ctx, testNamespace, metav1.CreateOptions{})
+			_, err = testutils.CreateNamespace(kubeClient, testNamespace)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
-			defer func() {
-				Expect(kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespace.Name, metav1.DeleteOptions{})).ToNot(HaveOccurred(), "Failed to delete test namespace")
-			}()
 
 			By("create a LocalQueue in the test namespace")
-			Expect(testutils.CreateLocalQueue(clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")).To(Succeed(), "Failed to create LocalQueue")
-			defer func() {
-				Expect(clients.UpstreamKueueClient.KueueV1beta1().LocalQueues(testNamespace.Name).Delete(ctx, "test-localqueue", metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete localQueue test-localqueue")
-			}()
+			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
+			Expect(err).ToNot(HaveOccurred(), "Failed to create LocalQueue")
+			defer cleanupLocalQueueFn()
 
 			job := &batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
@@ -754,11 +757,9 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 					},
 				},
 			}
-			_, err = kubeClient.BatchV1().Jobs(testNamespace.Name).Create(ctx, job, metav1.CreateOptions{})
+			jobCleanupFn, err := testutils.CreateJob(kubeClient, job)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test job")
-			defer func() {
-				Expect(kubeClient.BatchV1().Jobs(testNamespace.Name).Delete(ctx, job.Name, metav1.DeleteOptions{})).ToNot(HaveOccurred(), "unable to delete job")
-			}()
+			defer jobCleanupFn()
 
 			By("wait for workload to be created")
 			Eventually(func() error {
@@ -946,7 +947,7 @@ var _ = Describe("Kueue Operator", Ordered, func() {
 			requiredSS := requiredObj.(*ssv1.Kueue)
 			_, err = kueueClientset.KueueV1().Kueues().Create(ctx, requiredSS, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to create Kueue instance")
-			defer testutils.CleanUpKueuInstance(ctx, kueueClientset, "cluster")
+			defer testutils.CleanUpKueueInstance(ctx, kueueClientset, "cluster")
 
 			Eventually(func() error {
 				_, err := kueueClientset.KueueV1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
@@ -1133,7 +1134,13 @@ func deployOperand() error {
 				}
 				requiredSS := requiredObj.(*ssv1.Kueue)
 				_, err = ssClient.KueueV1().Kueues().Create(ctx, requiredSS, metav1.CreateOptions{})
-				return err
+				if err != nil {
+					if !errors.IsNotFound(err) {
+						return nil
+					}
+					return err
+				}
+				return nil
 			},
 		},
 	}

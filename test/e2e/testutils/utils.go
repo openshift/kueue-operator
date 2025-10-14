@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,6 +28,15 @@ const (
 	defaultImage = "quay.io/openshift/origin-cli:latest"
 )
 
+var removeFinalizersMergePatch = []byte(`{"metadata":{"finalizers":[]}}`)
+
+func removeFinalizersWithPatch(patchFn func() error) {
+	err := patchFn()
+	if err != nil && !apierrors.IsNotFound(err) {
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
 func GetContainerImageForWorkloads() string {
 	if image := os.Getenv("CONTAINER_IMAGE"); image != "" {
 		return image
@@ -39,7 +49,7 @@ type PodWrapper struct {
 	corev1.Pod
 }
 
-func CreateClusterQueue(client *upstreamkueueclient.Clientset) error {
+func CreateClusterQueue(client *upstreamkueueclient.Clientset) (func(), error) {
 	cq := &kueuev1beta1.ClusterQueue{
 		ObjectMeta: v1.ObjectMeta{Name: "test-clusterqueue"},
 		Spec: kueuev1beta1.ClusterQueueSpec{
@@ -60,10 +70,35 @@ func CreateClusterQueue(client *upstreamkueueclient.Clientset) error {
 	}
 
 	_, err := client.KueueV1beta1().ClusterQueues().Create(context.TODO(), cq, v1.CreateOptions{})
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Destroying ClusterQueue %s", cq.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta1().ClusterQueues().Patch(ctx, cq.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta1().ClusterQueues().Delete(ctx, cq.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta1().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("clusterqueue %s still exists: %w", cq.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("ClusterQueue %s was not cleaned up", cq.Name))
+	}
+
+	return cleanup, nil
 }
 
-func CreateLocalQueue(client *upstreamkueueclient.Clientset, namespace, name string) error {
+func CreateLocalQueue(client *upstreamkueueclient.Clientset, namespace, name string) (func(), error) {
 	lq := &kueuev1beta1.LocalQueue{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
@@ -73,17 +108,67 @@ func CreateLocalQueue(client *upstreamkueueclient.Clientset, namespace, name str
 	}
 
 	_, err := client.KueueV1beta1().LocalQueues(namespace).Create(context.TODO(), lq, v1.CreateOptions{})
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Destroying LocalQueue %s/%s", namespace, name))
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta1().LocalQueues(namespace).Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta1().LocalQueues(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta1().LocalQueues(namespace).Get(ctx, name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("localqueue %s/%s still exists: %w", namespace, name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("LocalQueue %s/%s was not cleaned up", namespace, name))
+	}
+
+	return cleanup, nil
 }
 
-func CreateResourceFlavor(client *upstreamkueueclient.Clientset) error {
+func CreateResourceFlavor(client *upstreamkueueclient.Clientset) (func(), error) {
 	rf := &kueuev1beta1.ResourceFlavor{
 		ObjectMeta: v1.ObjectMeta{Name: "default"},
 		Spec:       kueuev1beta1.ResourceFlavorSpec{},
 	}
 
 	_, err := client.KueueV1beta1().ResourceFlavors().Create(context.TODO(), rf, v1.CreateOptions{})
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By("Destroying ResourceFlavor default")
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta1().ResourceFlavors().Patch(ctx, rf.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta1().ResourceFlavors().Delete(ctx, rf.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta1().ResourceFlavors().Get(ctx, rf.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("resourceflavor %s still exists: %w", rf.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("ResourceFlavor %s was not cleaned up", rf.Name))
+	}
+
+	return cleanup, nil
 }
 
 func MakeCurlMetricsPod(namespace string) *PodWrapper {
@@ -146,7 +231,7 @@ func (p *PodWrapper) Obj() *corev1.Pod {
 	return &p.Pod
 }
 
-func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName, workloadName string) error {
+func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName, workloadName string) (func(), error) {
 	workload := &kueuev1beta1.Workload{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      workloadName,
@@ -181,13 +266,135 @@ func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName,
 	}
 
 	_, err := client.KueueV1beta1().Workloads(namespace).Create(context.TODO(), workload, v1.CreateOptions{})
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Destroying Workload %s/%s", namespace, workloadName))
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta1().Workloads(namespace).Patch(ctx, workloadName, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta1().Workloads(namespace).Delete(ctx, workloadName, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta1().Workloads(namespace).Get(ctx, workloadName, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("workload %s/%s still exists: %w", namespace, workloadName, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("Workload %s/%s was not cleaned up", namespace, workloadName))
+	}
+
+	return cleanup, nil
+}
+
+func CreateNamespace(kubeClient *kubernetes.Clientset, namespace *corev1.Namespace) (func(), error) {
+	ctx := context.TODO()
+	By(fmt.Sprintf("Creating namespace %s", namespace.Name))
+	_, err := kubeClient.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		By(fmt.Sprintf("Destroying Namespace %s", namespace.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := kubeClient.CoreV1().Namespaces().Patch(ctx, namespace.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := kubeClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("namespace %s still exists: %w", namespace.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("Namespace %s was not cleaned up", namespace.Name))
+	}
+
+	return cleanup, nil
+}
+
+func CreateJob(kubeClient *kubernetes.Clientset, job *batchv1.Job) (func(), error) {
+	ctx := context.TODO()
+	By(fmt.Sprintf("Creating Job %s/%s", job.Namespace, job.Name))
+	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		By(fmt.Sprintf("Destroying Job %s/%s", job.Namespace, job.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := kubeClient.BatchV1().Jobs(job.Namespace).Patch(ctx, job.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := kubeClient.BatchV1().Jobs(job.Namespace).Delete(ctx, job.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := kubeClient.BatchV1().Jobs(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("job %s/%s still exists: %w", job.Namespace, job.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("Job %s/%s was not cleaned up", job.Namespace, job.Name))
+	}
+
+	return cleanup, nil
+}
+
+func CreatePod(kubeClient *kubernetes.Clientset, pod *corev1.Pod) (func(), error) {
+	ctx := context.TODO()
+	By(fmt.Sprintf("Creating Pod %s/%s", pod.Namespace, pod.Name))
+	_, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		By(fmt.Sprintf("Destroying Pod %s/%s", pod.Namespace, pod.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(ctx, pod.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("pod %s/%s still exists: %w", pod.Namespace, pod.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("Pod %s/%s was not cleaned up", pod.Namespace, pod.Name))
+	}
+
+	return cleanup, nil
 }
 
 // CleanUpJob deletes the specified Job in the given namespace.
 func CleanUpJob(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string) {
 	By(fmt.Sprintf("Destroying job %s", name))
 	backgroundPolicy := metav1.DeletePropagationBackground
+	removeFinalizersWithPatch(func() error {
+		_, err := kubeClient.BatchV1().Jobs(namespace).Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+		return err
+	})
 	err := kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy})
 	Expect(err).NotTo(HaveOccurred())
 }
@@ -195,13 +402,21 @@ func CleanUpJob(ctx context.Context, kubeClient *kubernetes.Clientset, namespace
 // CleanUpWorkload deletes the specified Kueue Workload in the given namespace.
 func CleanUpWorkload(ctx context.Context, kueueClient *upstreamkueueclient.Clientset, namespace, name string) {
 	By(fmt.Sprintf("Destroying Workload %s", name))
+	removeFinalizersWithPatch(func() error {
+		_, err := kueueClient.KueueV1beta1().Workloads(namespace).Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+		return err
+	})
 	err := kueueClient.KueueV1beta1().Workloads(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// CleanUpKueuInstance deletes the specified Kueue instance and waits for its removal.
-func CleanUpKueuInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
+// CleanUpKueueInstance deletes the specified Kueue instance and waits for its removal.
+func CleanUpKueueInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
 	By(fmt.Sprintf("Destroying Kueue %s", name))
+	removeFinalizersWithPatch(func() error {
+		_, err := kueueClientset.KueueV1().Kueues().Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+		return err
+	})
 	err := kueueClientset.KueueV1().Kueues().Delete(ctx, name, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(func() error {
@@ -217,7 +432,26 @@ func CleanUpKueuInstance(ctx context.Context, kueueClientset *kueueclient.Client
 func CleanUpObject(ctx context.Context, kubeClient client.Client, obj client.Object) {
 	By(fmt.Sprintf("Destroying Object %s", obj.GetName()))
 
-	err := kubeClient.Delete(ctx, obj)
+	objToDelete := obj
+	if copiedObj, ok := obj.DeepCopyObject().(client.Object); ok {
+		err := kubeClient.Get(ctx, client.ObjectKeyFromObject(obj), copiedObj)
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+		} else {
+			if len(copiedObj.GetFinalizers()) > 0 {
+				copiedObj.SetFinalizers(nil)
+				err = kubeClient.Update(ctx, copiedObj)
+				if err != nil && !apierrors.IsNotFound(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+			objToDelete = copiedObj
+		}
+	}
+
+	err := kubeClient.Delete(ctx, objToDelete)
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(func() error {
 		err := kubeClient.Get(ctx, client.ObjectKeyFromObject(obj), obj)
