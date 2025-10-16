@@ -17,14 +17,15 @@ limitations under the License.
 package e2e
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/onsi/ginkgo/v2/reporters"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 )
 
@@ -37,13 +38,24 @@ var (
 // Run e2e tests using the Ginkgo runner.
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	GinkgoWriter.Printf("Starting kueue operator suite\n")
 	config, _ := GinkgoConfiguration()
+	config.ParallelProcess = 1
 	if config.DryRun {
-		report := PreviewSpecs("E2E Suite", Label("suite-label"))
-		_ = reporters.GenerateJUnitReport(report, "")
+		GinkgoWriter.Printf("Starting kueue operator suite [DryRun]\n")
+		report := PreviewSpecs("E2E Suite", config)
+		for _, sr := range report.SpecReports {
+			if sr.State == types.SpecStateSkipped {
+				continue
+			}
+			if len(sr.Labels()) > 0 {
+				GinkgoWriter.Printf("%s [labels: %s]\n", sr.FullText(), strings.Join(sr.Labels(), ", "))
+			} else {
+				GinkgoWriter.Printf("%s\n", sr.FullText())
+			}
+		}
 	} else {
-		RunSpecs(t, "e2e suite")
+		GinkgoWriter.Printf("Starting kueue operator suite\n")
+		RunSpecs(t, "e2e suite", config)
 	}
 }
 
