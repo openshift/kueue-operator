@@ -243,7 +243,7 @@ spec:
                 - name: RELATED_IMAGE_OPERAND_IMAGE
                   value: registry.redhat.io/kueue/kueue-rhel9@sha256:65127689705e84ce5e0858ca64920c7013c05a8336ce836726e99c952d1d473c
                 - name: RELATED_IMAGE_MUST_GATHER
-                  value: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:24c879ce1008dbe9acd131467f55b2c24219517d9a0ba28e25d1896d3e0c7310
+                  value: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:77a19c62e60935fbfaa5deb01f9e6873c0eaadb842e463243dc1efda43794554
                 image: registry.redhat.io/kueue/kueue-rhel9-operator@sha256:f1d0569c52596a276fd130df25e483d1d4ec2a3abcd0166b5462793e09b65ae6
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
@@ -310,6 +310,6 @@ spec:
   relatedImages:
   - image: registry.redhat.io/kueue/kueue-rhel9@sha256:65127689705e84ce5e0858ca64920c7013c05a8336ce836726e99c952d1d473c
     name: operand-image
-  - image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:24c879ce1008dbe9acd131467f55b2c24219517d9a0ba28e25d1896d3e0c7310
+  - image: registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:77a19c62e60935fbfaa5deb01f9e6873c0eaadb842e463243dc1efda43794554
     name: must-gather
   version: 1.1.0
