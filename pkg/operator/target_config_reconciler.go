@@ -425,6 +425,20 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 	}
 	specAnnotations["clusterrolebinding/"+managerRB.Name] = managerRB.GetResourceVersion()
 
+	managerRoleSecrets, _, err := c.manageRole("assets/kueue-operator/role-manager-secrets.yaml", ownerReference)
+	if err != nil {
+		klog.Error("unable to manage cluster role kueue-manager")
+		return err
+	}
+	specAnnotations["role/"+managerRoleSecrets.Name] = managerRoleSecrets.GetResourceVersion()
+
+	managerRBSecrets, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-manager-secrets.yaml", ownerReference, true)
+	if err != nil {
+		klog.Error("unable to manage cluster role kueue-manager")
+		return err
+	}
+	specAnnotations["rolebinding/"+managerRBSecrets.Name] = managerRBSecrets.GetResourceVersion()
+
 	if c.serviceMonitorSupport {
 		metricsRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference)
 		if err != nil {
