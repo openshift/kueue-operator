@@ -2,6 +2,8 @@ apiVersion: flowcontrol.apiserver.k8s.io/v1
 kind: PriorityLevelConfiguration
 metadata:
   name: kueue-visibility
+  annotations:
+    kueue.openshift.io/allow-nominal-concurrency-shares-update: "false"
 spec:
   limited:
     borrowingLimitPercent: 0
@@ -12,5 +14,5 @@ spec:
         queueLengthLimit: 50
         queues: 16
       type: Queue
-    nominalConcurrencyShares: 10
+    nominalConcurrencyShares: 2
   type: Limited

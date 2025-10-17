@@ -109,6 +109,13 @@ func ApplyPriorityLevelConfiguration(ctx context.Context, getter flowcontrolclie
 		return current, false, nil
 	}
 
+	if current.Annotations != nil && current.Annotations["kueue.openshift.io/allow-nominal-concurrency-shares-update"] == "true" {
+		nominalConcurrencyShares := *current.Spec.Limited.NominalConcurrencyShares
+		if (nominalConcurrencyShares >= *want.Spec.Limited.NominalConcurrencyShares && nominalConcurrencyShares <= 5) || nominalConcurrencyShares == 0 {
+			return current, false, nil
+		}
+	}
+
 	copy.Spec = *want.Spec.DeepCopy()
 	if klog.V(2).Enabled() {
 		klog.Infof("PriorityLevelConfiguration %q changes: %v", want.Name, resourceapply.JSONPatchNoError(current, copy))
