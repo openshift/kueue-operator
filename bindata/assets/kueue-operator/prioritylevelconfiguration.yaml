@@ -12,5 +12,5 @@ spec:
         queueLengthLimit: 50
         queues: 16
       type: Queue
-    nominalConcurrencyShares: 10
+    nominalConcurrencyShares: 2
   type: Limited
