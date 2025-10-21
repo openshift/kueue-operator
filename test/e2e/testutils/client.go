@@ -17,6 +17,7 @@ limitations under the License.
 package testutils
 
 import (
+	"fmt"
 	"os"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
@@ -28,7 +29,9 @@ import (
 
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
+	visibilityv1beta1 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta1"
 )
 
 type TestClients struct {
@@ -97,6 +100,20 @@ func getUpstreamKueueClient(config *rest.Config) *upstreamkueueclient.Clientset 
 		klog.Fatalf("Unable to build upstream kueue client: %v", err)
 	}
 	return client
+}
+
+func GetVisibilityClient(user string) (visibilityv1beta1.VisibilityV1beta1Interface, error) {
+	cfg, err := config.GetConfigWithContext("")
+	if err != nil {
+		return nil, fmt.Errorf("unable to get kubeconfig: %w", err)
+	}
+
+	if user != "" {
+		cfg.Impersonate.UserName = user
+	}
+
+	kueueClient := getUpstreamKueueClient(cfg)
+	return kueueClient.VisibilityV1beta1(), nil
 }
 
 func getDynamicClient(config *rest.Config) dynamic.Interface {

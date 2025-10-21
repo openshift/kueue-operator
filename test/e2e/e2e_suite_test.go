@@ -17,12 +17,14 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	visibilityv1beta1 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta1"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
@@ -30,9 +32,11 @@ import (
 )
 
 var (
-	kubeClient    *kubernetes.Clientset
-	genericClient client.Client
-	clients       *testutils.TestClients
+	kubeClient       *kubernetes.Clientset
+	genericClient    client.Client
+	clients          *testutils.TestClients
+	visibilityClient visibilityv1beta1.VisibilityV1beta1Interface
+	err              error
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -63,4 +67,7 @@ var _ = BeforeSuite(func() {
 	clients = testutils.NewTestClients()
 	kubeClient = clients.KubeClient
 	genericClient = clients.GenericClient
+
+	visibilityClient, err = testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:default", testutils.OperatorNamespace))
+	Expect(err).NotTo(HaveOccurred())
 })
