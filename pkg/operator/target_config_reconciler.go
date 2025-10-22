@@ -376,7 +376,7 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 
 	err = c.managePriorityLevelConfiguration(ownerReference)
 	if err != nil {
-		klog.Error("unable to manage visibility prioritylevelconfiguration ####")
+		klog.Error("unable to manage visibility prioritylevelconfiguration")
 		return err
 	}
 
