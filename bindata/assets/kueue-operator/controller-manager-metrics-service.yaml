@@ -6,6 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
+    app: metrics-service
   name: kueue-controller-manager-metrics-service
   namespace: openshift-kueue-operator
 spec:
