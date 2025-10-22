@@ -1405,7 +1405,7 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 				{
 					Interval:        "30s",
 					Path:            "/metrics",
-					Port:            "metrics", // Name of the port you want to monitor
+					Port:            "https", // Name of the port you want to monitor
 					Scheme:          "https",
 					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
 					TLSConfig: &monitoringv1.TLSConfig{
