@@ -1398,7 +1398,7 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 		Spec: monitoringv1.ServiceMonitorSpec{
 			Selector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"control-plane": "controller-manager",
+					"app": "metrics-service",
 				},
 			},
 			Endpoints: []monitoringv1.Endpoint{
