@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package operand
 
 import (
 	"bytes"
@@ -36,12 +36,12 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -52,68 +52,13 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-func findOperatorPods(namespace string, list *corev1.PodList) []*corev1.Pod {
-	pods := make([]*corev1.Pod, 0)
-	for i := range list.Items {
-		pod := &list.Items[i]
-		if strings.HasPrefix(pod.Name, namespace+"-") {
-			pods = append(pods, pod)
-		}
-	}
-	return pods
-}
-
-func findKueuePods(list *corev1.PodList) []*corev1.Pod {
-	pods := make([]*corev1.Pod, 0)
-	for i := range list.Items {
-		pod := &list.Items[i]
-		if strings.HasPrefix(pod.Name, "kueue-controller-manager") {
-			pods = append(pods, pod)
-		}
-	}
-	return pods
-}
-
-var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
-	// AfterEach(func() {
-	// 	Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
-	// })
-	When("installs", func() {
-		JustAfterEach(func(ctx context.Context) {
-			testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
-		})
-
-		It("operator pods should be ready", func() {
-			Eventually(func() error {
-				ctx := context.TODO()
-				podItems, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					klog.Errorf("Unable to list pods: %v", err)
-					return nil
-				}
-				for _, pod := range podItems.Items {
-					if !strings.HasPrefix(pod.Name, testutils.OperatorNamespace+"-") {
-						continue
-					}
-					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-					if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && pod.Status.ContainerStatuses[0].Ready {
-						return nil
-					}
-				}
-				return fmt.Errorf("pod is not ready")
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "operator pod failed to be ready")
-		})
-		It("kueue pods should be ready", func() {
+var _ = Describe("Kueue Operand", func() {
+	When("using default Kueue CR", func() {
+		It("kueue pods should be ready", Label("day-zero"), func() {
 			Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 		})
-	})
 
-	When("installs", func() {
-		JustAfterEach(func(ctx context.Context) {
-			testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
-		})
-
-		It("should set ReadyReplicas in operator status and handle degraded condition", func() {
+		It("should set ReadyReplicas in operator status and handle degraded condition", Label("day-zero"), func() {
 			ctx := context.TODO()
 			Eventually(func() error {
 				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
@@ -149,7 +94,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "ReadyReplicas not properly set or degraded condition not handled")
 		})
 
-		It("kueue operator deployment should contain priority class", func() {
+		It("kueue operator deployment should contain priority class", Label("day-zero"), func() {
 			ctx := context.TODO()
 			Eventually(func() error {
 				operatorDeployment, err := kubeClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "openshift-kueue-operator", metav1.GetOptions{})
@@ -163,7 +108,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Unexpected priority class")
 		})
 
-		It("kueue deployment should contain priority class and have no resource limits set", func() {
+		It("kueue deployment should contain priority class and have no resource limits set", Label("day-zero"), func() {
 			ctx := context.TODO()
 
 			Eventually(func() error {
@@ -181,7 +126,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Unexpected kueue-controller-manager spec")
 		})
 
-		It("Verifying that no v1alpha Kueue CRDs are installed", func() {
+		It("Verifying that no v1alpha Kueue CRDs are installed", Label("day-zero"), func() {
 			Eventually(func() error {
 				ctx := context.TODO()
 				crdList, err := clients.APIExtClient.CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
@@ -215,7 +160,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Unexpected v1alpha CRD is installed")
 		})
 
-		It("verify webhook readiness", func() {
+		It("verify webhook readiness", Label("day-zero"), func() {
 			ctx := context.TODO()
 			Eventually(func() error {
 				endpointSlices, err := kubeClient.DiscoveryV1().EndpointSlices(testutils.OperatorNamespace).List(
@@ -336,9 +281,112 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "network policy has not been setup")
 		})
+
+		It("can create clusterqueue, resourceflavor, and localqueue", func() {
+			ctx := context.TODO()
+			By("create a resourceFlavor")
+			cleanupResourceFlavorFn, err := testutils.CreateResourceFlavor(ctx, clients.UpstreamKueueClient)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create ResourceFlavor")
+			defer cleanupResourceFlavorFn()
+
+			By("create clusterQueue")
+			cleanupClusterQueueFn, err := testutils.CreateClusterQueue(ctx, clients.UpstreamKueueClient)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create ClusterQueue")
+			defer cleanupClusterQueueFn()
+
+			// Create a test namespace for LocalQueue
+			testNamespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kueue-test-namespace",
+					Labels: map[string]string{
+						"kueue.x-k8s.io/managed": "true",
+					},
+				},
+			}
+			cleanupNamespaceFn, err := testutils.CreateNamespace(kubeClient, testNamespace)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
+			defer cleanupNamespaceFn()
+
+			By("create a LocalQueue in the test namespace")
+			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
+			Expect(err).ToNot(HaveOccurred(), "Failed to create LocalQueue")
+			defer cleanupLocalQueueFn()
+		})
+
+		It("can run a job using the queue", func() {
+			ctx := context.TODO()
+
+			By("create a resourceFlavor")
+			cleanupResourceFlavorFn, err := testutils.CreateResourceFlavor(ctx, clients.UpstreamKueueClient)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create ResourceFlavor")
+			defer cleanupResourceFlavorFn()
+
+			By("create clusterQueue")
+			cleanupClusterQueueFn, err := testutils.CreateClusterQueue(ctx, clients.UpstreamKueueClient)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create ClusterQueue")
+			defer cleanupClusterQueueFn()
+
+			// Create a test namespace for LocalQueue
+			testNamespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kueue-test-namespace",
+					Labels: map[string]string{
+						"kueue.x-k8s.io/managed": "true",
+					},
+				},
+			}
+			cleanupNamespaceFn, err := testutils.CreateNamespace(kubeClient, testNamespace)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
+			defer cleanupNamespaceFn()
+
+			By("create a LocalQueue in the test namespace")
+			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
+			Expect(err).ToNot(HaveOccurred(), "Failed to create LocalQueue")
+			defer cleanupLocalQueueFn()
+
+			job := &batchv1.Job{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-job",
+					Namespace: testNamespace.Name,
+					Labels: map[string]string{
+						"kueue.x-k8s.io/queue-name": "test-localqueue",
+					},
+				},
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							RestartPolicy: corev1.RestartPolicyNever,
+							Containers: []corev1.Container{
+								{
+									Name:    "test-container",
+									Image:   "busybox",
+									Command: []string{"sh", "-c", "echo 'Hello World'"},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			jobCleanupFn, err := testutils.CreateJob(kubeClient, job)
+			Expect(err).ToNot(HaveOccurred(), "Failed to create test job")
+			defer jobCleanupFn()
+
+			By("wait for workload to be created")
+			Eventually(func() error {
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list workloads: %v", err)
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("No workloads found for job")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for job")
+		})
 	})
 
-	When("enable webhook via opt-in namespaces", func() {
+	When("enable webhook via opt-in namespaces", Serial, Ordered, func() {
 		var (
 			testNamespaceWithLabel    = "kueue-managed-test"
 			testNamespaceWithoutLabel = "kueue-unmanaged-test"
@@ -676,7 +724,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return ss.Status.ReadyReplicas
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(int32(1)), "StatefulSet in unlabeled namespace not ready")
 		})
-		It("should expose metrics endpoint with TLS", func() {
+		It("should expose metrics endpoint with TLS", Label("day-zero"), func() {
 			ctx := context.TODO()
 			var (
 				err                error
@@ -688,11 +736,13 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			)
 
 			By("creating workloads")
-			_, err = testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload")
+			cleanupWorkloadFn, err := testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload")
 			Expect(err).NotTo(HaveOccurred())
+			defer cleanupWorkloadFn()
 
-			_, err = testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload-2")
+			cleanupWorkload2Fn, err := testutils.CreateWorkload(kueueClient, testNamespaceWithLabel, testQueue, "test-workload-2")
 			Expect(err).NotTo(HaveOccurred())
+			defer cleanupWorkload2Fn()
 
 			By("Creating curl test pod")
 			curlPod := testutils.MakeCurlMetricsPod(testutils.OperatorNamespace)
@@ -734,23 +784,18 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
-	When("cleaning up Kueue resources", Label("disruptive"), func() {
-		var (
-			kueueName      = "cluster"
-			kueueClientset *kueueclient.Clientset
-			dynamicClient  dynamic.Interface
-		)
 
-		JustAfterEach(func(ctx context.Context) {
-			testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
-		})
+	When("the Kueue CR is deleted", func() {
+		It("should delete Kueue instance and verify cleanup", func() {
+			var (
+				kueueName      = "cluster"
+				kueueClientset *kueueclient.Clientset
+				dynamicClient  dynamic.Interface
+			)
 
-		BeforeEach(func() {
 			kueueClientset = clients.KueueClient
 			dynamicClient = clients.DynamicClient
-		})
 
-		It("should delete Kueue instance and verify cleanup", func() {
 			ctx := context.TODO()
 
 			// First, create some Kueue Custom Resources to test that they are NOT deleted
@@ -776,8 +821,9 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					},
 				},
 			}
-			_, err = testutils.CreateNamespace(kubeClient, testNamespace)
+			cleanupNamespaceFn, err := testutils.CreateNamespace(kubeClient, testNamespace)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
+			defer cleanupNamespaceFn()
 
 			By("create a LocalQueue in the test namespace")
 			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
@@ -1000,9 +1046,17 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Resources were not cleaned up properly")
+			testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
 		})
 
 		It("should redeploy Kueue instance and verify pod is ready", func() {
+			var (
+				kueueName      = "cluster"
+				kueueClientset *kueueclient.Clientset
+			)
+
+			kueueClientset = clients.KueueClient
+
 			ctx := context.TODO()
 
 			klog.Infof("Redeploying Kueue instance")
@@ -1033,9 +1087,32 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}
 				return fmt.Errorf("pod is not ready")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue pod failed to be ready")
+			testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
 		})
 	})
 })
+
+func findOperatorPods(namespace string, list *corev1.PodList) []*corev1.Pod {
+	pods := make([]*corev1.Pod, 0)
+	for i := range list.Items {
+		pod := &list.Items[i]
+		if strings.HasPrefix(pod.Name, namespace+"-") {
+			pods = append(pods, pod)
+		}
+	}
+	return pods
+}
+
+func findKueuePods(list *corev1.PodList) []*corev1.Pod {
+	pods := make([]*corev1.Pod, 0)
+	for i := range list.Items {
+		pod := &list.Items[i]
+		if strings.HasPrefix(pod.Name, "kueue-controller-manager") {
+			pods = append(pods, pod)
+		}
+	}
+	return pods
+}
 
 func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClient *kubernetes.Clientset) {
 	kueueClientset := clients.KueueClient
