@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package operand
 
 import (
 	"bytes"
@@ -32,19 +32,16 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/bindata"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -56,257 +53,9 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-func findOperatorPods(namespace string, list *corev1.PodList) []*corev1.Pod {
-	pods := make([]*corev1.Pod, 0)
-	for i := range list.Items {
-		pod := &list.Items[i]
-		if strings.HasPrefix(pod.Name, namespace+"-") {
-			pods = append(pods, pod)
-		}
-	}
-	return pods
-}
+var _ = Describe("Kueue Operand", func() {
 
-func findKueuePods(list *corev1.PodList) []*corev1.Pod {
-	pods := make([]*corev1.Pod, 0)
-	for i := range list.Items {
-		pod := &list.Items[i]
-		if strings.HasPrefix(pod.Name, "kueue-controller-manager") {
-			pods = append(pods, pod)
-		}
-	}
-	return pods
-}
-
-var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
-	// AfterEach(func() {
-	// 	Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
-	// })
-	When("installs", func() {
-		It("operator pods should be ready", func() {
-			Eventually(func() error {
-				ctx := context.TODO()
-				podItems, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					klog.Errorf("Unable to list pods: %v", err)
-					return nil
-				}
-				for _, pod := range podItems.Items {
-					if !strings.HasPrefix(pod.Name, testutils.OperatorNamespace+"-") {
-						continue
-					}
-					klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-					if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && pod.Status.ContainerStatuses[0].Ready {
-						return nil
-					}
-				}
-				return fmt.Errorf("pod is not ready")
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "operator pod failed to be ready")
-		})
-		It("kueue pods should be ready", func() {
-			Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
-		})
-	})
-
-	When("installs", func() {
-		It("should set ReadyReplicas in operator status and handle degraded condition", func() {
-			ctx := context.TODO()
-			Eventually(func() error {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("Unable to fetch Kueue instance: %v", err)
-				}
-
-				// Check ReadyReplicas is set correctly
-				if kueueInstance.Status.ReadyReplicas == 0 {
-					// If ReadyReplicas is 0, check if the operator properly reports degraded condition.
-					for _, condition := range kueueInstance.Status.Conditions {
-						if condition.Type == "Degraded" && condition.Status == "True" {
-							if strings.Contains(condition.Message, "No replicas ready") {
-								return nil
-							}
-						}
-					}
-					return fmt.Errorf("operator status ReadyReplicas is 0 but Degraded condition is not True or message does not match expected pattern")
-				}
-
-				// If ReadyReplicas is non-zero, verify it matches deployment status.
-				deployment, err := kubeClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("Unable to fetch deployment: %v", err)
-				}
-
-				if kueueInstance.Status.ReadyReplicas != deployment.Status.ReadyReplicas {
-					return fmt.Errorf("operator status ReadyReplicas (%d) does not match deployment ReadyReplicas (%d)",
-						kueueInstance.Status.ReadyReplicas, deployment.Status.ReadyReplicas)
-				}
-
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "ReadyReplicas not properly set or degraded condition not handled")
-		})
-
-		It("kueue operator deployment should contain priority class", func() {
-			ctx := context.TODO()
-			Eventually(func() error {
-				operatorDeployment, err := kubeClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "openshift-kueue-operator", metav1.GetOptions{})
-				if err != nil {
-					return err
-				}
-				if operatorDeployment.Spec.Template.Spec.PriorityClassName != "system-cluster-critical" {
-					return fmt.Errorf("Operator deployment does not have priority class system-cluster-critical")
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Unexpected priority class")
-		})
-
-		It("kueue deployment should contain priority class and have no resource limits set", func() {
-			ctx := context.TODO()
-
-			Eventually(func() error {
-				managerDeployment, err := kubeClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-				if err != nil {
-					return err
-				}
-				if managerDeployment.Spec.Template.Spec.PriorityClassName != "system-cluster-critical" {
-					return fmt.Errorf("kueue-controller-manager does not have priority class system-cluster-critical")
-				}
-				if len(managerDeployment.Spec.Template.Spec.Containers[0].Resources.Limits) > 0 {
-					return fmt.Errorf("kueue-controller-manager shouldn't set resources limits")
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Unexpected kueue-controller-manager spec")
-		})
-
-		It("Verifying that no v1alpha Kueue CRDs are installed", func() {
-			Eventually(func() error {
-				ctx := context.TODO()
-				crdList, err := clients.APIExtClient.CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
-				if err != nil {
-					klog.Errorf("Failed to list CRDs: %v", err)
-					return err
-				}
-
-				var kueueCRDs []apiextensionsv1.CustomResourceDefinition
-
-				for _, crd := range crdList.Items {
-					if strings.Contains(crd.Name, "kueue") {
-						if crd.Name != "kueue.openshift.io" {
-							kueueCRDs = append(kueueCRDs, crd)
-						}
-					}
-				}
-
-				if len(kueueCRDs) == 0 {
-					return fmt.Errorf("no kueue CRDs found")
-				}
-
-				for _, crd := range kueueCRDs {
-					for _, version := range crd.Spec.Versions {
-						if strings.HasPrefix(version.Name, "v1alpha") {
-							return fmt.Errorf("unexpected v1alpha CRD installed: %s", crd.Name)
-						}
-					}
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Unexpected v1alpha CRD is installed")
-		})
-
-		It("verify webhook readiness", func() {
-			Eventually(func() error {
-				_, err := kubeClient.CoreV1().Endpoints(testutils.OperatorNamespace).Get(
-					context.TODO(),
-					"kueue-webhook-service",
-					metav1.GetOptions{},
-				)
-				return err
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook service is not ready")
-
-			Eventually(func() error {
-				endpoints, err := kubeClient.CoreV1().Endpoints(testutils.OperatorNamespace).Get(
-					context.TODO(),
-					"kueue-webhook-service",
-					metav1.GetOptions{},
-				)
-				if err != nil {
-					return err
-				}
-				if len(endpoints.Subsets) == 0 || len(endpoints.Subsets[0].Addresses) == 0 {
-					return fmt.Errorf("webhook service has no endpoints")
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook endpoints not ready")
-
-			Eventually(func() error {
-				// Validate validating webhook configuration
-				vwh, err := kubeClient.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
-					context.TODO(),
-					"kueue-validating-webhook-configuration",
-					metav1.GetOptions{},
-				)
-				Expect(err).NotTo(HaveOccurred(), "Failed to get validating webhook configuration")
-				Expect(vwh.Name).To(Equal("kueue-validating-webhook-configuration"))
-
-				// Validate mutating webhook configuration
-				mwh, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(
-					context.TODO(),
-					"kueue-mutating-webhook-configuration",
-					metav1.GetOptions{},
-				)
-				Expect(err).NotTo(HaveOccurred(), "Failed to get mutating webhook configuration")
-				Expect(mwh.Name).To(Equal("kueue-mutating-webhook-configuration"))
-
-				return err
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook configurations are not ready")
-		})
-
-		It("verify that deny-all network policy is present", func() {
-			Eventually(func() error {
-				const (
-					denyLabelKey   = "app.openshift.io/name"
-					denyLabelValue = "kueue"
-				)
-
-				deny, err := kubeClient.NetworkingV1().NetworkPolicies(testutils.OperatorNamespace).Get(
-					context.Background(),
-					"kueue-deny-all",
-					metav1.GetOptions{},
-				)
-				if err != nil {
-					return err // retry
-				}
-
-				// deny-all policy should prohibit all traffic
-				// (ingress and egress) for pods that has the
-				// label 'app.openshift.io/name: kueue'
-				Expect(deny.Spec.PodSelector.MatchLabels).To(Equal(map[string]string{denyLabelKey: denyLabelValue}))
-				Expect(deny.Spec.Ingress).To(BeEmpty())
-				Expect(deny.Spec.Egress).To(BeEmpty())
-				Expect(deny.Spec.PolicyTypes).To(Equal([]networkingv1.PolicyType{
-					networkingv1.PolicyTypeIngress,
-					networkingv1.PolicyTypeEgress,
-				}))
-
-				// make sure that both our operator pod and the
-				// operand pod have the right label
-				pods, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(context.Background(), metav1.ListOptions{})
-				if err != nil {
-					return err // retry
-				}
-
-				operatorPods := findOperatorPods(testutils.OperatorNamespace, pods)
-				Expect(len(operatorPods)).To(BeNumerically(">=", 1), "no operator pod seen")
-				kueuePods := findKueuePods(pods)
-				Expect(len(kueuePods)).To(BeNumerically(">=", 1), "no kueue pod seen")
-
-				for _, pod := range append(operatorPods, kueuePods...) {
-					Expect(pod.Labels).To(HaveKeyWithValue(denyLabelKey, denyLabelValue))
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "network policy has not been setup")
-		})
-	})
-
-	When("enable webhook via opt-in namespaces", func() {
+	When("enable webhook via opt-in namespaces", Serial, Ordered, func() {
 		var (
 			testNamespaceWithLabel    = "kueue-managed-test"
 			testNamespaceWithoutLabel = "kueue-unmanaged-test"
@@ -640,7 +389,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return ss.Status.ReadyReplicas
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(int32(1)), "StatefulSet in unlabeled namespace not ready")
 		})
-		It("should expose metrics endpoint with TLS", func() {
+		It("should expose metrics endpoint with TLS", Label("day-zero"), func() {
 			ctx := context.TODO()
 			var (
 				err                error
@@ -698,7 +447,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
-	When("cleaning up Kueue resources", Label("disruptive"), func() {
+	When("the Kueue CR is deleted", func() {
 		var (
 			kueueName      = "cluster"
 			kueueClientset *kueueclient.Clientset
@@ -1137,69 +886,6 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 		return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted)
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Workload not admitted")
 	return workload.Name
-}
-
-func deployOperand() error {
-	ssClient := clients.KueueClient
-
-	ctx, cancelFnc := context.WithCancel(context.TODO())
-	defer cancelFnc()
-
-	assets := []struct {
-		path           string
-		readerAndApply func(objBytes []byte) error
-	}{
-		{
-			path: "assets/08_kueue_default.yaml",
-			readerAndApply: func(objBytes []byte) error {
-				requiredObj, err := runtime.Decode(ssscheme.Codecs.UniversalDecoder(ssv1.SchemeGroupVersion), objBytes)
-				if err != nil {
-					klog.Errorf("Unable to decode assets/08_kueue_default.yaml: %v", err)
-					return err
-				}
-				requiredSS := requiredObj.(*ssv1.Kueue)
-				_, err = ssClient.KueueV1().Kueues().Create(ctx, requiredSS, metav1.CreateOptions{})
-				if err != nil {
-					if !errors.IsNotFound(err) {
-						return nil
-					}
-					return err
-				}
-				return nil
-			},
-		},
-	}
-
-	Eventually(func() error {
-		for _, asset := range assets {
-			klog.Infof("Creating %v", asset.path)
-			if err := asset.readerAndApply(bindata.MustAsset(asset.path)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "assets should be deployed")
-
-	Eventually(func() error {
-		ctx := context.TODO()
-		podItems, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			klog.Errorf("Unable to list pods: %v", err)
-			return nil
-		}
-		for _, pod := range podItems.Items {
-			if !strings.HasPrefix(pod.Name, "kueue-controller-manager") {
-				continue
-			}
-			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && pod.Status.ContainerStatuses[0].Ready {
-				return nil
-			}
-		}
-		return fmt.Errorf("pod is not ready")
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue pod failed to be ready")
-
-	return nil
 }
 
 func Kexecute(ctx context.Context, restConfig *rest.Config, kubeClient kubernetes.Interface, namespace, podName, containerName string, command []string) ([]byte, []byte, error) {
