@@ -33,6 +33,7 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -931,6 +932,21 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 						serviceNames = append(serviceNames, svc.Name)
 					}
 					return fmt.Errorf("Services still exist in namespace %s: %v", testutils.OperatorNamespace, serviceNames)
+				}
+
+				_, err = kubeClient.FlowcontrolV1().PriorityLevelConfigurations().Get(ctx, "kueue-visibility", metav1.GetOptions{})
+				if err == nil || (err != nil && !apierrors.IsNotFound(err)) {
+					return fmt.Errorf("PriorityLevelConfiguration still exists: %v", err)
+				}
+
+				_, err = kubeClient.FlowcontrolV1().FlowSchemas().Get(ctx, "visibility", metav1.GetOptions{})
+				if err == nil || (err != nil && !apierrors.IsNotFound(err)) {
+					return fmt.Errorf("FlowSchema still exists: %v", err)
+				}
+
+				_, err = clients.ApiregistrationClient.APIServices().Get(ctx, "visibility.kueue.x-k8s.io", metav1.GetOptions{})
+				if err == nil || (err != nil && !apierrors.IsNotFound(err)) {
+					return fmt.Errorf("APIService still exists: %v", err)
 				}
 
 				return nil

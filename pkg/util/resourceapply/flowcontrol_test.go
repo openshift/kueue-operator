@@ -179,12 +179,15 @@ func TestApplyFlowSchema(t *testing.T) {
 }
 
 func TestApplyPriorityLevelConfiguration(t *testing.T) {
-	var nominalConcurrencyShares int32 = 10
+	var nominalConcurrencyShares int32 = 2
 	var lendablePercent int32 = 90
 	newObject := func() *flowcontrolv1.PriorityLevelConfiguration {
 		return &flowcontrolv1.PriorityLevelConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-plc",
+				Annotations: map[string]string{
+					"kueue.openshift.io/allow-nominal-concurrency-shares-update": "false",
+				},
 			},
 			Spec: flowcontrolv1.PriorityLevelConfigurationSpec{
 				Type: flowcontrolv1.PriorityLevelEnablementLimited,
@@ -237,7 +240,9 @@ func TestApplyPriorityLevelConfiguration(t *testing.T) {
 				desired.Spec.Limited.NominalConcurrencyShares = &ncs
 				expected = desired.DeepCopy()
 				expected.Labels = map[string]string{}
-				expected.Annotations = map[string]string{}
+				expected.Annotations = map[string]string{
+					"kueue.openshift.io/allow-nominal-concurrency-shares-update": "false",
+				}
 				expected.OwnerReferences = []metav1.OwnerReference{}
 				return current, desired, expected
 			},
@@ -251,12 +256,45 @@ func TestApplyPriorityLevelConfiguration(t *testing.T) {
 				desired.Spec.Limited.LendablePercent = ptr.To(int32(70))
 				expected = desired.DeepCopy()
 				expected.Labels = map[string]string{}
-				expected.Annotations = map[string]string{}
+				expected.Annotations = map[string]string{
+					"kueue.openshift.io/allow-nominal-concurrency-shares-update": "false",
+				}
 				expected.OwnerReferences = []metav1.OwnerReference{}
 				return current, desired, expected
 			},
 			mutator: func(p *flowcontrolv1.PriorityLevelConfiguration) {
 				p.Spec.Limited.LendablePercent = ptr.To(int32(80))
+			},
+			diff:       true,
+			operations: []string{"get", "update"},
+		},
+		{
+			name: "object exists on cluster, no desired spec changes, should not call update",
+			setup: func() (current, desired, expected *flowcontrolv1.PriorityLevelConfiguration) {
+				current, desired = newObject(), newObject()
+				current.Annotations = map[string]string{"kueue.openshift.io/allow-nominal-concurrency-shares-update": "true"}
+				var ncs int32 = 2
+				current.Spec.Limited.NominalConcurrencyShares = &ncs
+				desired.Spec.Limited.NominalConcurrencyShares = &ncs
+				expected = desired.DeepCopy()
+				expected.Annotations = map[string]string{"kueue.openshift.io/allow-nominal-concurrency-shares-update": "true"}
+				return current, desired, expected
+			},
+			diff:       false,
+			operations: []string{"get"},
+		},
+		{
+			name: "object exists on cluster, desired spec changes back to default as value is not allowed",
+			setup: func() (current, desired, expected *flowcontrolv1.PriorityLevelConfiguration) {
+				current, desired = newObject(), newObject()
+				current.Annotations = map[string]string{"kueue.openshift.io/allow-nominal-concurrency-shares-update": "true"}
+				var ncs1 int32 = 1
+				current.Spec.Limited.NominalConcurrencyShares = &ncs1
+				expected = desired.DeepCopy()
+				expected.Labels = map[string]string{}
+				expected.Annotations = map[string]string{"kueue.openshift.io/allow-nominal-concurrency-shares-update": "false"}
+				expected.OwnerReferences = []metav1.OwnerReference{}
+				return current, desired, expected
 			},
 			diff:       true,
 			operations: []string{"get", "update"},

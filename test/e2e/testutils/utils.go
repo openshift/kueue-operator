@@ -413,10 +413,6 @@ func CleanUpWorkload(ctx context.Context, kueueClient *upstreamkueueclient.Clien
 // CleanUpKueueInstance deletes the specified Kueue instance and waits for its removal.
 func CleanUpKueueInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
 	By(fmt.Sprintf("Destroying Kueue %s", name))
-	removeFinalizersWithPatch(func() error {
-		_, err := kueueClientset.KueueV1().Kueues().Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
-		return err
-	})
 	err := kueueClientset.KueueV1().Kueues().Delete(ctx, name, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(func() error {
