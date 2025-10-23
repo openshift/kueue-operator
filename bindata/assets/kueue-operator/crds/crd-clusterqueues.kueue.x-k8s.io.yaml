@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.18.0
   labels:
     app.kubernetes.io/component: controller
     app.kubernetes.io/name: kueue
@@ -168,19 +168,18 @@ spec:
                   before borrowing or preempting in the flavor being evaluated.
                 properties:
                   whenCanBorrow:
-                    default: MayStopSearch
+                    default: Borrow
                     description: |-
                       whenCanBorrow determines whether a workload should try the next flavor
                       before borrowing in current flavor. The possible values are:
 
-                      - `MayStopSearch` (default): stop the search for candidate flavors if workload
-                        fits or requires borrowing to fit.
-                      - `TryNextFlavor`: try next flavor if workload requires borrowing to fit.
-                      - `Borrow` (deprecated): old name for `MayStopSearch`; please use new name.
+                      - `Borrow` (default): allocate in current flavor if borrowing
+                        is possible.
+                      - `TryNextFlavor`: try next flavor even if the current
+                        flavor has enough resources to borrow.
                     enum:
-                    - MayStopSearch
-                    - TryNextFlavor
                     - Borrow
+                    - TryNextFlavor
                     type: string
                   whenCanPreempt:
                     default: TryNextFlavor
@@ -188,15 +187,12 @@ spec:
                       whenCanPreempt determines whether a workload should try the next flavor
                       before borrowing in current flavor. The possible values are:
 
-                      - `MayStopSearch`: stop the search for candidate flavors if workload fits or requires
-                        preemption to fit.
-                      - `TryNextFlavor` (default): try next flavor if workload requires preemption
-                        to fit in current flavor.
-                      - `Preempt` (deprecated): old name for `MayStopSearch`; please use new name.
+                      - `Preempt`: allocate in current flavor if it's possible to preempt some workloads.
+                      - `TryNextFlavor` (default): try next flavor even if there are enough
+                        candidates for preemption in the current flavor.
                     enum:
-                    - MayStopSearch
-                    - TryNextFlavor
                     - Preempt
+                    - TryNextFlavor
                     type: string
                 type: object
               namespaceSelector:
