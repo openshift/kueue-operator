@@ -78,10 +78,7 @@ func findKueuePods(list *corev1.PodList) []*corev1.Pod {
 	return pods
 }
 
-var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
-	// AfterEach(func() {
-	// 	Expect(kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})).To(Succeed())
-	// })
+var _ = Describe("Kueue Operator", Label("operator"), Serial, Ordered, func() {
 	When("installs", func() {
 		It("operator pods should be ready", func() {
 			Eventually(func() error {
