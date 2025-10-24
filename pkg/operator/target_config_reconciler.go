@@ -368,19 +368,19 @@ func (c TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncCo
 	specAnnotations["service/"+webhookService.Name] = webhookService.GetResourceVersion()
 
 	// From here, we will create our cluster wide resources.
-	err = c.manageAPIService(ownerReference)
+	err = c.manageAPIService(specAnnotations, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage visibility apiservice")
 		return err
 	}
 
-	err = c.managePriorityLevelConfiguration(ownerReference)
+	err = c.managePriorityLevelConfiguration(specAnnotations, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage visibility prioritylevelconfiguration")
 		return err
 	}
 
-	err = c.manageFlowSchema(ownerReference)
+	err = c.manageFlowSchema(specAnnotations, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage visibility flowschema")
 		return err
@@ -887,7 +887,7 @@ func (c *TargetConfigReconciler) manageServiceAccount(ownerReference metav1.Owne
 	return resourceapply.ApplyServiceAccount(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageFlowSchema(ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageFlowSchema(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	flowSchemaFilePath := "assets/kueue-operator/flowschema.yaml"
 
 	// TODO: move these resource helper functions to library-go
@@ -896,14 +896,15 @@ func (c *TargetConfigReconciler) manageFlowSchema(ownerReference metav1.OwnerRef
 		ownerReference,
 	}
 
-	_, _, err := utilresourceapply.ApplyFlowSchema(c.ctx, c.kubeClient.FlowcontrolV1(), c.eventRecorder, want)
+	flowSchema, _, err := utilresourceapply.ApplyFlowSchema(c.ctx, c.kubeClient.FlowcontrolV1(), c.eventRecorder, want)
 	if err != nil {
 		return err
 	}
+	specAnnotations["flowschema/"+flowSchema.Name] = flowSchema.GetResourceVersion()
 	return nil
 }
 
-func (c *TargetConfigReconciler) managePriorityLevelConfiguration(ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) managePriorityLevelConfiguration(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	priorityLevelConfigurationFilePath := "assets/kueue-operator/prioritylevelconfiguration.yaml"
 
 	// TODO: move these resource helper functions to library-go
@@ -912,10 +913,11 @@ func (c *TargetConfigReconciler) managePriorityLevelConfiguration(ownerReference
 		ownerReference,
 	}
 
-	_, _, err := utilresourceapply.ApplyPriorityLevelConfiguration(c.ctx, c.kubeClient.FlowcontrolV1(), c.eventRecorder, want)
+	priorityLevelConfiguration, _, err := utilresourceapply.ApplyPriorityLevelConfiguration(c.ctx, c.kubeClient.FlowcontrolV1(), c.eventRecorder, want)
 	if err != nil {
 		return err
 	}
+	specAnnotations["prioritylevelconfiguration/"+priorityLevelConfiguration.Name] = priorityLevelConfiguration.GetResourceVersion()
 	return nil
 }
 
@@ -1002,7 +1004,7 @@ func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference 
 	return resourceapply.ApplyService(c.ctx, c.kubeClient.CoreV1(), c.eventRecorder, required)
 }
 
-func (c *TargetConfigReconciler) manageAPIService(ownerReference metav1.OwnerReference) error {
+func (c *TargetConfigReconciler) manageAPIService(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset("assets/kueue-operator/apiservice.yaml"))
 	required.Spec.InsecureSkipTLSVerify = false
 	required.Spec.Service.Namespace = c.operatorNamespace
@@ -1017,10 +1019,11 @@ func (c *TargetConfigReconciler) manageAPIService(ownerReference metav1.OwnerRef
 	required.OwnerReferences = []metav1.OwnerReference{
 		ownerReference,
 	}
-	_, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
+	apiService, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
 	if err != nil {
 		return err
 	}
+	specAnnotations["apiservice/"+apiService.Name] = apiService.GetResourceVersion()
 	return nil
 }
 
