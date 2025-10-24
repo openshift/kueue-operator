@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/klog/v2"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -101,8 +102,15 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(*priority.Spec.Limited.NominalConcurrencyShares).To(Equal(int32(0)))
 
 			By("Try to access the pending workload")
-			_, err = visibilityClient.LocalQueues(ns.Name).GetPendingWorkloadsSummary(ctx, testQueue, metav1.GetOptions{})
-			Expect(apierrors.IsTooManyRequests(err)).To(BeTrue())
+			Eventually(func() bool {
+				_, err = visibilityClient.LocalQueues(ns.Name).GetPendingWorkloadsSummary(ctx, testQueue, metav1.GetOptions{})
+				if err != nil && apierrors.IsTooManyRequests(err) {
+					klog.Infof("Received TooManyRequests error: %v", err)
+					return true
+				}
+				klog.Infof("Did not receive TooManyRequests error")
+				return false
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Did not receive TooManyRequests error")
 
 		})
 		It("should allow modification of the nominal concurrency shares to 5", func(ctx context.Context) {
