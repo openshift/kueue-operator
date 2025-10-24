@@ -385,10 +385,19 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 		AfterAll(func() {
 			ctx := context.TODO()
 			cleanupLocalQueue()
+			deleteNamespace(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespaceWithLabel,
+				},
+			})
+			deleteNamespace(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testNamespaceWithoutLabel,
+				},
+			})
+
 			cleanupClusterQueue()
 			cleanupResourceFlavor()
-			_ = kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespaceWithLabel, metav1.DeleteOptions{})
-			_ = kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespaceWithoutLabel, metav1.DeleteOptions{})
 		})
 
 		It("should suspend jobs only in labeled namespaces when labelPolicy=None", func() {
