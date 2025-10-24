@@ -35,7 +35,7 @@ const (
 	priorityName = "kueue-visibility"
 )
 
-var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, func() {
+var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Serial, Ordered, func() {
 	BeforeAll(func() {
 		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 	})

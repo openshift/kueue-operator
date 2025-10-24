@@ -40,7 +40,7 @@ var (
 	defaultLocalQueueClean func()
 )
 
-var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, func() {
+var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Serial, Ordered, func() {
 	BeforeAll(func() {
 		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 	})
