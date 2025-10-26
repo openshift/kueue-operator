@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --with pyyaml --with requests
 """
 Check if local changes in bindata/ would be overwritten by sync-manifests-from-submodule.
 
