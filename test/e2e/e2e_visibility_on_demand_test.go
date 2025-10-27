@@ -86,9 +86,9 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 		AfterAll(func(ctx context.Context) {
 			cleanupLocalQueue()
+			deleteNamespace(ctx, ns)
 			cleanupClusterQueue()
 			cleanupResourceFlavor()
-			deleteNamespace(ctx, ns)
 		})
 
 		It("should allow modification of the nominal concurrency shares to 0", func(ctx context.Context) {
