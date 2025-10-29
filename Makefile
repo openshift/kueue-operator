@@ -131,12 +131,13 @@ clean:
 .PHONY: clean
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter 
+lint: check-sync-manifests golangci-lint ## Run golangci-lint linter 
 	$(GOLANGCI_LINT) run --timeout 30m
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix --timeout 30m
+
 
 ## Tool Versions
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
@@ -185,6 +186,10 @@ sync-manifests:
 .PHONY: sync-manifests-from-submodule
 sync-manifests-from-submodule:
 	hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
+
+.PHONY: check-sync-manifests
+check-sync-manifests:
+	hack/check_bindata_conflicts.py
 
 GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
