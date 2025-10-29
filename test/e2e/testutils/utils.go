@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -169,6 +172,96 @@ func CreateResourceFlavor(client *upstreamkueueclient.Clientset) (func(), error)
 	}
 
 	return cleanup, nil
+}
+
+type KueueWrapper struct {
+	*ssv1.Kueue
+}
+
+// NewKueueDefault returns a default Kueue instance for testing
+func NewKueueDefault() *KueueWrapper {
+	return &KueueWrapper{
+		&ssv1.Kueue{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cluster",
+				Namespace: OperatorNamespace,
+				Labels: map[string]string{
+					"app.kubernetes.io/name":       "kueue-operator",
+					"app.kubernetes.io/managed-by": "kustomize",
+				},
+			},
+			Spec: ssv1.KueueOperandSpec{
+				OperatorSpec: operatorv1.OperatorSpec{
+					ManagementState: operatorv1.Managed,
+				},
+				Config: ssv1.KueueConfiguration{
+					Integrations: ssv1.Integrations{
+						Frameworks: []ssv1.KueueIntegration{
+							ssv1.KueueIntegrationBatchJob,
+							ssv1.KueueIntegrationPod,
+							ssv1.KueueIntegrationDeployment,
+							ssv1.KueueIntegrationStatefulSet,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (k *KueueWrapper) EnableDebug() *KueueWrapper {
+	k.Kueue.Spec.LogLevel = operatorv1.Debug
+	return k
+}
+
+func (k *KueueWrapper) GetKueue() *ssv1.Kueue {
+	return k.Kueue
+}
+
+// DumpKueueControllerManagerLogs dumps the logs from kueue-controller-manager pods
+// when a test fails. This should be called from JustAfterEach.
+func DumpKueueControllerManagerLogs(ctx context.Context, kubeClient *kubernetes.Clientset, tailLines int64) {
+	if !CurrentSpecReport().Failed() {
+		return
+	}
+
+	By("Test failed - dumping kueue-controller-manager logs")
+	pods, err := kubeClient.CoreV1().Pods(OperatorNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "control-plane=controller-manager",
+	})
+	if err != nil {
+		GinkgoWriter.Printf("Failed to list controller pods: %v\n", err)
+		return
+	}
+
+	if len(pods.Items) == 0 {
+		GinkgoWriter.Printf("No kueue-controller-manager pods found\n")
+		return
+	}
+
+	for _, pod := range pods.Items {
+		GinkgoWriter.Printf("\n=== Logs from pod %s ===\n", pod.Name)
+		for _, container := range pod.Spec.Containers {
+			GinkgoWriter.Printf("\n--- Container: %s ---\n", container.Name)
+			req := kubeClient.CoreV1().Pods(OperatorNamespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+				Container: container.Name,
+				TailLines: &tailLines,
+			})
+			logs, err := req.Stream(ctx)
+			if err != nil {
+				GinkgoWriter.Printf("Failed to get logs for container %s: %v\n", container.Name, err)
+				continue
+			}
+			defer logs.Close()
+
+			logBytes, err := io.ReadAll(logs)
+			if err != nil {
+				GinkgoWriter.Printf("Failed to read logs: %v\n", err)
+				continue
+			}
+			GinkgoWriter.Printf("%s\n", string(logBytes))
+		}
+	}
 }
 
 func MakeCurlMetricsPod(namespace string) *PodWrapper {
@@ -411,7 +504,8 @@ func CleanUpWorkload(ctx context.Context, kueueClient *upstreamkueueclient.Clien
 }
 
 // CleanUpKueueInstance deletes the specified Kueue instance and waits for its removal.
-func CleanUpKueueInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string) {
+// It also waits for webhook endpointslices to be completely gone if kubeClient is provided.
+func CleanUpKueueInstance(ctx context.Context, kueueClientset *kueueclient.Clientset, name string, kubeClient *kubernetes.Clientset) {
 	By(fmt.Sprintf("Destroying Kueue %s", name))
 	err := kueueClientset.KueueV1().Kueues().Delete(ctx, name, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
@@ -422,6 +516,59 @@ func CleanUpKueueInstance(ctx context.Context, kueueClientset *kueueclient.Clien
 		}
 		return fmt.Errorf("Kueue %s still exists", name)
 	}, DeletionTime, DeletionPoll).Should(Succeed(), "Resources were not cleaned up properly")
+
+	// Wait for webhook endpointslices to be completely gone if kubeClient is provided
+	if kubeClient != nil {
+		By("Waiting for webhook endpointslices to be deleted")
+		Eventually(func() error {
+			endpointSlices, err := kubeClient.DiscoveryV1().EndpointSlices(OperatorNamespace).List(
+				ctx,
+				metav1.ListOptions{
+					LabelSelector: "kubernetes.io/service-name=kueue-webhook-service",
+				},
+			)
+			if err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
+			if len(endpointSlices.Items) > 0 {
+				return fmt.Errorf("webhook endpointslices still exist: %d found", len(endpointSlices.Items))
+			}
+			return nil
+		}, DeletionTime, DeletionPoll).Should(Succeed(), "Webhook endpointslices were not cleaned up")
+
+		By("Waiting for operand deployment to be deleted")
+		Eventually(func() error {
+			_, err := kubeClient.AppsV1().Deployments(OperatorNamespace).Get(
+				ctx,
+				"kueue-controller-manager",
+				metav1.GetOptions{},
+			)
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("operand deployment kueue-controller-manager still exists")
+		}, DeletionTime, DeletionPoll).Should(Succeed(), "Operand deployment was not cleaned up")
+
+		By("Waiting for operand pods to be deleted")
+		Eventually(func() error {
+			pods, err := kubeClient.CoreV1().Pods(OperatorNamespace).List(
+				ctx,
+				metav1.ListOptions{
+					LabelSelector: "control-plane=controller-manager",
+				},
+			)
+			if err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
+			if len(pods.Items) > 0 {
+				return fmt.Errorf("operand pods still exist: %d found", len(pods.Items))
+			}
+			return nil
+		}, DeletionTime, DeletionPoll).Should(Succeed(), "Operand pods were not cleaned up")
+	}
 }
 
 // CleanUpObject deletes the specified kubernetes object and waits for its removal.

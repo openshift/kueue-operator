@@ -18,7 +18,6 @@ package e2e
 
 import (
 	"context"
-	//"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -40,7 +39,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 	})
 	AfterAll(func(ctx context.Context) {
-		testutils.CleanUpKueueInstance(ctx, clients.KueueClient, "cluster")
+		testutils.CleanUpKueueInstance(ctx, clients.KueueClient, "cluster", clients.KubeClient)
 	})
 
 	When("kueue.openshift.io/allow-nominal-concurrency-shares-update annotation is set to true", func() {
@@ -91,6 +90,10 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			cleanupResourceFlavor()
 		})
 
+		JustAfterEach(func(ctx context.Context) {
+			testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 100)
+		})
+
 		It("should allow modification of the nominal concurrency shares to 0", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 0")
 			updateNominalConcurrencyShares(ctx, priorityClient, 0)
@@ -103,7 +106,6 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Try to access the pending workload")
 			_, err = visibilityClient.LocalQueues(ns.Name).GetPendingWorkloadsSummary(ctx, testQueue, metav1.GetOptions{})
 			Expect(apierrors.IsTooManyRequests(err)).To(BeTrue())
-
 		})
 		It("should allow modification of the nominal concurrency shares to 5", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 5")
