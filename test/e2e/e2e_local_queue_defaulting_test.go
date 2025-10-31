@@ -57,7 +57,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 			initialKueueInstance = kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = kueueoperatorv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
-			createClusterQueueAndResourceFlavor()
+			createClusterQueueAndResourceFlavor(ctx)
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -112,7 +112,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdPod.UID))
 
-			cleanupSecondQueue, err := testutils.CreateLocalQueue(kueueClient, ns.Name, secondQueueName)
+			cleanupSecondQueue, err := testutils.CreateLocalQueue(ctx, kueueClient, ns.Name, secondQueueName)
 			Expect(err).NotTo(HaveOccurred())
 			defer cleanupSecondQueue()
 
@@ -160,7 +160,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 
 			// Creation of LocalQueue Default with new Job
 			By("Creating localQueue Default")
-			defaultLocalQueueClean, err = testutils.CreateLocalQueue(kueueClient, ns.Name, testutils.DefaultLocalQueueName)
+			defaultLocalQueueClean, err = testutils.CreateLocalQueue(ctx, kueueClient, ns.Name, testutils.DefaultLocalQueueName)
 			Expect(err).NotTo(HaveOccurred())
 			job := builder.NewJobWithoutQueue()
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
@@ -204,7 +204,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 	When("labelPolicy is not defined and default LocalQueue is in a managed namespace", func() {
 		BeforeEach(func(ctx context.Context) {
 			// Initial configuration - creating clusterQueue, resourceFlavor, namespace and localqueue
-			createClusterQueueAndResourceFlavor()
+			createClusterQueueAndResourceFlavor(ctx)
 			namespaceLabel := map[string]string{
 				testutils.OpenShiftManagedLabel: "true",
 			}
@@ -232,7 +232,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 	When("labelPolicy is not defined and default LocalQueue is in an unmanaged namespace", func() {
 		BeforeEach(func(ctx context.Context) {
 			// Initial configuration - creating clusterQueue, resourceFlavor, namespace and localqueue
-			createClusterQueueAndResourceFlavor()
+			createClusterQueueAndResourceFlavor(ctx)
 			createNamespaceAndLocalQueueDefault(ctx, nil)
 		})
 		AfterEach(func(ctx context.Context) {
@@ -302,7 +302,7 @@ func deleteNamespace(ctx context.Context, namespace *corev1.Namespace) {
 	testutils.WaitForAllPodsInNamespaceDeleted(ctx, clients.GenericClient, namespace)
 }
 
-func createClusterQueueAndResourceFlavor() {
+func createClusterQueueAndResourceFlavor(ctx context.Context) {
 	kueueClient = clients.UpstreamKueueClient
 	if clusterQueueCleanup != nil {
 		clusterQueueCleanup()
@@ -313,9 +313,9 @@ func createClusterQueueAndResourceFlavor() {
 		resourceFlavorCleanup = nil
 	}
 	var err error
-	clusterQueueCleanup, err = testutils.CreateClusterQueue(kueueClient)
+	clusterQueueCleanup, err = testutils.CreateClusterQueue(ctx, kueueClient)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-	resourceFlavorCleanup, err = testutils.CreateResourceFlavor(kueueClient)
+	resourceFlavorCleanup, err = testutils.CreateResourceFlavor(ctx, kueueClient)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
 }
 
@@ -337,6 +337,6 @@ func createNamespaceAndLocalQueueDefault(ctx context.Context, labels map[string]
 	Expect(err).NotTo(HaveOccurred())
 	By(fmt.Sprintf("Created namespace %s", ns.Name))
 	builder = testutils.NewTestResourceBuilder(ns.Name, testutils.DefaultLocalQueueName)
-	defaultLocalQueueClean, err = testutils.CreateLocalQueue(kueueClient, ns.Name, testutils.DefaultLocalQueueName)
+	defaultLocalQueueClean, err = testutils.CreateLocalQueue(ctx, kueueClient, ns.Name, testutils.DefaultLocalQueueName)
 	Expect(err).NotTo(HaveOccurred())
 }
