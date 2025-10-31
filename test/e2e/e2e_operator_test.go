@@ -381,14 +381,14 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cleanupClusterQueue, err = testutils.CreateClusterQueue(kueueClient)
+			cleanupClusterQueue, err = testutils.CreateClusterQueue(context.TODO(), kueueClient)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create LocalQueue in managed namespace
-			cleanupLocalQueue, err = testutils.CreateLocalQueue(kueueClient, testNamespaceWithLabel, testQueue)
+			cleanupLocalQueue, err = testutils.CreateLocalQueue(context.TODO(), kueueClient, testNamespaceWithLabel, testQueue)
 			Expect(err).NotTo(HaveOccurred())
 
-			cleanupResourceFlavor, err = testutils.CreateResourceFlavor(kueueClient)
+			cleanupResourceFlavor, err = testutils.CreateResourceFlavor(context.TODO(), kueueClient)
 			Expect(err).NotTo(HaveOccurred())
 
 			nodes, err := kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
@@ -759,12 +759,12 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			klog.Infof("Creating Kueue Custom Resources to test they are NOT deleted when Kueue CR is deleted")
 
 			By("create a resourceFlavor")
-			cleanupResourceFlavorFn, err := testutils.CreateResourceFlavor(clients.UpstreamKueueClient)
+			cleanupResourceFlavorFn, err := testutils.CreateResourceFlavor(ctx, clients.UpstreamKueueClient)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create ResourceFlavor")
 			defer cleanupResourceFlavorFn()
 
 			By("create clusterQueue")
-			cleanupClusterQueueFn, err := testutils.CreateClusterQueue(clients.UpstreamKueueClient)
+			cleanupClusterQueueFn, err := testutils.CreateClusterQueue(ctx, clients.UpstreamKueueClient)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create ClusterQueue")
 			defer cleanupClusterQueueFn()
 
@@ -781,7 +781,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
 
 			By("create a LocalQueue in the test namespace")
-			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
+			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
 			Expect(err).ToNot(HaveOccurred(), "Failed to create LocalQueue")
 			defer cleanupLocalQueueFn()
 
