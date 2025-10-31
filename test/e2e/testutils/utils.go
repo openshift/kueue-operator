@@ -49,17 +49,27 @@ type PodWrapper struct {
 	corev1.Pod
 }
 
-func CreateClusterQueue(client *upstreamkueueclient.Clientset) (func(), error) {
+// ClusterQueueWrapper wraps a ClusterQueue and provides builder methods.
+type ClusterQueueWrapper struct {
+	*kueuev1beta1.ClusterQueue
+}
+
+// NewClusterQueue creates a new wrapper with default values.
+func NewClusterQueue() *ClusterQueueWrapper {
 	cq := &kueuev1beta1.ClusterQueue{
-		ObjectMeta: v1.ObjectMeta{Name: "test-clusterqueue"},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "test-clusterqueue",
+		},
 		Spec: kueuev1beta1.ClusterQueueSpec{
-			NamespaceSelector: &v1.LabelSelector{MatchLabels: map[string]string{
-				"kueue.openshift.io/managed": "true",
-			}},
+			NamespaceSelector: &v1.LabelSelector{
+				MatchLabels: map[string]string{
+					"kueue.openshift.io/managed": "true",
+				},
+			},
 			ResourceGroups: []kueuev1beta1.ResourceGroup{{
 				CoveredResources: []corev1.ResourceName{"cpu", "memory"},
 				Flavors: []kueuev1beta1.FlavorQuotas{{
-					Name: "default",
+					Name: kueuev1beta1.ResourceFlavorReference("default"),
 					Resources: []kueuev1beta1.ResourceQuota{
 						{Name: "cpu", NominalQuota: resource.MustParse("100")},
 						{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
@@ -69,106 +79,238 @@ func CreateClusterQueue(client *upstreamkueueclient.Clientset) (func(), error) {
 		},
 	}
 
-	_, err := client.KueueV1beta1().ClusterQueues().Create(context.TODO(), cq, v1.CreateOptions{})
+	return &ClusterQueueWrapper{
+		ClusterQueue: cq,
+	}
+}
+
+// WithGenerateName switches to using GenerateName with "cluster-queue-" prefix.
+func (cqw *ClusterQueueWrapper) WithGenerateName() *ClusterQueueWrapper {
+	cqw.Name = ""
+	cqw.GenerateName = "cluster-queue-"
+	return cqw
+}
+
+// WithCPU sets the CPU quota.
+func (cqw *ClusterQueueWrapper) WithCPU(cpu string) *ClusterQueueWrapper {
+	if len(cqw.Spec.ResourceGroups) > 0 && len(cqw.Spec.ResourceGroups[0].Flavors) > 0 {
+		for i, r := range cqw.Spec.ResourceGroups[0].Flavors[0].Resources {
+			if r.Name == "cpu" {
+				cqw.Spec.ResourceGroups[0].Flavors[0].Resources[i].NominalQuota = resource.MustParse(cpu)
+				break
+			}
+		}
+	}
+	return cqw
+}
+
+// WithMemory sets the memory quota.
+func (cqw *ClusterQueueWrapper) WithMemory(memory string) *ClusterQueueWrapper {
+	if len(cqw.Spec.ResourceGroups) > 0 && len(cqw.Spec.ResourceGroups[0].Flavors) > 0 {
+		for i, r := range cqw.Spec.ResourceGroups[0].Flavors[0].Resources {
+			if r.Name == "memory" {
+				cqw.Spec.ResourceGroups[0].Flavors[0].Resources[i].NominalQuota = resource.MustParse(memory)
+				break
+			}
+		}
+	}
+	return cqw
+}
+
+// WithFlavorName sets the resource flavor name.
+func (cqw *ClusterQueueWrapper) WithFlavorName(flavorName string) *ClusterQueueWrapper {
+	if len(cqw.Spec.ResourceGroups) > 0 && len(cqw.Spec.ResourceGroups[0].Flavors) > 0 {
+		cqw.Spec.ResourceGroups[0].Flavors[0].Name = kueuev1beta1.ResourceFlavorReference(flavorName)
+	}
+	return cqw
+}
+
+// Create creates the ClusterQueue in the cluster and returns cleanup function.
+func (cqw *ClusterQueueWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
+	_, cleanup, err := cqw.CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+// CreateWithObject creates the ClusterQueue in the cluster and returns the created object, cleanup function, and error.
+func (cqw *ClusterQueueWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta1.ClusterQueue, func(), error) {
+	createdCQ, err := client.KueueV1beta1().ClusterQueues().Create(ctx, cqw.ClusterQueue, v1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cleanup := func() {
 		ctx := context.TODO()
-		By(fmt.Sprintf("Destroying ClusterQueue %s", cq.Name))
+		By(fmt.Sprintf("Destroying ClusterQueue %s", createdCQ.Name))
 		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().ClusterQueues().Patch(ctx, cq.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			_, err := client.KueueV1beta1().ClusterQueues().Patch(ctx, createdCQ.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 			return err
 		})
-		err := client.KueueV1beta1().ClusterQueues().Delete(ctx, cq.Name, metav1.DeleteOptions{})
+		err := client.KueueV1beta1().ClusterQueues().Delete(ctx, createdCQ.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := client.KueueV1beta1().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+			_, err := client.KueueV1beta1().ClusterQueues().Get(ctx, createdCQ.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
-			return fmt.Errorf("clusterqueue %s still exists: %w", cq.Name, err)
-		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("ClusterQueue %s was not cleaned up", cq.Name))
+			return fmt.Errorf("clusterqueue %s still exists: %w", createdCQ.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("ClusterQueue %s was not cleaned up", createdCQ.Name))
 	}
 
-	return cleanup, nil
+	return createdCQ, cleanup, nil
 }
 
-func CreateLocalQueue(client *upstreamkueueclient.Clientset, namespace, name string) (func(), error) {
+func CreateClusterQueue(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
+	_, cleanup, err := NewClusterQueue().CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+func CreateLocalQueue(ctx context.Context, client *upstreamkueueclient.Clientset, namespace, name string) (func(), error) {
+	_, cleanup, err := NewLocalQueue(namespace, name).CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+// LocalQueueWrapper wraps a LocalQueue and provides builder methods.
+type LocalQueueWrapper struct {
+	*kueuev1beta1.LocalQueue
+}
+
+// NewLocalQueue creates a new wrapper with default values.
+func NewLocalQueue(namespace, name string) *LocalQueueWrapper {
+	By(fmt.Sprintf("Creating LocalQueue %s in namespace %s", name, namespace))
 	lq := &kueuev1beta1.LocalQueue{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: kueuev1beta1.LocalQueueSpec{ClusterQueue: "test-clusterqueue"},
+		Spec: kueuev1beta1.LocalQueueSpec{
+			ClusterQueue: "test-clusterqueue",
+		},
 	}
 
-	_, err := client.KueueV1beta1().LocalQueues(namespace).Create(context.TODO(), lq, v1.CreateOptions{})
-	if err != nil {
-		return nil, err
+	return &LocalQueueWrapper{
+		LocalQueue: lq,
 	}
-
-	cleanup := func() {
-		ctx := context.TODO()
-		By(fmt.Sprintf("Destroying LocalQueue %s/%s", namespace, name))
-		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().LocalQueues(namespace).Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
-			return err
-		})
-		err := client.KueueV1beta1().LocalQueues(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-		if apierrors.IsNotFound(err) {
-			return
-		}
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(func() error {
-			_, err := client.KueueV1beta1().LocalQueues(namespace).Get(ctx, name, metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				return nil
-			}
-			return fmt.Errorf("localqueue %s/%s still exists: %w", namespace, name, err)
-		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("LocalQueue %s/%s was not cleaned up", namespace, name))
-	}
-
-	return cleanup, nil
 }
 
-func CreateResourceFlavor(client *upstreamkueueclient.Clientset) (func(), error) {
-	rf := &kueuev1beta1.ResourceFlavor{
-		ObjectMeta: v1.ObjectMeta{Name: "default"},
-		Spec:       kueuev1beta1.ResourceFlavorSpec{},
-	}
+// WithGenerateName switches to using GenerateName with "local-queue-" prefix.
+func (lqw *LocalQueueWrapper) WithGenerateName() *LocalQueueWrapper {
+	lqw.Name = ""
+	lqw.GenerateName = "local-queue-"
+	return lqw
+}
 
-	_, err := client.KueueV1beta1().ResourceFlavors().Create(context.TODO(), rf, v1.CreateOptions{})
+// WithClusterQueue sets the ClusterQueue name.
+func (lqw *LocalQueueWrapper) WithClusterQueue(clusterQueue string) *LocalQueueWrapper {
+	lqw.Spec.ClusterQueue = kueuev1beta1.ClusterQueueReference(clusterQueue)
+	return lqw
+}
+
+// Create creates the LocalQueue in the cluster and returns cleanup function.
+func (lqw *LocalQueueWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
+	_, cleanup, err := lqw.CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+// CreateWithObject creates the LocalQueue in the cluster and returns the created object, cleanup function, and error.
+func (lqw *LocalQueueWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta1.LocalQueue, func(), error) {
+	createdLQ, err := client.KueueV1beta1().LocalQueues(lqw.Namespace).Create(ctx, lqw.LocalQueue, v1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cleanup := func() {
 		ctx := context.TODO()
-		By("Destroying ResourceFlavor default")
+		By(fmt.Sprintf("Destroying LocalQueue %s/%s", createdLQ.Namespace, createdLQ.Name))
 		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().ResourceFlavors().Patch(ctx, rf.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			_, err := client.KueueV1beta1().LocalQueues(createdLQ.Namespace).Patch(ctx, createdLQ.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 			return err
 		})
-		err := client.KueueV1beta1().ResourceFlavors().Delete(ctx, rf.Name, metav1.DeleteOptions{})
+		err := client.KueueV1beta1().LocalQueues(createdLQ.Namespace).Delete(ctx, createdLQ.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := client.KueueV1beta1().ResourceFlavors().Get(ctx, rf.Name, metav1.GetOptions{})
+			_, err := client.KueueV1beta1().LocalQueues(createdLQ.Namespace).Get(ctx, createdLQ.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
-			return fmt.Errorf("resourceflavor %s still exists: %w", rf.Name, err)
-		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("ResourceFlavor %s was not cleaned up", rf.Name))
+			return fmt.Errorf("localqueue %s/%s still exists: %w", createdLQ.Namespace, createdLQ.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("LocalQueue %s/%s was not cleaned up", createdLQ.Namespace, createdLQ.Name))
 	}
 
-	return cleanup, nil
+	return createdLQ, cleanup, nil
+}
+
+func CreateResourceFlavor(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
+	_, cleanup, err := NewResourceFlavor().CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+// ResourceFlavorWrapper wraps a ResourceFlavor and provides builder methods.
+type ResourceFlavorWrapper struct {
+	*kueuev1beta1.ResourceFlavor
+}
+
+// NewResourceFlavor creates a new wrapper with default values.
+func NewResourceFlavor() *ResourceFlavorWrapper {
+	rf := &kueuev1beta1.ResourceFlavor{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: kueuev1beta1.ResourceFlavorSpec{},
+	}
+
+	return &ResourceFlavorWrapper{
+		ResourceFlavor: rf,
+	}
+}
+
+// WithGenerateName switches to using GenerateName with "resource-flavor-" prefix.
+func (rfw *ResourceFlavorWrapper) WithGenerateName() *ResourceFlavorWrapper {
+	rfw.Name = ""
+	rfw.GenerateName = "resource-flavor-"
+	return rfw
+}
+
+// Create creates the ResourceFlavor in the cluster and returns cleanup function.
+func (rfw *ResourceFlavorWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
+	_, cleanup, err := rfw.CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+// CreateWithObject creates the ResourceFlavor in the cluster and returns the created object, cleanup function, and error.
+func (rfw *ResourceFlavorWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta1.ResourceFlavor, func(), error) {
+	createdRF, err := client.KueueV1beta1().ResourceFlavors().Create(ctx, rfw.ResourceFlavor, v1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Destroying ResourceFlavor %s", createdRF.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta1().ResourceFlavors().Patch(ctx, createdRF.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta1().ResourceFlavors().Delete(ctx, createdRF.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta1().ResourceFlavors().Get(ctx, createdRF.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("resourceflavor %s still exists: %w", createdRF.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("ResourceFlavor %s was not cleaned up", createdRF.Name))
+	}
+
+	return createdRF, cleanup, nil
 }
 
 func MakeCurlMetricsPod(namespace string) *PodWrapper {
