@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package webhook for managing webhooks
 package webhook
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
@@ -32,34 +34,35 @@ const (
 	annotationClusterQueue   = "kueue.x-k8s.io/clusterqueue"
 	annotationResourceFlavor = "kueue.x-k8s.io/resourceflavor"
 	annotationCohort         = "kueue.x-k8s.io/cohort"
+
+	// webhookTimeoutSeconds is the timeout for webhook operations to prevent 500 errors
+	webhookTimeoutSeconds = 23
 )
 
-var (
-	// webhooksList maps the webhook name to the framework/resource name.
-	// for e.g. "BatchJob" -> (vjob.kb.io -> job)
-	webhooksList = map[string]string{
-		string(kueue.KueueIntegrationBatchJob):        "job",
-		string(kueue.KueueIntegrationMPIJob):          "mpijob",
-		string(kueue.KueueIntegrationRayJob):          "rayjob",
-		string(kueue.KueueIntegrationRayCluster):      "raycluster",
-		string(kueue.KueueIntegrationJobSet):          "jobset",
-		string(kueue.KueueIntegrationPaddleJob):       "paddlejob",
-		string(kueue.KueueIntegrationPyTorchJob):      "pytorchjob",
-		string(kueue.KueueIntegrationTFJob):           "tfjob",
-		string(kueue.KueueIntegrationXGBoostJob):      "xgboostjob",
-		string(kueue.KueueIntegrationJaxJob):          "jaxjob",
-		string(kueue.KueueIntegrationPod):             "pod",
-		string(kueue.KueueIntegrationDeployment):      "deployment",
-		string(kueue.KueueIntegrationStatefulSet):     "statefulset",
-		string(kueue.KueueIntegrationTrainJob):        "trainjob",
-		string(kueue.KueueIntegrationLeaderWorkerSet): "leaderworkerset",
-		annotationClusterQueue:                        "clusterqueue",
-		annotationWorkload:                            "workload",
-		annotationResourceFlavor:                      "resourceflavor",
-		annotationCohort:                              "cohort",
-		string(kueue.KueueIntegrationAppWrapper):      "appwrapper",
-	}
-)
+// webhooksList maps the webhook name to the framework/resource name.
+// for e.g. "BatchJob" -> (vjob.kb.io -> job)
+var webhooksList = map[string]string{
+	string(kueue.KueueIntegrationBatchJob):        "job",
+	string(kueue.KueueIntegrationMPIJob):          "mpijob",
+	string(kueue.KueueIntegrationRayJob):          "rayjob",
+	string(kueue.KueueIntegrationRayCluster):      "raycluster",
+	string(kueue.KueueIntegrationJobSet):          "jobset",
+	string(kueue.KueueIntegrationPaddleJob):       "paddlejob",
+	string(kueue.KueueIntegrationPyTorchJob):      "pytorchjob",
+	string(kueue.KueueIntegrationTFJob):           "tfjob",
+	string(kueue.KueueIntegrationXGBoostJob):      "xgboostjob",
+	string(kueue.KueueIntegrationJaxJob):          "jaxjob",
+	string(kueue.KueueIntegrationPod):             "pod",
+	string(kueue.KueueIntegrationDeployment):      "deployment",
+	string(kueue.KueueIntegrationStatefulSet):     "statefulset",
+	string(kueue.KueueIntegrationTrainJob):        "trainjob",
+	string(kueue.KueueIntegrationLeaderWorkerSet): "leaderworkerset",
+	annotationClusterQueue:                        "clusterqueue",
+	annotationWorkload:                            "workload",
+	annotationResourceFlavor:                      "resourceflavor",
+	annotationCohort:                              "cohort",
+	string(kueue.KueueIntegrationAppWrapper):      "appwrapper",
+}
 
 func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentWebhook *admissionregistrationv1.ValidatingWebhookConfiguration) *admissionregistrationv1.ValidatingWebhookConfiguration {
 	newWebhook := currentWebhook.DeepCopy()
@@ -72,9 +75,12 @@ func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentW
 		enabledFrameworks[string(fw)] = true
 	}
 
+	timeoutSeconds := int32(webhookTimeoutSeconds)
+
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForValidatingWebhook(wh.Name)
 		if enabledFrameworks[framework] {
+			wh.TimeoutSeconds = &timeoutSeconds
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -94,9 +100,12 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 		enabledFrameworks[string(fw)] = true
 	}
 
+	timeoutSeconds := int32(webhookTimeoutSeconds)
+
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForMutatingWebhook(wh.Name)
 		if enabledFrameworks[framework] {
+			wh.TimeoutSeconds = &timeoutSeconds
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -165,7 +174,7 @@ func getFrameworkForMutatingWebhook(name string) string {
 //			  values:
 //			  - kube-system
 //			  - openshift-kueue-operator
-func mergeNamespaceSelectors(webhook interface{}, podSelector *metav1.LabelSelector) {
+func mergeNamespaceSelectors(webhook any, podSelector *metav1.LabelSelector) {
 	switch wh := webhook.(type) {
 	case *admissionregistrationv1.ValidatingWebhookConfiguration:
 		for i := range wh.Webhooks {
@@ -206,12 +215,8 @@ func mergeSelectors(crSelector, existingSelector *metav1.LabelSelector) *metav1.
 	}
 
 	// Merge labels with CRD taking precedence
-	for k, v := range existingSelector.MatchLabels {
-		merged.MatchLabels[k] = v
-	}
-	for k, v := range crSelector.MatchLabels {
-		merged.MatchLabels[k] = v
-	}
+	maps.Copy(merged.MatchLabels, existingSelector.MatchLabels)
+	maps.Copy(merged.MatchLabels, crSelector.MatchLabels)
 
 	// Merge expressions with deduplication
 	seenKeys := make(map[string]bool)
