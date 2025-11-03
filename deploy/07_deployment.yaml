@@ -12,6 +12,7 @@ spec:
     metadata:
       labels:
         name: openshift-kueue-operator
+        app.openshift.io/component: operator
         app.openshift.io/name: kueue # for network policies to select this pod
     spec:
       priorityClassName: system-cluster-critical
