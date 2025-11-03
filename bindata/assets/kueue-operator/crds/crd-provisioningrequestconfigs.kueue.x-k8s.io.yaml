@@ -6,7 +6,6 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
   labels:
-    app.kubernetes.io/component: controller
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
   name: provisioningrequestconfigs.kueue.x-k8s.io

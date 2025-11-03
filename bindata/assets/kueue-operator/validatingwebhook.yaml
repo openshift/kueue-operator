@@ -4,7 +4,6 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   labels:
-    app.kubernetes.io/component: controller
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
   name: kueue-validating-webhook-configuration
