@@ -1501,14 +1501,15 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 		Spec: monitoringv1.ServiceMonitorSpec{
 			Selector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"control-plane": "controller-manager",
+					"app.kubernetes.io/component": "metrics-service",
+					"app.kubernetes.io/name":      "kueue",
 				},
 			},
 			Endpoints: []monitoringv1.Endpoint{
 				{
 					Interval:        "30s",
 					Path:            "/metrics",
-					Port:            "metrics", // Name of the port you want to monitor
+					Port:            "https", // Name of the port you want to monitor
 					Scheme:          "https",
 					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
 					TLSConfig: &monitoringv1.TLSConfig{
