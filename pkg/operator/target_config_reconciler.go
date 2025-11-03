@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
@@ -92,11 +91,6 @@ type TargetConfigReconciler struct {
 	kueueImage                 string
 	serviceMonitorSupport      bool
 	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
-
-	// Platform detection cache
-	platformDetectionOnce sync.Once
-	isOpenShift           bool
-	platformDetectError   error
 }
 
 func NewTargetConfigReconciler(
@@ -346,13 +340,13 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 
 	err = cert.WaitForCertificateReady(c.ctx, c.dynamicClient, c.operatorNamespace, "metrics-certs", 2*time.Minute)
 	if err != nil {
-		klog.Warningf("Webhook certificate not ready yet: %v - will retry on next reconciliation", err)
+		klog.Warningf("Metrics certificate not ready yet: %v - will retry on next reconciliation", err)
 		return err
 	}
 
 	err = cert.WaitForCertificateReady(c.ctx, c.dynamicClient, c.operatorNamespace, "kueue-visibility-server-cert", 2*time.Minute)
 	if err != nil {
-		klog.Warningf("Webhook certificate not ready yet: %v - will retry on next reconciliation", err)
+		klog.Warningf("Kueue Visibility certificate not ready yet: %v - will retry on next reconciliation", err)
 		return err
 	}
 
@@ -406,6 +400,13 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			return err
 		}
 		specAnnotations["service/"+controllerService.Name] = controllerService.GetResourceVersion()
+
+		promCRB, _, err := c.manageClusterRoleBindingsWithoutNamespaceOverride("assets/kueue-operator/clusterrolebinding-metrics-monitoring.yaml", ownerReference)
+		if err != nil {
+			klog.Error("unable to manage metrics monitoring cluster role binding")
+			return err
+		}
+		specAnnotations["clusterrolebinding/"+promCRB.Name] = promCRB.GetResourceVersion()
 	}
 
 	visbilityService, _, err := c.manageService("assets/kueue-operator/visibility-server.yaml", ownerReference)
@@ -484,6 +485,13 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			return err
 		}
 		specAnnotations["clusterrolebinding/"+metricsRB.Name] = metricsRB.GetResourceVersion()
+
+		metricsAuthRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics-auth.yaml", ownerReference)
+		if err != nil {
+			klog.Error("unable to manage metrics auth cluster role binding")
+			return err
+		}
+		specAnnotations["clusterrolebinding/"+metricsAuthRB.Name] = metricsAuthRB.GetResourceVersion()
 	}
 
 	roleBindingVisibility, _, err := c.manageSystemRoleBindings("assets/kueue-operator/rolebinding-visibility-server-auth-reader.yaml", ownerReference, true)
@@ -1044,6 +1052,17 @@ func (c *TargetConfigReconciler) manageClusterRoleBindings(assetDir string, owne
 	return c.applyClusterRoleBindingWithCache(required)
 }
 
+// manageClusterRoleBindingsWithoutNamespaceOverride manages ClusterRoleBindings without overriding subject namespaces.
+// Use this for ClusterRoleBindings that reference service accounts in namespaces other than the operator namespace.
+func (c *TargetConfigReconciler) manageClusterRoleBindingsWithoutNamespaceOverride(assetDir string, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {
+	required := resourceread.ReadClusterRoleBindingV1OrDie(bindata.MustAsset(assetDir))
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
+	}
+	// Note: We do NOT override subject namespaces here - they remain as specified in the asset file
+	return c.applyClusterRoleBindingWithCache(required)
+}
+
 func (c *TargetConfigReconciler) manageRole(assetPath string, ownerReference metav1.OwnerReference) (*rbacv1.Role, bool, error) {
 	required := resourceread.ReadRoleV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -1113,21 +1132,6 @@ func (c *TargetConfigReconciler) manageClusterRoles(specAnnotations map[string]s
 }
 
 func (c *TargetConfigReconciler) manageNetworkPolicies(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
-	// Detect platform and use appropriate NetworkPolicy strategy
-	isOpenShift, err := c.isOpenShiftCluster()
-	if err != nil {
-		klog.Warningf("Failed to detect platform type, defaulting to OpenShift NetworkPolicies: %v", err)
-		isOpenShift = true // Default to more restrictive policies for safety
-	}
-
-	if isOpenShift {
-		return c.manageNetworkPoliciesOpenShift(specAnnotations, ownerReference)
-	}
-
-	return c.manageNetworkPoliciesKind(specAnnotations, ownerReference)
-}
-
-func (c *TargetConfigReconciler) manageNetworkPoliciesOpenShift(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
 	networkPolicyDir := "assets/kueue-operator/networkpolicy"
 
 	files, err := bindata.AssetDir(networkPolicyDir)
@@ -1161,17 +1165,6 @@ func (c *TargetConfigReconciler) manageNetworkPoliciesOpenShift(specAnnotations 
 		}
 		specAnnotations["networkpolicy/"+policy.Name] = policy.GetResourceVersion()
 	}
-	return nil
-}
-
-func (c *TargetConfigReconciler) manageNetworkPoliciesKind(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
-	// For kind/non-OpenShift clusters, we skip NetworkPolicies because:
-	// 1. Kind clusters use different API server labels/namespaces than OpenShift
-	// 2. The restrictive OpenShift policies block webhook connectivity in kind
-	// 3. Kind clusters are typically for development/testing, not production
-	//
-	// In the future, we could create kind-specific NetworkPolicies that allow
-	// kube-system API server access, but for now we skip them entirely.
 	return nil
 }
 
@@ -1797,31 +1790,6 @@ func (c *TargetConfigReconciler) isResourceRegisteredCached(gvk schema.GroupVers
 		return false, err
 	}
 	return true, nil
-}
-
-// isOpenShiftCluster detects if the cluster is OpenShift by checking for OpenShift-specific APIs
-// Returns true for OpenShift, false for other Kubernetes distributions (like kind, upstream K8s, etc.)
-// The result is cached after the first call to avoid repeated API discovery calls.
-func (c *TargetConfigReconciler) isOpenShiftCluster() (bool, error) {
-	// Use sync.Once to ensure platform detection only happens once
-	c.platformDetectionOnce.Do(func() {
-		klog.V(2).Info("Detecting cluster platform type...")
-		// Check for config.openshift.io API group which is unique to OpenShift
-		c.isOpenShift, c.platformDetectError = isResourceRegistered(c.discoveryClient, schema.GroupVersionKind{
-			Group:   "config.openshift.io",
-			Version: "v1",
-			Kind:    "Infrastructure",
-		})
-		if c.platformDetectError != nil {
-			klog.Warningf("Failed to detect platform type: %v", c.platformDetectError)
-		} else if c.isOpenShift {
-			klog.V(2).Info("Platform detected: OpenShift")
-		} else {
-			klog.V(2).Info("Platform detected: Non-OpenShift (e.g., kind, vanilla Kubernetes)")
-		}
-	})
-
-	return c.isOpenShift, c.platformDetectError
 }
 
 // applyDeploymentWithCache wraps ApplyDeployment with caching support to reduce API server calls
