@@ -108,7 +108,6 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Try to access the pending workload")
 			_, err = visibilityClient.LocalQueues(ns.Name).GetPendingWorkloadsSummary(ctx, testQueue, metav1.GetOptions{})
 			Expect(apierrors.IsTooManyRequests(err)).To(BeTrue())
-
 		})
 		It("should allow modification of the nominal concurrency shares to 5", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 5")
@@ -146,10 +145,6 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 	When("PendingWorkloads list should be checked for a ClusterQueue and LocalQueue", func() {
 		var (
-			// testID, resourceFlavorName, clusterQueueAName, clusterQueueBName     string
-			// highPriorityClassName, mediumPriorityClassName, lowPriorityClassName string
-
-			// finalPendingWorkloadsA, finalPendingWorkloadsB                       *kueuevisibility.PendingWorkloadsSummary
 			labelKey   = "kueue.openshift.io/managed"
 			labelValue = "true"
 		)
@@ -165,10 +160,10 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
 			DeferCleanup(cleanupResourceFlavor)
-			clusterQueueA, cleanupClusterQueueA, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("1").WithMemory("1Gi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			clusterQueueA, cleanupClusterQueueA, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("2").WithMemory("1Gi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
 			DeferCleanup(cleanupClusterQueueA)
-			clusterQueueB, cleanupClusterQueueB, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("1").WithMemory("1Gi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			clusterQueueB, cleanupClusterQueueB, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("2").WithMemory("1Gi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
 			DeferCleanup(cleanupClusterQueueB)
 
@@ -219,7 +214,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority class")
 			DeferCleanup(cleanupLowPriorityClass)
 
-			By("Creating RBAC for Visibility API")
+			By("Creating RBAC kueue-batch-admin-role for Visibility API")
 			kueueTestSA, err := createServiceAccount(ctx, namespaceA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
@@ -227,7 +222,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster role binding")
 			DeferCleanup(cleanupClusterRoleBinding)
 
-			By("Creating RBAC for Visibility API - 2")
+			By("Creating RBAC kueue-batch-user-role for Visibility API")
 			kueueTestSAUser, err := createServiceAccount(ctx, namespaceA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
@@ -240,28 +235,43 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name)
 
 			By("Creating testing data")
-			cleanupJobBlockerA, jobBlockerA, err := createCustomJob(ctx, "job-blocker", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "1", "1Gi")
+			cleanupJobBlockerA, jobBlockerA, err := createCustomJob(ctx, "job-blocker", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
 			DeferCleanup(cleanupJobBlockerA)
-			cleanupJobHighA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "1", "1Gi")
+			cleanupJobHighA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority job")
 			DeferCleanup(cleanupJobHighA)
-			cleanupJobMediumA, jobMediumA, err := createCustomJob(ctx, "job-medium-a", namespaceA.Name, localQueueA.Name, midPriorityClass.Name, "1", "1Gi")
+			cleanupJobMediumA, jobMediumA, err := createCustomJob(ctx, "job-medium-a", namespaceA.Name, localQueueA.Name, midPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create medium priority job")
 			DeferCleanup(cleanupJobMediumA)
-			cleanupJobLowA, jobLowA, err := createCustomJob(ctx, "job-low-a", namespaceA.Name, localQueueA.Name, lowPriorityClass.Name, "1", "1Gi")
+			cleanupJobLowA, jobLowA, err := createCustomJob(ctx, "job-low-a", namespaceA.Name, localQueueA.Name, lowPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
 			DeferCleanup(cleanupJobLowA)
-			cleanupJobBlockerB, jobBlockerB, err := createCustomJob(ctx, "job-blocker-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "1", "1Gi")
+			cleanupJobBlockerB, jobBlockerB, err := createCustomJob(ctx, "job-blocker-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
 			DeferCleanup(cleanupJobBlockerB)
-			cleanupJobHighB, jobHighB, err := createCustomJob(ctx, "job-high-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "1", "1Gi")
+			cleanupJobHighB, jobHighB, err := createCustomJob(ctx, "job-high-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
 			DeferCleanup(cleanupJobHighB)
 
 			By(fmt.Sprintf("Checking the pending workloads for cluster queue %s", clusterQueueA.Name))
+			// Wait for job-blocker pod to be created
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+				for _, pod := range pods.Items {
+					for _, owner := range pod.OwnerReferences {
+						if owner.UID == jobBlockerA.UID {
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("pod for job-blocker not found yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Blocker job pod was not created")
 			Eventually(func() error {
 				clusterPendingWorkloadsA, err = testUserVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueueA.Name, metav1.GetOptions{})
 				return err
@@ -274,6 +284,21 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(clusterPendingWorkloadsA.Items[2].Priority).To(Equal(int32(50)), "Third workload should have low priority (50)")
 
 			By(fmt.Sprintf("Checking the pending workloads for cluster queue %s", clusterQueueB.Name))
+			// Wait for job-blocker-b pod to be created
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceB.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+				for _, pod := range pods.Items {
+					for _, owner := range pod.OwnerReferences {
+						if owner.UID == jobBlockerB.UID {
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("pod for job-blocker-b not found yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Blocker job pod was not created")
 			Eventually(func() error {
 				clusterPendingWorkloadsB, err = testUserVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueueB.Name, metav1.GetOptions{})
 				return err
@@ -466,7 +491,7 @@ func createCustomJob(ctx context.Context, name, namespace, queueName, priorityCl
 						{
 							Name:    "test-container",
 							Image:   "busybox",
-							Command: []string{"sh", "-c", "echo 'Hello Kueue'; sleep 20"},
+							Command: []string{"sh", "-c", "echo 'Hello Kueue'; sleep 40"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse(cpuQuota),
