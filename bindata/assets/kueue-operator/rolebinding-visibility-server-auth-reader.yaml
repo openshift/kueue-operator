@@ -4,7 +4,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    app.kubernetes.io/component: controller
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
   name: kueue-visibility-server-auth-reader
