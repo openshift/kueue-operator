@@ -8,7 +8,9 @@ spec:
     matchLabels:
       app.kubernetes.io/name: kueue # applies to the kueue pod only
   ingress:
-  - ports:
+  - from:
+    - namespaceSelector: {}  # Allow from all namespaces (visibility server has RBAC controls)
+    ports:
     - protocol: TCP
       port: visibility
   policyTypes:
