@@ -194,9 +194,12 @@ func NewTargetConfigReconciler(
 		c.kubeInformer.Flowcontrol().V1().PriorityLevelConfigurations().Informer(),
 		// Namespaced resource informers for caching
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().ConfigMaps().Informer(),
+		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().Secrets().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().Services().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Core().V1().ServiceAccounts().Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Networking().V1().NetworkPolicies().Informer(),
+		kubeInformer.Flowcontrol().V1().FlowSchemas().Informer(),
+		apiregistrationInformer.Apiregistration().V1().APIServices().Informer(),
 	).ResyncEvery(5*time.Minute).
 		WithSync(c.sync).
 		ToController("KueueOperator", c.eventRecorder), nil
