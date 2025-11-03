@@ -11,6 +11,6 @@ spec:
   ingress:
   - ports:
     - protocol: TCP
-      port: metrics
+      port: https
   policyTypes:
   - Ingress
