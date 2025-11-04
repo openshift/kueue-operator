@@ -19,7 +19,6 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        app.kubernetes.io/component: controller
         app.kubernetes.io/name: kueue
         app.openshift.io/name: kueue
         control-plane: controller-manager

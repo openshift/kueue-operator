@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: kueue
+    control-plane: controller-manager
+  name: kueue-metrics-monitoring-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kueue-metrics-reader
+subjects:
+# Allow Prometheus in openshift-monitoring to scrape metrics
+- kind: ServiceAccount
+  name: prometheus
+  namespace: openshift-monitoring
+# Allow default SA in openshift-monitoring (for testing)
+- kind: ServiceAccount
+  name: default
+  namespace: openshift-monitoring
+# Allow Prometheus in openshift-user-workload-monitoring to scrape metrics
+- kind: ServiceAccount
+  name: prometheus
+  namespace: openshift-user-workload-monitoring
