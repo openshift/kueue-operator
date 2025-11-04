@@ -9,8 +9,18 @@ spec:
     matchLabels:
       app.openshift.io/name: kueue # applies to both the operator and kueue pod
   ingress:
-  - ports:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          openshift.io/cluster-monitoring: "true"
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-monitoring
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-user-workload-monitoring
+    ports:
     - protocol: TCP
-      port: metrics
+      port: 8443
   policyTypes:
   - Ingress

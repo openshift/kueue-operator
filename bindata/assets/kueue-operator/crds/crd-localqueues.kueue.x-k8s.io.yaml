@@ -6,7 +6,6 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
   labels:
-    app.kubernetes.io/component: controller
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
   name: localqueues.kueue.x-k8s.io
@@ -344,7 +343,7 @@ spec:
                           description: levels define the levels of topology.
                           items:
                             type: string
-                          maxItems: 8
+                          maxItems: 16
                           minItems: 1
                           type: array
                           x-kubernetes-list-type: atomic

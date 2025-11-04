@@ -6,7 +6,6 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
   labels:
-    app.kubernetes.io/component: controller
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
   name: workloads.kueue.x-k8s.io
@@ -8932,7 +8931,7 @@ spec:
                                       the highest to the lowest.
                                     items:
                                       type: string
-                                    maxItems: 8
+                                    maxItems: 16
                                     minItems: 1
                                     type: array
                                     x-kubernetes-list-type: atomic
@@ -8948,7 +8947,7 @@ spec:
                                 the topology.
                               items:
                                 type: string
-                              maxItems: 8
+                              maxItems: 16
                               minItems: 1
                               type: array
                               x-kubernetes-list-type: atomic

@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"os"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -90,7 +93,16 @@ func getKueueClient(config *rest.Config) *kueueclient.Clientset {
 }
 
 func getGenericClient(config *rest.Config) client.Client {
-	client, err := client.New(config, client.Options{})
+	// Create a custom scheme with monitoring API
+	customScheme := runtime.NewScheme()
+	if err := scheme.AddToScheme(customScheme); err != nil {
+		klog.Fatalf("Unable to add k8s scheme: %v", err)
+	}
+	if err := monitoringv1.AddToScheme(customScheme); err != nil {
+		klog.Fatalf("Unable to add monitoring scheme: %v", err)
+	}
+
+	client, err := client.New(config, client.Options{Scheme: customScheme})
 	if err != nil {
 		klog.Fatalf("Unable to build generic kubernetes client: %v", err)
 	}
