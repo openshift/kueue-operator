@@ -147,7 +147,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 	})
 
-	When("PendingWorkloads list should be checked for a ClusterQueue", func() {
+	When("PendingWorkloads list should be checked for a ClusterQueue and LocalQueue", func() {
 		var (
 			labelKey   = testutils.OpenShiftManagedLabel
 			labelValue = "true"
@@ -353,6 +353,127 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceA.Name, string(jobLowA.UID))
 			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceB.Name, string(jobHighB.UID))
 		})
+
+		It("Should allow access to LocalQueues in bound namespaces and deny access to unbound namespaces", func(ctx context.Context) {
+			var (
+				localPendingWorkloadsA *visibilityv1beta1.PendingWorkloadsSummary
+				localPendingWorkloadsB *visibilityv1beta1.PendingWorkloadsSummary
+				err                    error
+			)
+
+			By("Creating Cluster Resources")
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
+			DeferCleanup(cleanupResourceFlavor)
+			clusterQueue, cleanupClusterQueueA, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("2").WithMemory("1Gi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
+			DeferCleanup(cleanupClusterQueueA)
+
+			By("Creating namespace-a and LocalQueue-a")
+			namespaceA, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "namespace-a-",
+					Labels: map[string]string{
+						labelKey: labelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespaceA)
+			})
+
+			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
+			DeferCleanup(cleanupLocalQueueA)
+
+			By("Creating namespace-b and LocalQueue-b")
+			namespaceB, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "namespace-b-",
+					Labels: map[string]string{
+						labelKey: labelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespaceB)
+			})
+
+			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
+			DeferCleanup(cleanupLocalQueueB)
+
+			By("Creating RBAC kueue-batch-admin-role for Visibility API")
+			kueueTestSAA, err := createServiceAccount(ctx, namespaceA.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAA.Name, "kueue-batch-user-role")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
+			DeferCleanup(cleanupRoleBindingA)
+
+			kueueTestSAB, err := createServiceAccount(ctx, namespaceB.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAB.Name, "kueue-batch-user-role")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
+			DeferCleanup(cleanupRoleBindingB)
+
+			By("Creating Priority Classes")
+			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, false, "High priority class")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority class")
+			DeferCleanup(cleanupHighPriorityClass)
+			lowPriorityClass, cleanupLowPriorityClass, err := createPriorityClass(ctx, 50, false, "Low priority class")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority class")
+			DeferCleanup(cleanupLowPriorityClass)
+
+			By("Creating testing data")
+			cleanupJobBlockerA, jobBlockerA, err := createCustomJob(ctx, "job-blocker", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "2", "1Gi")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
+			DeferCleanup(cleanupJobBlockerA)
+			cleanupJobHighA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, lowPriorityClass.Name, "1", "512Mi")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority job")
+			DeferCleanup(cleanupJobHighA)
+			cleanupJobBlockerB, jobBlockerB, err := createCustomJob(ctx, "job-blocker-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "2", "1Gi")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
+			DeferCleanup(cleanupJobBlockerB)
+			cleanupJobLowB, jobLowB, err := createCustomJob(ctx, "job-low-b", namespaceB.Name, localQueueB.Name, lowPriorityClass.Name, "1", "512Mi")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
+			DeferCleanup(cleanupJobLowB)
+
+			By("Checking Pending Workloads")
+			visibilityClientA := testutils.NewVisibilityClient(clients.GenericClient, kueueTestSAA.Name, namespaceA.Name)
+			visibilityClientB := testutils.NewVisibilityClient(clients.GenericClient, kueueTestSAB.Name, namespaceB.Name)
+
+			By("Checking access to LocalQueue in namespace-a")
+			Eventually(func() error {
+				localPendingWorkloadsA, err = visibilityClientA.LocalQueuesPendingWorkloads(ctx, localQueueA.Name, namespaceA.Name, 10, 0)
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for localQueueA")
+
+			By("Verifying pending workloads in namespace-a contains only its own job")
+			Expect(localPendingWorkloadsA.Items).To(HaveLen(1), "LocalQueue-a should only show 1 pending workload")
+			Expect(localPendingWorkloadsA.Items[0].Name).To(HavePrefix("job-high-a"), "LocalQueue-a should show job-high-a")
+
+			By("Checking access to LocalQueue in namespace-b")
+			Eventually(func() error {
+				localPendingWorkloadsB, err = visibilityClientB.LocalQueuesPendingWorkloads(ctx, localQueueB.Name, namespaceB.Name, 10, 0)
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for localQueueB")
+
+			By("Verifying pending workloads in namespace-b contains only its own job")
+			Expect(localPendingWorkloadsB.Items).To(HaveLen(1), "LocalQueue-b should only show 1 pending workload")
+			Expect(localPendingWorkloadsB.Items[0].Name).To(HavePrefix("job-low-b"), "LocalQueue-b should show job-low-b")
+
+			By("Verifying user in namespace-a CANNOT access LocalQueue in namespace-b")
+			_, err = visibilityClientA.LocalQueuesPendingWorkloads(ctx, localQueueB.Name, namespaceB.Name, 10, 0)
+			Expect(err).To(HaveOccurred(), "User in namespace-a should NOT be able to access LocalQueue in namespace-b")
+
+			By("Verifying user in namespace-b CANNOT access LocalQueue in namespace-a")
+			_, err = visibilityClientB.LocalQueuesPendingWorkloads(ctx, localQueueA.Name, namespaceA.Name, 10, 0)
+			Expect(err).To(HaveOccurred(), "User in namespace-b should NOT be able to access LocalQueue in namespace-a")
+		})
 	})
 })
 
@@ -461,6 +582,52 @@ func createClusterRoleBinding(ctx context.Context, serviceAccountName, serviceAc
 			}
 			return fmt.Errorf("clusterrolebinding %s still exists: %w", createdClusterRoleBinding.Name, err)
 		}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), fmt.Sprintf("ClusterRoleBinding %s was not cleaned up", createdClusterRoleBinding.Name))
+	}
+
+	return cleanup, nil
+}
+
+// createRoleBinding creates a RoleBinding in the specified namespace for the given ServiceAccount and ClusterRole
+// and returns a cleanup function
+func createRoleBinding(ctx context.Context, namespace, serviceAccountName, clusterRoleName string) (func(), error) {
+	roleBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "kueue-role-binding-",
+			Namespace:    namespace,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      serviceAccountName,
+				Namespace: namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     clusterRoleName,
+		},
+	}
+	createdRoleBinding, err := kubeClient.RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Deleting RoleBinding %s in namespace %s", createdRoleBinding.Name, namespace))
+		err := kubeClient.RbacV1().RoleBindings(namespace).Delete(ctx, createdRoleBinding.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := kubeClient.RbacV1().RoleBindings(namespace).Get(ctx, createdRoleBinding.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("rolebinding %s still exists: %w", createdRoleBinding.Name, err)
+		}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), fmt.Sprintf("RoleBinding %s was not cleaned up", createdRoleBinding.Name))
 	}
 
 	return cleanup, nil
