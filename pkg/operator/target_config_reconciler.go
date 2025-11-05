@@ -200,22 +200,7 @@ func NewTargetConfigReconciler(
 }
 
 func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncContext) error {
-	found, err := c.isResourceRegisteredCached(schema.GroupVersionKind{
-		Group:   "cert-manager.io",
-		Version: "v1",
-		Kind:    "Issuer",
-	})
-	if err != nil {
-		klog.Errorf("unable to check cert-manager is installed: %v", err)
-		return err
-	}
-	if !found {
-		klog.Errorf("please make sure that cert-manager is installed")
-		c.eventRecorder.Eventf("unconfigured", "cert-manager is not installed")
-		return nil
-	}
-
-	// Get Kueue from informer cache instead of making API call
+	// Get Kueue from informer cache first so we can update status if needed.
 	obj, exists, err := c.kueueClient.Informer().GetIndexer().GetByKey(operatorclient.OperatorConfigName)
 	if err != nil {
 		c.eventRecorder.Eventf("unconfigured", "unable to get operator configuration from cache")
@@ -232,6 +217,27 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	if !ok {
 		c.eventRecorder.Eventf("unconfigured", "unable to convert cached object to Kueue")
 		klog.Errorf("unable to convert cached object to Kueue type")
+		return nil
+	}
+
+	found, err := c.isResourceRegisteredCached(schema.GroupVersionKind{
+		Group:   "cert-manager.io",
+		Version: "v1",
+		Kind:    "Issuer",
+	})
+	if err != nil {
+		klog.Errorf("unable to check cert-manager is installed: %v", err)
+		return err
+	}
+	if !found {
+		klog.Errorf("please make sure that cert-manager is installed")
+		c.eventRecorder.Eventf("CertManagerMissing", "cert-manager is not installed")
+
+		// Update Kueue CR status with Degraded condition
+		conditions := c.buildCertManagerMissingConditions()
+		if err := c.updateKueueStatus(kueue, conditions, nil); err != nil {
+			klog.Errorf("failed to update status: %v", err)
+		}
 		return nil
 	}
 
@@ -537,24 +543,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	conditions := c.buildOperatorConditions(deployment)
-	status := applyconfigurationkueueoperatorv1.KueueStatus().WithConditions(conditions...)
-	status.ReadyReplicas = &deployment.Status.ReadyReplicas
-
-	// Set lastTransitionTime properly by comparing with existing conditions
-	// This prevents the time from updating on every reconciliation when status hasn't changed
-	var existingConditions []applyoperatorv1.OperatorConditionApplyConfiguration
-	if len(kueue.Status.Conditions) > 0 {
-		// Extract existing status to get apply configuration format
-		extracted, err := applyconfigurationkueueoperatorv1.ExtractKueueStatus(kueue, "kueue-operator")
-		if err == nil && extracted.Status != nil {
-			existingConditions = extracted.Status.Conditions
-		}
-	}
-	v1helpers.SetApplyConditionsLastTransitionTime(clock.RealClock{}, &status.Conditions, existingConditions)
-
-	config := applyconfigurationkueueoperatorv1.Kueue("cluster").WithStatus(status)
-	_, err = c.operatorClient.Kueues().ApplyStatus(c.ctx, config, metav1.ApplyOptions{FieldManager: "kueue-operator"})
-	return err
+	return c.updateKueueStatus(kueue, conditions, &deployment.Status.ReadyReplicas)
 }
 
 func (c *TargetConfigReconciler) buildOperatorConditions(deployment *appsv1.Deployment) []*applyoperatorv1.OperatorConditionApplyConfiguration {
@@ -607,11 +596,70 @@ func (c *TargetConfigReconciler) buildOperatorConditions(deployment *appsv1.Depl
 			WithMessage(fmt.Sprintf("No replicas ready (desired: %d)", desired))
 	}
 
+	// cert-manager is installed and available.
+	certManagerCond := applyoperatorv1.OperatorCondition().
+		WithType("CertManagerAvailable").
+		WithStatus(operatorv1.ConditionTrue).
+		WithReason("CertManagerInstalled").
+		WithMessage("cert-manager is installed")
+
+	return []*applyoperatorv1.OperatorConditionApplyConfiguration{
+		availableCond,
+		progressingCond,
+		degradedCond,
+		certManagerCond,
+	}
+}
+
+// buildCertManagerMissingConditions creates operator conditions when cert-manager is not installed.
+func (c *TargetConfigReconciler) buildCertManagerMissingConditions() []*applyoperatorv1.OperatorConditionApplyConfiguration {
+	degradedCond := applyoperatorv1.OperatorCondition().
+		WithType("Degraded").
+		WithStatus(operatorv1.ConditionTrue).
+		WithReason("MissingDependency").
+		WithMessage("please make sure that cert-manager is installed on your cluster")
+
+	availableCond := applyoperatorv1.OperatorCondition().
+		WithType("Available").
+		WithStatus(operatorv1.ConditionFalse).
+		WithReason("MissingDependency").
+		WithMessage("cert-manager is required but not installed")
+
+	progressingCond := applyoperatorv1.OperatorCondition().
+		WithType("Progressing").
+		WithStatus(operatorv1.ConditionFalse).
+		WithReason("MissingDependency").
+		WithMessage("waiting for cert-manager to be installed")
+
 	return []*applyoperatorv1.OperatorConditionApplyConfiguration{
 		availableCond,
 		progressingCond,
 		degradedCond,
 	}
+}
+
+// updateKueueStatus updates the Kueue CR status with the provided conditions.
+func (c *TargetConfigReconciler) updateKueueStatus(kueue *kueuev1.Kueue, conditions []*applyoperatorv1.OperatorConditionApplyConfiguration, readyReplicas *int32) error {
+	status := applyconfigurationkueueoperatorv1.KueueStatus().WithConditions(conditions...)
+
+	// Set ReadyReplicas if provided
+	if readyReplicas != nil {
+		status.ReadyReplicas = readyReplicas
+	}
+
+	// Set lastTransitionTime properly by comparing with existing conditions
+	var existingConditions []applyoperatorv1.OperatorConditionApplyConfiguration
+	if len(kueue.Status.Conditions) > 0 {
+		extracted, err := applyconfigurationkueueoperatorv1.ExtractKueueStatus(kueue, "kueue-operator")
+		if err == nil && extracted.Status != nil {
+			existingConditions = extracted.Status.Conditions
+		}
+	}
+	v1helpers.SetApplyConditionsLastTransitionTime(clock.RealClock{}, &status.Conditions, existingConditions)
+
+	config := applyconfigurationkueueoperatorv1.Kueue("cluster").WithStatus(status)
+	_, err := c.operatorClient.Kueues().ApplyStatus(c.ctx, config, metav1.ApplyOptions{FieldManager: "kueue-operator"})
+	return err
 }
 
 func (c *TargetConfigReconciler) updateFinalizer(kueue *kueuev1.Kueue, add bool) error {
