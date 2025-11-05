@@ -206,13 +206,13 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			DeferCleanup(cleanupLocalQueueB)
 
 			By("Creating Priority Classes")
-			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, false, "High priority class")
+			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, "High priority class")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority class")
 			DeferCleanup(cleanupHighPriorityClass)
-			midPriorityClass, cleanupMidPriorityClass, err := createPriorityClass(ctx, 75, false, "Medium priority class")
+			midPriorityClass, cleanupMidPriorityClass, err := createPriorityClass(ctx, 75, "Medium priority class")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create medium priority class")
 			DeferCleanup(cleanupMidPriorityClass)
-			lowPriorityClass, cleanupLowPriorityClass, err := createPriorityClass(ctx, 50, false, "Low priority class")
+			lowPriorityClass, cleanupLowPriorityClass, err := createPriorityClass(ctx, 50, "Low priority class")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority class")
 			DeferCleanup(cleanupLowPriorityClass)
 
@@ -427,10 +427,10 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAB.Name)
 
 			By("Creating Priority Classes")
-			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, false, "High priority class")
+			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, "High priority class")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority class")
 			DeferCleanup(cleanupHighPriorityClass)
-			lowPriorityClass, cleanupLowPriorityClass, err := createPriorityClass(ctx, 50, false, "Low priority class")
+			lowPriorityClass, cleanupLowPriorityClass, err := createPriorityClass(ctx, 50, "Low priority class")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority class")
 			DeferCleanup(cleanupLowPriorityClass)
 
@@ -508,13 +508,13 @@ func updateNominalConcurrencyShares(ctx context.Context, priorityClient flowcont
 
 // createPriorityClass creates a PriorityClass with the specified value and description
 // and returns the created object along with a cleanup function
-func createPriorityClass(ctx context.Context, value int32, globalDefault bool, description string) (*schedulingv1.PriorityClass, func(), error) {
+func createPriorityClass(ctx context.Context, value int32, description string) (*schedulingv1.PriorityClass, func(), error) {
 	priorityClass := &schedulingv1.PriorityClass{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "priority-class-",
 		},
 		Value:         value,
-		GlobalDefault: globalDefault,
+		GlobalDefault: false,
 		Description:   description,
 	}
 	createdPriorityClass, err := kubeClient.SchedulingV1().PriorityClasses().Create(ctx, priorityClass, metav1.CreateOptions{})
