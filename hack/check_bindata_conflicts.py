@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --with pyyaml --with requests
+#!/usr/bin/env python3
 """
 Check if local changes in bindata/ would be overwritten by sync-manifests-from-submodule.
 
@@ -67,24 +67,19 @@ def clean_name(name: str, kind: str) -> str:
 
 def process_manifests(src_dir: Path, bindata_dir: Path) -> Dict[str, str]:
     """
-    Process manifests from kustomize build and return mapping of file paths to content.
+    Process manifests from make sync-manifests-from-submodule and return mapping of file paths to content.
     This simulates what sync-manifests-from-submodule would generate.
     """
-    # Run kustomize build
-    print(f"Running kustomize build on {src_dir}...")
     try:
         result = subprocess.run(
-            ["kustomize", "build", src_dir],
+            ["python3", "hack/sync_manifests.py", "--src-dir", src_dir],
             capture_output=True,
             text=True,
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        print(f"Failed to run kustomize: {e}")
+        print(f"Failed to run make sync-manifests-from-submodule: {e}")
         print(f"stderr: {e.stderr}")
-        sys.exit(1)
-    except FileNotFoundError:
-        print("Error: kustomize command not found. Please install kustomize.")
         sys.exit(1)
 
     # Parse YAML documents

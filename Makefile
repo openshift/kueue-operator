@@ -185,11 +185,41 @@ sync-manifests:
 # Use this target like make sync-manifests-from-submodule
 .PHONY: sync-manifests-from-submodule
 sync-manifests-from-submodule:
-	hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
+	@echo "Syncing manifests in bindata/assets/kueue-operator using a container"
+	@podman run --rm \
+                -v $(PWD):/workspace:Z \
+                -w /workspace \
+                python:3.11-slim \
+                sh -c " \
+			echo 'Installing dependencies...'; \
+			apt-get update -qq > /dev/null 2>&1; \
+			apt-get install -y -qq git curl jq make > /dev/null 2>&1; \
+			echo 'Fetching latest kustomize version...'; \
+			KUSTOMIZE_VERSION=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name' | sed 's/kustomize\///'); \
+			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin > /dev/null 2>&1; \
+                        echo 'Checking for Python dependencies...'; \
+                        pip install pyyaml requests > /dev/null; \
+                        echo 'Running sync_manifests.py...'; \
+                        python3 hack/sync_manifests.py $(VERSION) --src-dir upstream/kueue/src/config/default/ \
+		"
 
 .PHONY: check-sync-manifests
 check-sync-manifests:
-	hack/check_bindata_conflicts.py
+	@podman run --rm \
+		-v $(PWD):/workspace:Z \
+		-w /workspace \
+		python:3.11-slim \
+		sh -c " \
+			echo 'Installing dependencies...'; \
+			apt-get update -qq > /dev/null 2>&1; \
+			apt-get install -y -qq git curl jq > /dev/null 2>&1; \
+			echo 'Fetching latest kustomize version...'; \
+			KUSTOMIZE_VERSION=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name' | sed 's/kustomize\///'); \
+			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin > /dev/null 2>&1; \
+			pip install pyyaml requests > /dev/null 2>&1; \
+			echo 'Running check_bindata_conflicts.py...'; \
+			python3 hack/check_bindata_conflicts.py \
+		"
 
 GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
