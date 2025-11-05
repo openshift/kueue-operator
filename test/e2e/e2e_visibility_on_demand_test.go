@@ -408,15 +408,23 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Creating RBAC kueue-batch-admin-role for Visibility API")
 			kueueTestSAA, err := createServiceAccount(ctx, namespaceA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
 			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAA.Name, "kueue-batch-user-role")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingA)
 
 			kueueTestSAB, err := createServiceAccount(ctx, namespaceB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
 			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAB.Name, "kueue-batch-user-role")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingB)
+
+			By("Creating custom visibility client for ClusterQueue user")
+			testUserVisibilityClientA, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAA.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAA.Name)
+			testUserVisibilityClientB, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAB.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAB.Name)
 
 			By("Creating Priority Classes")
 			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, false, "High priority class")
@@ -442,37 +450,44 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
 			DeferCleanup(cleanupJobLowB)
 
-			By("Checking Pending Workloads")
-			visibilityClientA := testutils.NewVisibilityClient(clients.GenericClient, kueueTestSAA.Name, namespaceA.Name)
-			visibilityClientB := testutils.NewVisibilityClient(clients.GenericClient, kueueTestSAB.Name, namespaceB.Name)
-
-			By("Checking access to LocalQueue in namespace-a")
+			By("Check if allowed users have access to LocalQueueA in bound namespaces")
 			Eventually(func() error {
-				localPendingWorkloadsA, err = visibilityClientA.LocalQueuesPendingWorkloads(ctx, localQueueA.Name, namespaceA.Name, 10, 0)
+				localPendingWorkloadsA, err = testUserVisibilityClientA.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
 				return err
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for localQueueA")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueueA.Name)
 
-			By("Verifying pending workloads in namespace-a contains only its own job")
-			Expect(localPendingWorkloadsA.Items).To(HaveLen(1), "LocalQueue-a should only show 1 pending workload")
-			Expect(localPendingWorkloadsA.Items[0].Name).To(HavePrefix("job-high-a"), "LocalQueue-a should show job-high-a")
+			Eventually(func() bool {
+				_, err = testUserVisibilityClientB.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
+				return err != nil && apierrors.IsForbidden(err)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Expected a Forbidden error when user from namespaceB tries to access LocalQueue in namespaceA")
 
-			By("Checking access to LocalQueue in namespace-b")
+			By("Check if allowed users have access to LocalQueueB in bound namespaces")
 			Eventually(func() error {
-				localPendingWorkloadsB, err = visibilityClientB.LocalQueuesPendingWorkloads(ctx, localQueueB.Name, namespaceB.Name, 10, 0)
+				localPendingWorkloadsB, err = testUserVisibilityClientB.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
 				return err
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for localQueueB")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueueB.Name)
 
-			By("Verifying pending workloads in namespace-b contains only its own job")
-			Expect(localPendingWorkloadsB.Items).To(HaveLen(1), "LocalQueue-b should only show 1 pending workload")
-			Expect(localPendingWorkloadsB.Items[0].Name).To(HavePrefix("job-low-b"), "LocalQueue-b should show job-low-b")
+			Eventually(func() bool {
+				_, err = testUserVisibilityClientA.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
+				return err != nil && apierrors.IsForbidden(err)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Expected a Forbidden error when user from namespaceA tries to access LocalQueue in namespaceB")
 
-			By("Verifying user in namespace-a CANNOT access LocalQueue in namespace-b")
-			_, err = visibilityClientA.LocalQueuesPendingWorkloads(ctx, localQueueB.Name, namespaceB.Name, 10, 0)
-			Expect(err).To(HaveOccurred(), "User in namespace-a should NOT be able to access LocalQueue in namespace-b")
+			By("All workloads should have been created")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobHighA.UID))
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobLowB.UID))
 
-			By("Verifying user in namespace-b CANNOT access LocalQueue in namespace-a")
-			_, err = visibilityClientB.LocalQueuesPendingWorkloads(ctx, localQueueA.Name, namespaceA.Name, 10, 0)
-			Expect(err).To(HaveOccurred(), "User in namespace-b should NOT be able to access LocalQueue in namespace-a")
+			By("Verifying pending workloads lists are empty")
+			Eventually(func() error {
+				localPendingWorkloadsA, err = testUserVisibilityClientA.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get final pending workloads")
+			Expect(localPendingWorkloadsA.Items).To(BeEmpty(), "Pending workloads list should be empty after workloads were executed")
+
+			Eventually(func() error {
+				localPendingWorkloadsB, err = testUserVisibilityClientB.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get final pending workloads")
+			Expect(localPendingWorkloadsB.Items).To(BeEmpty(), "Pending workloads list should be empty after workloads were executed")
 		})
 	})
 })
