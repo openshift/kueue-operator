@@ -147,7 +147,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 	})
 
-	When("PendingWorkloads list should be checked for a ClusterQueue and LocalQueue", func() {
+	When("PendingWorkloads list should be checked for a ClusterQueue", func() {
 		var (
 			labelKey   = "kueue.openshift.io/managed"
 			labelValue = "true"
@@ -171,7 +171,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
 			DeferCleanup(cleanupClusterQueueB)
 
-			By("Creating Namespaces and LocalQueues ")
+			By("Creating Namespaces and LocalQueues")
 			namespaceA, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "namespace-a-",
@@ -181,9 +181,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 				},
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				err = kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespaceA.Name, metav1.DeleteOptions{})
-				Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespaceA)
 			})
 
 			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueueA.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -199,9 +198,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 				},
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				err = kubeClient.CoreV1().Namespaces().Delete(context.TODO(), namespaceB.Name, metav1.DeleteOptions{})
-				Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespaceB)
 			})
 			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueueB.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
@@ -354,11 +352,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceA.Name, string(jobMediumA.UID))
 			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceA.Name, string(jobLowA.UID))
 			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceB.Name, string(jobHighB.UID))
-
 		})
-
 	})
-
 })
 
 // updateNominalConcurrencyShares updates the nominal concurrency shares of the priority level configuration
@@ -375,7 +370,8 @@ func updateNominalConcurrencyShares(ctx context.Context, priorityClient flowcont
 	Expect(updatedPriority.Spec.Limited.NominalConcurrencyShares).To(Equal(&nominalConcurrencyShares))
 }
 
-// func createPriorityClass(ctx context.Context, name string, value int32, globalDefault bool, description string) (func(), error) {
+// createPriorityClass creates a PriorityClass with the specified value and description
+// and returns the created object along with a cleanup function
 func createPriorityClass(ctx context.Context, value int32, globalDefault bool, description string) (*schedulingv1.PriorityClass, func(), error) {
 	priorityClass := &schedulingv1.PriorityClass{
 		ObjectMeta: metav1.ObjectMeta{
@@ -410,6 +406,7 @@ func createPriorityClass(ctx context.Context, value int32, globalDefault bool, d
 	return createdPriorityClass, cleanup, nil
 }
 
+// createServiceAccount creates a ServiceAccount in the specified namespaceand returns the created object
 func createServiceAccount(ctx context.Context, namespace string) (*corev1.ServiceAccount, error) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -424,6 +421,8 @@ func createServiceAccount(ctx context.Context, namespace string) (*corev1.Servic
 	return createdServiceAccount, nil
 }
 
+// createClusterRoleBinding creates a ClusterRoleBinding for the specified ServiceAccount and ClusterRole
+// and returns a cleanup function
 func createClusterRoleBinding(ctx context.Context, serviceAccountName, serviceAccountNamespace, clusterRoleName string) (func(), error) {
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -467,6 +466,8 @@ func createClusterRoleBinding(ctx context.Context, serviceAccountName, serviceAc
 	return cleanup, nil
 }
 
+// createCustomJob creates a Job with the specified queue, priority class, and resource requirements
+// and returns a cleanup function along with the created Job object
 func createCustomJob(ctx context.Context, name, namespace, queueName, priorityClassName, cpu, memory string) (func(), *batchv1.Job, error) {
 	cpuQuota := "1"
 	memoryQuota := "1Gi"
@@ -536,6 +537,8 @@ func createCustomJob(ctx context.Context, name, namespace, queueName, priorityCl
 	return cleanup, createdJob, nil
 }
 
+// verifyWorkloadCompleted waits for a workload with the specified job UID to complete
+// and asserts that the workload's Finished condition is set to True
 func verifyWorkloadCompleted(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {
 	Eventually(func() bool {
 		// Find workload by job UID
