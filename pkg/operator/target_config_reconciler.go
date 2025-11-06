@@ -423,6 +423,28 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 	specAnnotations["rolebinding/"+roleBindingLeader.Name] = hash
 
+	secretManagerRole, _, err := c.manageRole("assets/kueue-operator/role-manager-secrets.yaml", ownerReference)
+	if err != nil {
+		klog.Error("unable to create role manager-secrets")
+		return err
+	}
+	hash, err = computeSpecHash(secretManagerRole.Rules)
+	if err != nil {
+		return fmt.Errorf("failed to hash Role rules: %w", err)
+	}
+	specAnnotations["role/"+secretManagerRole.Name] = hash
+
+	roleBindingSecrets, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-manager-secrets.yaml", ownerReference, true)
+	if err != nil {
+		klog.Error("unable to bind role manager secrets")
+		return err
+	}
+	hash, err = computeSpecHash(roleBindingSecrets)
+	if err != nil {
+		return fmt.Errorf("failed to hash RoleBinding: %w", err)
+	}
+	specAnnotations["rolebinding/"+roleBindingSecrets.Name] = hash
+
 	if c.serviceMonitorSupport {
 		prometheusRole, _, err := c.manageRole("assets/kueue-operator/role-prometheus.yaml", ownerReference)
 		if err != nil {
