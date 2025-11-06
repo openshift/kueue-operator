@@ -201,6 +201,7 @@ func NewKueueDefault() *KueueWrapper {
 							ssv1.KueueIntegrationPod,
 							ssv1.KueueIntegrationDeployment,
 							ssv1.KueueIntegrationStatefulSet,
+							ssv1.KueueIntegrationJobSet,
 						},
 					},
 				},
