@@ -230,6 +230,19 @@ e2e-upstream-test: ginkgo
 	SKIP_DEPLOY=true \
 	./upstream/kueue/e2e-test-ocp.sh
 
+.PHONY: install-jobset-operator
+install-jobset-operator:
+	@echo "Installing Jobset Operator"
+	oc create -f hack/manifests/jobset-operator.yaml
+	@echo "Waiting for Jobset Operator to be installed"
+	@timeout 300s bash -c 'until oc get deployment jobset-operator -n openshift-jobset-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
+	@echo "Jobset Operator installed"
+	@echo "Creating Jobset Instance"
+	oc create -f hack/manifests/jobset-operand.yaml
+	@echo "Waiting for Jobset Operand to be installed"
+	@timeout 300s bash -c 'until oc get deployment jobset-controller-manager -n openshift-jobset-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
+	@echo "Jobset Operand installed"
+
 .PHONY: build-must
 build-must:
 	$(CONTAINER_TOOL) build -f must-gather/Dockerfile -t $(MUST_GATHER_IMAGE) .
