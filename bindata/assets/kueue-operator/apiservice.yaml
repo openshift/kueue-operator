@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
-  name: v1beta1.visibility.kueue.x-k8s.io
+  name: v1beta2.visibility.kueue.x-k8s.io
 spec:
   group: visibility.kueue.x-k8s.io
   groupPriorityMinimum: 100
@@ -14,5 +14,5 @@ spec:
   service:
     name: kueue-visibility-server
     namespace: kueue-system
-  version: v1beta1
+  version: v1beta2
   versionPriority: 100
