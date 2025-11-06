@@ -49,7 +49,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 	})
 
 	When("kueue.openshift.io/allow-nominal-concurrency-shares-update annotation is set to true", func() {
-		labelKey := "kueue.openshift.io/managed"
+		labelKey := testutils.OpenShiftManagedLabel
 		labelValue := "true"
 		testQueue := "test-queue"
 
@@ -60,7 +60,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 		BeforeAll(func(ctx context.Context) {
 			priorityClient = clients.KubeClient.FlowcontrolV1().PriorityLevelConfigurations()
-			ns, err = kubeClient.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
+			ns, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "e2e-kueue-visibility-on-demand-",
 					Labels: map[string]string{
@@ -149,7 +149,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 	When("PendingWorkloads list should be checked for a ClusterQueue", func() {
 		var (
-			labelKey   = "kueue.openshift.io/managed"
+			labelKey   = testutils.OpenShiftManagedLabel
 			labelValue = "true"
 		)
 
