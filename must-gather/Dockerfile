@@ -1,6 +1,6 @@
 FROM registry.redhat.io/openshift4/ose-must-gather-rhel9:v4.19 as builder
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6-1760515502
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:34880b64c07f28f64d95737f82f891516de9a3b43583f39970f7bf8e4cfa48b7
 
 COPY --from=builder /usr/bin/oc /usr/bin/oc
 COPY --from=builder /usr/bin/gather /usr/bin/gather_original
