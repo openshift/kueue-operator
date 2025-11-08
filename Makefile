@@ -195,8 +195,10 @@ sync-manifests-from-submodule:
 			apt-get update -qq > /dev/null 2>&1; \
 			apt-get install -y -qq git curl jq make > /dev/null 2>&1; \
 			echo 'Fetching latest kustomize version...'; \
-			KUSTOMIZE_VERSION=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name' | sed 's/kustomize\///'); \
-			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin > /dev/null 2>&1; \
+			KUSTOMIZE_TAG=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name'); \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_TAG#kustomize/}; \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_VERSION#v}; \
+			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin; \
                         echo 'Checking for Python dependencies...'; \
                         pip install pyyaml requests > /dev/null; \
                         echo 'Running sync_manifests.py...'; \
@@ -214,8 +216,10 @@ check-sync-manifests:
 			apt-get update -qq > /dev/null 2>&1; \
 			apt-get install -y -qq git curl jq > /dev/null 2>&1; \
 			echo 'Fetching latest kustomize version...'; \
-			KUSTOMIZE_VERSION=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name' | sed 's/kustomize\///'); \
-			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin > /dev/null 2>&1; \
+			KUSTOMIZE_TAG=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name'); \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_TAG#kustomize/}; \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_VERSION#v}; \
+			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin; \
 			pip install pyyaml requests > /dev/null 2>&1; \
 			echo 'Running check_bindata_conflicts.py...'; \
 			python3 hack/check_bindata_conflicts.py \
