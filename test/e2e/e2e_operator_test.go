@@ -1198,55 +1198,54 @@ func waitForWebhookReady(ctx context.Context, kubeClient *kubernetes.Clientset) 
 }
 
 func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue, framework string) {
-	validateWebhook := func(webhooks []admissionregistrationv1.ValidatingWebhookConfiguration) {
+	// avoid matching on two of same names like job and jobset.
+	stringToMatch := framework + ".kb.io"
+	validateWebhook := func(webhooks *admissionregistrationv1.ValidatingWebhookConfiguration) {
 		found := false
-		for _, wh := range webhooks {
-			for _, webhook := range wh.Webhooks {
-				if strings.Contains(webhook.Name, framework) && strings.Contains(webhook.Name, ".kb.io") {
-					found = true
-					Expect(webhook.NamespaceSelector).NotTo(BeNil(),
-						"NamespaceSelector is nil for webhook %s", webhook.Name)
-					Expect(webhook.NamespaceSelector.MatchExpressions).To(
-						ContainElement(metav1.LabelSelectorRequirement{
-							Key:      labelKey,
-							Operator: metav1.LabelSelectorOpIn,
-							Values:   []string{labelValue},
-						}),
-						"Webhook %s missing required namespace selector", webhook.Name)
-				}
+		for _, webhook := range webhooks.Webhooks {
+			if strings.Contains(webhook.Name, stringToMatch) && strings.Contains(webhook.Name, ".kb.io") {
+				found = true
+				Expect(webhook.NamespaceSelector).NotTo(BeNil(),
+					"NamespaceSelector is nil for webhook %s", webhook.Name)
+				Expect(webhook.NamespaceSelector.MatchExpressions).To(
+					ContainElement(metav1.LabelSelectorRequirement{
+						Key:      labelKey,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{labelValue},
+					}),
+					"Webhook %s missing required namespace selector", webhook.Name)
 			}
 		}
-		Expect(found).To(BeTrue(), "No validating webhook found for framework %s", framework)
+
+		Expect(found).To(BeTrue(), "No validating webhook found for framework %s", stringToMatch)
 	}
 
-	mutatingWebhook := func(webhooks []admissionregistrationv1.MutatingWebhookConfiguration) {
+	mutatingWebhook := func(webhooks *admissionregistrationv1.MutatingWebhookConfiguration) {
 		found := false
-		for _, wh := range webhooks {
-			for _, webhook := range wh.Webhooks {
-				if strings.Contains(webhook.Name, framework) && strings.Contains(webhook.Name, ".kb.io") {
-					found = true
-					Expect(webhook.NamespaceSelector).NotTo(BeNil(),
-						"NamespaceSelector is nil for webhook %s", webhook.Name)
-					Expect(webhook.NamespaceSelector.MatchExpressions).To(
-						ContainElement(metav1.LabelSelectorRequirement{
-							Key:      labelKey,
-							Operator: metav1.LabelSelectorOpIn,
-							Values:   []string{labelValue},
-						}),
-						"Webhook %s missing required namespace selector", webhook.Name)
-				}
+		for _, webhook := range webhooks.Webhooks {
+			if strings.Contains(webhook.Name, stringToMatch) && strings.Contains(webhook.Name, ".kb.io") {
+				found = true
+				Expect(webhook.NamespaceSelector).NotTo(BeNil(),
+					"NamespaceSelector is nil for webhook %s", webhook.Name)
+				Expect(webhook.NamespaceSelector.MatchExpressions).To(
+					ContainElement(metav1.LabelSelectorRequirement{
+						Key:      labelKey,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{labelValue},
+					}),
+					"Webhook %s missing required namespace selector", webhook.Name)
 			}
 		}
-		Expect(found).To(BeTrue(), "No mutating webhook found for framework %s", framework)
+		Expect(found).To(BeTrue(), "No mutating webhook found for framework %s", stringToMatch)
 	}
 
-	vwh, err := kubeClient.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(context.TODO(), metav1.ListOptions{})
+	vwh, err := kubeClient.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.TODO(), "kueue-validating-webhook-configuration", metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	validateWebhook(vwh.Items)
+	validateWebhook(vwh)
 
-	mwh, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().List(context.TODO(), metav1.ListOptions{})
+	mwh, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.TODO(), "kueue-mutating-webhook-configuration", metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	mutatingWebhook(mwh.Items)
+	mutatingWebhook(mwh)
 }
 
 func fetchWorkload(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {
