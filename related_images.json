@@ -9,6 +9,6 @@
   },
   {
     "name": "operand",
-    "image": "registry.redhat.io/kueue/kueue-rhel9@sha256:2ae729e3d009a1dae014dd6b77df011796b4970a51c5e66856412ef5f1f224c6"
+    "image": "registry.redhat.io/kueue/kueue-rhel9@sha256:90177ee28dcf085e2cfa11557c1993d042c6cfb92647edde2120200c375eb510"
   }
 ]
