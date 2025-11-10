@@ -406,7 +406,7 @@ func createPriorityClass(ctx context.Context, value int32, globalDefault bool, d
 	return createdPriorityClass, cleanup, nil
 }
 
-// createServiceAccount creates a ServiceAccount in the specified namespaceand returns the created object
+// createServiceAccount creates a ServiceAccount in the specified namespace and returns the created object
 func createServiceAccount(ctx context.Context, namespace string) (*corev1.ServiceAccount, error) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
