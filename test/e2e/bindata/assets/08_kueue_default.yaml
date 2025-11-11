@@ -16,3 +16,4 @@ spec:
       - Deployment
       - StatefulSet
       - JobSet
+      - LeaderWorkerSet
