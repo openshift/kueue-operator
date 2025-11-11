@@ -1,15 +1,15 @@
 [
   {
     "name": "operator",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator-main@sha256:1baaedb982758157971d79586ed03e0cd50c3ef7804f2849b40bbc25632ba1c4 "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator-main@sha256:450b1dfe5ba62e8e296740ea147c440a61c0e78ae8f8122570b1be4dbe362462 "
   },
   {
     "name": "must-gather",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main@sha256:46fd38f9895592f591c4464c202918a24329bf5deae1d163a9d4faabc1e306f8 "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main@sha256:2cbf2dd2a8fcda5f8ef2d974a73f006b4e6ece194c04906f4f1afb250c137bef "
   },
   {
     "name": "operand",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operand-main@sha256:b5f14209c81c6a84d5dd9a73bd2c6147682da712c00f73b7fc6f41ca4aef192e "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operand-main@sha256:b78b0f02f4d256bbd10f9c9f235e1af1ad10e9839812309efd7b20af8a701ab2 "
   },
   {
     "name": "operand-0-12",
