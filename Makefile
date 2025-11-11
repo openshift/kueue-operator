@@ -248,12 +248,12 @@ install-lws-operator:
 	@echo "Installing Leader Worker Set Operator"
 	oc create -f hack/manifests/lws-operator.yaml
 	@echo "Waiting for Leader Worker Set Operator CSV to be succeeded"
-	@timeout 300s bash -c 'until [ "$$(oc get csv -n openshift-lws-operator -o jsonpath="{.items[0].status.phase}" 2>/dev/null)" = "Succeeded" ]; do sleep 10; echo "Still waiting..."; done'
+	@timeout 300s bash -c 'until oc get deployment openshift-lws-operator -n openshift-lws-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
 	@echo "Leader Worker Set Operator installed"
 	@echo "Creating Leader Worker Set Instance"
 	oc create -f hack/manifests/lws-operand.yaml
 	@echo "Waiting for Leader Worker Set Operand to be installed"
-	@timeout 300s bash -c 'until oc get deployment openshift-lws-operator -n openshift-lws-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
+	@timeout 300s bash -c 'until oc get deployment lws-controller-manager -n openshift-lws-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
 	@echo "Leader Worker Set Operand installed"
 
 .PHONY: build-must
