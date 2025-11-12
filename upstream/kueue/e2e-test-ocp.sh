@@ -45,8 +45,6 @@ skips=(
         # do not deploy JobSet in OCP
         TrainJob
         # do not deploy LWS in OCP
-        LeaderWorkerSet
-        # do not deploy Jax in OCP
         JAX
         # do not deploy KubeRay in OCP
         Kuberay
