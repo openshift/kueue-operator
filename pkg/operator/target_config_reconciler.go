@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -91,6 +92,18 @@ type TargetConfigReconciler struct {
 	kueueImage                 string
 	serviceMonitorSupport      bool
 	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
+}
+
+// computeSpecHash computes a SHA256 hash of the given object's spec.
+// This is used to detect spec changes while ignoring status changes.
+// For objects without a spec field (like ConfigMaps), it hashes the entire object.
+func computeSpecHash(obj interface{}) (string, error) {
+	jsonBytes, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(jsonBytes)
+	return fmt.Sprintf("%x", hash), nil
 }
 
 func NewTargetConfigReconciler(
@@ -290,7 +303,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Errorf("unable to manage issuer err: %v", err)
 		return err
 	}
-	specAnnotations["issuer/"+issuer.GetName()] = issuer.GetResourceVersion()
+	hash, err := computeSpecHash(issuer.Object["spec"])
+	if err != nil {
+		return fmt.Errorf("failed to hash Issuer spec: %w", err)
+	}
+	specAnnotations["issuer/"+issuer.GetName()] = hash
 
 	certificateData := []struct {
 		dnsNames        []interface{}
@@ -333,7 +350,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Errorf("unable to manage certificate err: %v", err)
 			return err
 		}
-		specAnnotations["certificate/"+cert.GetName()] = cert.GetResourceVersion()
+		hash, err = computeSpecHash(cert.Object["spec"])
+		if err != nil {
+			return fmt.Errorf("failed to hash Certificate spec: %w", err)
+		}
+		specAnnotations["certificate/"+cert.GetName()] = hash
 	}
 
 	// Wait for the webhook certificate to be ready before creating webhooks
@@ -361,7 +382,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return err
 	}
 	if cm != nil {
-		specAnnotations["configmap/"+cm.Name] = cm.GetResourceVersion()
+		hash, err = computeSpecHash(cm.Data)
+		if err != nil {
+			return fmt.Errorf("failed to hash ConfigMap data: %w", err)
+		}
+		specAnnotations["configmap/"+cm.Name] = hash
 	}
 
 	sa, _, err := c.manageServiceAccount(ownerReference)
@@ -369,21 +394,34 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage service account")
 		return err
 	}
-	specAnnotations["serviceaccounts/"+sa.Name] = sa.GetResourceVersion()
+	// ServiceAccount doesn't have a spec field, hash the entire object
+	hash, err = computeSpecHash(sa)
+	if err != nil {
+		return fmt.Errorf("failed to hash ServiceAccount: %w", err)
+	}
+	specAnnotations["serviceaccounts/"+sa.Name] = hash
 
 	leaderRole, _, err := c.manageRole("assets/kueue-operator/role-leader-election.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to create role leader-election")
 		return err
 	}
-	specAnnotations["role/"+leaderRole.Name] = leaderRole.GetResourceVersion()
+	hash, err = computeSpecHash(leaderRole.Rules)
+	if err != nil {
+		return fmt.Errorf("failed to hash Role rules: %w", err)
+	}
+	specAnnotations["role/"+leaderRole.Name] = hash
 
 	roleBindingLeader, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-leader-election.yaml", ownerReference, true)
 	if err != nil {
 		klog.Error("unable to bind role leader-election")
 		return err
 	}
-	specAnnotations["rolebinding/"+roleBindingLeader.Name] = roleBindingLeader.GetResourceVersion()
+	hash, err = computeSpecHash(roleBindingLeader)
+	if err != nil {
+		return fmt.Errorf("failed to hash RoleBinding: %w", err)
+	}
+	specAnnotations["rolebinding/"+roleBindingLeader.Name] = hash
 
 	if c.serviceMonitorSupport {
 		prometheusRole, _, err := c.manageRole("assets/kueue-operator/role-prometheus.yaml", ownerReference)
@@ -391,28 +429,44 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Error("unable to create role prometheus")
 			return err
 		}
-		specAnnotations["role/"+prometheusRole.Name] = prometheusRole.GetResourceVersion()
+		hash, err = computeSpecHash(prometheusRole.Rules)
+		if err != nil {
+			return fmt.Errorf("failed to hash Role rules: %w", err)
+		}
+		specAnnotations["role/"+prometheusRole.Name] = hash
 
 		prometheusRB, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-prometheus.yaml", ownerReference, false)
 		if err != nil {
 			klog.Error("unable to bind role prometheus")
 			return err
 		}
-		specAnnotations["rolebinding/"+prometheusRB.Name] = prometheusRB.GetResourceVersion()
+		hash, err = computeSpecHash(prometheusRB)
+		if err != nil {
+			return fmt.Errorf("failed to hash RoleBinding: %w", err)
+		}
+		specAnnotations["rolebinding/"+prometheusRB.Name] = hash
 
 		controllerService, _, err := c.manageService("assets/kueue-operator/controller-manager-metrics-service.yaml", ownerReference)
 		if err != nil {
 			klog.Error("unable to manage metrics service")
 			return err
 		}
-		specAnnotations["service/"+controllerService.Name] = controllerService.GetResourceVersion()
+		hash, err = computeSpecHash(controllerService.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to hash Service spec: %w", err)
+		}
+		specAnnotations["service/"+controllerService.Name] = hash
 
 		promCRB, _, err := c.manageClusterRoleBindingsWithoutNamespaceOverride("assets/kueue-operator/clusterrolebinding-metrics-monitoring.yaml", ownerReference)
 		if err != nil {
 			klog.Error("unable to manage metrics monitoring cluster role binding")
 			return err
 		}
-		specAnnotations["clusterrolebinding/"+promCRB.Name] = promCRB.GetResourceVersion()
+		hash, err = computeSpecHash(promCRB)
+		if err != nil {
+			return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
+		}
+		specAnnotations["clusterrolebinding/"+promCRB.Name] = hash
 	}
 
 	visbilityService, _, err := c.manageService("assets/kueue-operator/visibility-server.yaml", ownerReference)
@@ -420,7 +474,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage visbility service")
 		return err
 	}
-	specAnnotations["service/"+visbilityService.Name] = visbilityService.GetResourceVersion()
+	hash, err = computeSpecHash(visbilityService.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to hash Service spec: %w", err)
+	}
+	specAnnotations["service/"+visbilityService.Name] = hash
 
 	// From here, we will create our cluster wide resources.
 	err = c.manageAPIService(specAnnotations, ownerReference)
@@ -461,28 +519,44 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage openshift cluster roles")
 		return err
 	}
-	specAnnotations["clusterrole/"+clusterRole.Name] = clusterRole.GetResourceVersion()
+	hash, err = computeSpecHash(clusterRole.Rules)
+	if err != nil {
+		return fmt.Errorf("failed to hash ClusterRole rules: %w", err)
+	}
+	specAnnotations["clusterrole/"+clusterRole.Name] = hash
 
 	clusterRoleBindingForKueue, _, err := c.manageOpenshiftClusterRolesBindingForKueue(ownerReference)
 	if err != nil {
 		klog.Error("unable to manage openshift cluster roles binding")
 		return err
 	}
-	specAnnotations["clusterrolebinding/"+clusterRoleBindingForKueue.Name] = clusterRoleBindingForKueue.GetResourceVersion()
+	hash, err = computeSpecHash(clusterRoleBindingForKueue)
+	if err != nil {
+		return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
+	}
+	specAnnotations["clusterrolebinding/"+clusterRoleBindingForKueue.Name] = hash
 
 	proxyRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-proxy.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage kube proxy cluster roles")
 		return err
 	}
-	specAnnotations["clusterrolebinding/"+proxyRB.Name] = proxyRB.GetResourceVersion()
+	hash, err = computeSpecHash(proxyRB)
+	if err != nil {
+		return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
+	}
+	specAnnotations["clusterrolebinding/"+proxyRB.Name] = hash
 
 	managerRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-manager.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage cluster role kueue-manager")
 		return err
 	}
-	specAnnotations["clusterrolebinding/"+managerRB.Name] = managerRB.GetResourceVersion()
+	hash, err = computeSpecHash(managerRB)
+	if err != nil {
+		return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
+	}
+	specAnnotations["clusterrolebinding/"+managerRB.Name] = hash
 
 	if c.serviceMonitorSupport {
 		metricsRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics.yaml", ownerReference)
@@ -490,14 +564,22 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Error("unable to manage cluster role kueue-manager")
 			return err
 		}
-		specAnnotations["clusterrolebinding/"+metricsRB.Name] = metricsRB.GetResourceVersion()
+		hash, err = computeSpecHash(metricsRB)
+		if err != nil {
+			return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
+		}
+		specAnnotations["clusterrolebinding/"+metricsRB.Name] = hash
 
 		metricsAuthRB, _, err := c.manageClusterRoleBindings("assets/kueue-operator/clusterrolebinding-metrics-auth.yaml", ownerReference)
 		if err != nil {
 			klog.Error("unable to manage metrics auth cluster role binding")
 			return err
 		}
-		specAnnotations["clusterrolebinding/"+metricsAuthRB.Name] = metricsAuthRB.GetResourceVersion()
+		hash, err = computeSpecHash(metricsAuthRB)
+		if err != nil {
+			return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
+		}
+		specAnnotations["clusterrolebinding/"+metricsAuthRB.Name] = hash
 	}
 
 	roleBindingVisibility, _, err := c.manageSystemRoleBindings("assets/kueue-operator/rolebinding-visibility-server-auth-reader.yaml", ownerReference, true)
@@ -505,35 +587,55 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to bind role binding for visibility")
 		return err
 	}
-	specAnnotations["rolebinding/"+roleBindingVisibility.Name] = roleBindingVisibility.GetResourceVersion()
+	hash, err = computeSpecHash(roleBindingVisibility)
+	if err != nil {
+		return fmt.Errorf("failed to hash RoleBinding: %w", err)
+	}
+	specAnnotations["rolebinding/"+roleBindingVisibility.Name] = hash
 
 	kueueWH, _, err := c.manageMutatingWebhook(kueue, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage mutating webhook")
 		return err
 	}
-	specAnnotations["mutatingwebhook/"+kueueWH.Name] = kueueWH.GetResourceVersion()
+	hash, err = computeSpecHash(kueueWH.Webhooks)
+	if err != nil {
+		return fmt.Errorf("failed to hash MutatingWebhookConfiguration webhooks: %w", err)
+	}
+	specAnnotations["mutatingwebhook/"+kueueWH.Name] = hash
 
 	kueueVWH, _, err := c.manageValidatingWebhook(kueue, ownerReference)
 	if err != nil {
 		klog.Error("unable to manage validating webhook")
 		return err
 	}
-	specAnnotations["validatingwebhook/"+kueueVWH.Name] = kueueVWH.GetResourceVersion()
+	hash, err = computeSpecHash(kueueVWH.Webhooks)
+	if err != nil {
+		return fmt.Errorf("failed to hash ValidatingWebhookConfiguration webhooks: %w", err)
+	}
+	specAnnotations["validatingwebhook/"+kueueVWH.Name] = hash
 
 	webhookService, _, err := c.manageService("assets/kueue-operator/webhook-service.yaml", ownerReference)
 	if err != nil {
 		klog.Error("unable to manage webhook service")
 		return err
 	}
-	specAnnotations["service/"+webhookService.Name] = webhookService.GetResourceVersion()
+	hash, err = computeSpecHash(webhookService.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to hash Service spec: %w", err)
+	}
+	specAnnotations["service/"+webhookService.Name] = hash
 
 	if c.serviceMonitorSupport {
 		serviceMonitor, _, err := c.manageServiceMonitor(c.ctx, kueue)
 		if err != nil {
 			return err
 		}
-		specAnnotations["servicemonitor/"+serviceMonitor.GetName()] = serviceMonitor.GetResourceVersion()
+		hash, err = computeSpecHash(serviceMonitor.Object["spec"])
+		if err != nil {
+			return fmt.Errorf("failed to hash ServiceMonitor spec: %w", err)
+		}
+		specAnnotations["servicemonitor/"+serviceMonitor.GetName()] = hash
 	}
 
 	deployment, _, err := c.manageDeployment(kueue, specAnnotations, ownerReference)
@@ -1014,7 +1116,11 @@ func (c *TargetConfigReconciler) manageFlowSchema(specAnnotations map[string]str
 	if err != nil {
 		return err
 	}
-	specAnnotations["flowschema/"+flowSchema.Name] = flowSchema.GetResourceVersion()
+	hash, err := computeSpecHash(flowSchema.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to hash FlowSchema spec: %w", err)
+	}
+	specAnnotations["flowschema/"+flowSchema.Name] = hash
 	return nil
 }
 
@@ -1031,7 +1137,11 @@ func (c *TargetConfigReconciler) managePriorityLevelConfiguration(specAnnotation
 	if err != nil {
 		return err
 	}
-	specAnnotations["prioritylevelconfiguration/"+priorityLevelConfiguration.Name] = priorityLevelConfiguration.GetResourceVersion()
+	hash, err := computeSpecHash(priorityLevelConfiguration.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to hash PriorityLevelConfiguration spec: %w", err)
+	}
+	specAnnotations["prioritylevelconfiguration/"+priorityLevelConfiguration.Name] = hash
 	return nil
 }
 
@@ -1148,7 +1258,11 @@ func (c *TargetConfigReconciler) manageAPIService(specAnnotations map[string]str
 	if err != nil {
 		return err
 	}
-	specAnnotations["apiservice/"+apiService.Name] = apiService.GetResourceVersion()
+	hash, err := computeSpecHash(apiService.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to hash APIService spec: %w", err)
+	}
+	specAnnotations["apiservice/"+apiService.Name] = hash
 	return nil
 }
 
@@ -1160,6 +1274,7 @@ func (c *TargetConfigReconciler) manageClusterRoles(specAnnotations map[string]s
 		return fmt.Errorf("failed to read clusterroles directory: %w", err)
 	}
 
+	var hash string
 	for _, file := range files {
 		assetPath := filepath.Join(clusterRoleDir, file)
 		required := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset(assetPath))
@@ -1174,7 +1289,11 @@ func (c *TargetConfigReconciler) manageClusterRoles(specAnnotations map[string]s
 		if err != nil {
 			return err
 		}
-		specAnnotations["clusterrole/"+role.Name] = role.GetResourceVersion()
+		hash, err = computeSpecHash(role.Rules)
+		if err != nil {
+			return fmt.Errorf("failed to hash ClusterRole rules: %w", err)
+		}
+		specAnnotations["clusterrole/"+role.Name] = hash
 	}
 	return nil
 }
@@ -1198,6 +1317,7 @@ func (c *TargetConfigReconciler) manageNetworkPolicies(specAnnotations map[strin
 	// effect and creation of b fails. If this can happen then the operator
 	// has lost access to the apiserver in a self inflicted manner. Should
 	// the operator create the deny-all policy last to avoid this issue?
+	var hash string
 	for _, file := range files {
 		assetPath := filepath.Join(networkPolicyDir, file)
 		// TODO: move these resource helper functions to library-go
@@ -1211,7 +1331,11 @@ func (c *TargetConfigReconciler) manageNetworkPolicies(specAnnotations map[strin
 		if err != nil {
 			return err
 		}
-		specAnnotations["networkpolicy/"+policy.Name] = policy.GetResourceVersion()
+		hash, err = computeSpecHash(policy.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to hash NetworkPolicy spec: %w", err)
+		}
+		specAnnotations["networkpolicy/"+policy.Name] = hash
 	}
 	return nil
 }
@@ -1275,6 +1399,7 @@ func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[strin
 		return fmt.Errorf("failed to read crd directory: %w", err)
 	}
 
+	var hash string
 	for _, file := range files {
 		assetPath := filepath.Join(crdDir, file)
 		required := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
@@ -1297,7 +1422,11 @@ func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[strin
 		if err != nil {
 			return err
 		}
-		specAnnotations["crd/"+crd.Name] = crd.GetResourceVersion()
+		hash, err = computeSpecHash(crd.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to hash CRD spec: %w", err)
+		}
+		specAnnotations["crd/"+crd.Name] = hash
 	}
 	return nil
 }
