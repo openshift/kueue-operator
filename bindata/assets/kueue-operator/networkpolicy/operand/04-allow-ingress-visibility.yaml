@@ -6,7 +6,8 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: kueue # applies to the kueue pod only
+      app.kubernetes.io/name: kueue
+      control-plane: controller-manager
   ingress:
   - from:
     - namespaceSelector: {}  # Allow from all namespaces (visibility server has RBAC controls)
