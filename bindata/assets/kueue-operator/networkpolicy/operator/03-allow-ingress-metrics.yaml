@@ -1,13 +1,17 @@
-# allow ingress traffic to metrics endpoint
+# allow ingress traffic to metrics endpoint on operator pod
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: kueue-allow-ingress-metrics
+  name: kueue-operator-allow-ingress-metrics
   namespace: openshift-kueue-operator
+  labels:
+    app.kubernetes.io/managed-by: kueue-operator
+    app.kubernetes.io/component: operator-network-policy
 spec:
   podSelector:
     matchLabels:
-      app.openshift.io/name: kueue # applies to both the operator and kueue pod
+      app.openshift.io/component: operator
+      app.openshift.io/name: kueue
   ingress:
   - from:
     - namespaceSelector:
