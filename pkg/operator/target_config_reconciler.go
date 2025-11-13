@@ -66,6 +66,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -185,6 +186,48 @@ func NewTargetConfigReconciler(
 
 	// Detect platform type (OpenShift vs kind/vanilla k8s)
 	c.isOpenShift = c.detectOpenShift()
+
+	// Create operator ServiceMonitor and Prometheus RBAC if CRD is available
+	if c.serviceMonitorSupport {
+		// Create Prometheus RBAC first (needed for Prometheus to scrape metrics)
+		if err := c.ensurePrometheusRBAC(ctx); err != nil {
+			klog.Errorf("Failed to create Prometheus RBAC: %v", err)
+			c.eventRecorder.Warningf(
+				"PrometheusRBACCreateFailed",
+				"Failed to create Prometheus RBAC: %v", err,
+			)
+			// Don't fail controller startup if RBAC creation fails
+		} else {
+			klog.Info("Prometheus RBAC ensured successfully")
+		}
+
+		// Create ServiceMonitor
+		if err := c.ensureOperatorServiceMonitor(ctx); err != nil {
+			klog.Errorf("Failed to create operator ServiceMonitor: %v", err)
+			c.eventRecorder.Warningf(
+				"ServiceMonitorCreateFailed",
+				"Failed to create operator ServiceMonitor: %v", err,
+			)
+			// Don't fail controller startup if ServiceMonitor creation fails
+			// This is optional functionality
+		} else {
+			klog.Info("Operator ServiceMonitor ensured successfully")
+		}
+	} else {
+		klog.Info("ServiceMonitor CRD not available, skipping operator monitoring setup")
+	}
+
+	// Ensure operator NetworkPolicies
+	if err := c.ensureOperatorNetworkPolicies(ctx); err != nil {
+		klog.Errorf("Failed to create operator NetworkPolicies: %v", err)
+		c.eventRecorder.Warningf(
+			"NetworkPolicyCreateFailed",
+			"Failed to create operator NetworkPolicies: %v", err,
+		)
+		// Don't fail controller startup if NetworkPolicy creation fails
+	} else {
+		klog.Info("Operator NetworkPolicies ensured successfully")
+	}
 
 	return factory.New().WithInformers(
 		kueueClient.Informer(),
@@ -1330,25 +1373,22 @@ func (c *TargetConfigReconciler) manageClusterRoles(ctx context.Context, specAnn
 	return nil
 }
 
+// manageNetworkPolicies applies NetworkPolicies for the kueue operand (deployment) pods.
+// These policies are applied during the sync loop and have owner references to the Kueue CR.
+// For operator NetworkPolicies, see ensureOperatorNetworkPolicies() which is called during
+// controller initialization.
 func (c *TargetConfigReconciler) manageNetworkPolicies(ctx context.Context, specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
-	networkPolicyDir := "assets/kueue-operator/networkpolicy"
+	// Use operand subdirectory - operator policies are applied separately during init
+	networkPolicyDir := "assets/kueue-operator/networkpolicy/operand"
 
 	files, err := bindata.AssetDir(networkPolicyDir)
 	if err != nil {
 		return fmt.Errorf("failed to read networkpolicy from directory %q: %w", networkPolicyDir, err)
 	}
 
-	// TODO: does the order of the creation of these policies matter?
-	// TODO: Since OLM does not support networkpolicy resource yet the
-	// operator Pod is creating policies for self isolation (in addition
-	// to operand isolation). let's say our operator creates the following
-	// network policy manifests for self and the operand in the following
-	// order: a) deny-all, b) allow-egress-api, c) allow egress cluster-dns,
-	// and d) allow-ingress-metrics; while creating these manifests in order,
-	// if there is a delay between a and b, long enough that deny-all takes
-	// effect and creation of b fails. If this can happen then the operator
-	// has lost access to the apiserver in a self inflicted manner. Should
-	// the operator create the deny-all policy last to avoid this issue?
+	// Sort files to ensure consistent ordering (allow policies before deny-all)
+	slices.Sort(files)
+
 	var hash string
 	for _, file := range files {
 		assetPath := filepath.Join(networkPolicyDir, file)
@@ -1472,6 +1512,158 @@ func (c *TargetConfigReconciler) adjustWebhookNetworkPolicyForPlatform(policy *n
 	}
 
 	return policy
+}
+
+// ensurePrometheusRBAC creates RBAC resources to allow Prometheus to scrape operator metrics.
+// This includes a Role granting permissions to list pods/services/endpoints and a RoleBinding
+// binding the prometheus-k8s service account to the Role.
+func (c *TargetConfigReconciler) ensurePrometheusRBAC(ctx context.Context) error {
+	klog.Info("Creating Prometheus RBAC resources...")
+
+	// Create Role
+	roleAssetPath := "assets/kueue-operator/prometheus-rbac/role.yaml"
+	roleData, err := bindata.Asset(roleAssetPath)
+	if err != nil {
+		return fmt.Errorf("failed to load Prometheus Role asset: %w", err)
+	}
+
+	role := resourceread.ReadRoleV1OrDie(roleData)
+	role.Namespace = c.operatorNamespace
+
+	_, _, err = resourceapply.ApplyRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, role)
+	if err != nil {
+		return fmt.Errorf("failed to apply Prometheus Role: %w", err)
+	}
+
+	// Create RoleBinding
+	roleBindingAssetPath := "assets/kueue-operator/prometheus-rbac/rolebinding.yaml"
+	roleBindingData, err := bindata.Asset(roleBindingAssetPath)
+	if err != nil {
+		return fmt.Errorf("failed to load Prometheus RoleBinding asset: %w", err)
+	}
+
+	roleBinding := resourceread.ReadRoleBindingV1OrDie(roleBindingData)
+	roleBinding.Namespace = c.operatorNamespace
+
+	_, _, err = resourceapply.ApplyRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, roleBinding)
+	if err != nil {
+		return fmt.Errorf("failed to apply Prometheus RoleBinding: %w", err)
+	}
+
+	klog.Info("Prometheus RBAC resources created successfully")
+	return nil
+}
+
+// ensureOperatorServiceMonitor creates a ServiceMonitor for the operator's metrics endpoint
+// if the ServiceMonitor CRD is available. This is optional functionality that enables
+// Prometheus integration on clusters with Prometheus Operator installed.
+func (c *TargetConfigReconciler) ensureOperatorServiceMonitor(ctx context.Context) error {
+	klog.Info("Creating operator ServiceMonitor...")
+
+	assetPath := "assets/kueue-operator/servicemonitor/operator-metrics.yaml"
+	data, err := bindata.Asset(assetPath)
+	if err != nil {
+		return fmt.Errorf("failed to load ServiceMonitor asset: %w", err)
+	}
+
+	// Parse the ServiceMonitor YAML
+	obj := &unstructured.Unstructured{}
+	if err := yaml.Unmarshal(data, obj); err != nil {
+		return fmt.Errorf("failed to unmarshal ServiceMonitor: %w", err)
+	}
+
+	// Set the namespace
+	obj.SetNamespace(c.operatorNamespace)
+
+	// Create or update the ServiceMonitor using dynamic client
+	gvr := schema.GroupVersionResource{
+		Group:    "monitoring.coreos.com",
+		Version:  "v1",
+		Resource: "servicemonitors",
+	}
+
+	existing, err := c.dynamicClient.Resource(gvr).Namespace(c.operatorNamespace).Get(
+		ctx,
+		obj.GetName(),
+		metav1.GetOptions{},
+	)
+
+	if errors.IsNotFound(err) {
+		klog.Infof("Creating ServiceMonitor: %s", obj.GetName())
+		_, err = c.dynamicClient.Resource(gvr).Namespace(c.operatorNamespace).Create(
+			ctx,
+			obj,
+			metav1.CreateOptions{},
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create ServiceMonitor: %w", err)
+		}
+		klog.Info("Operator ServiceMonitor created successfully")
+	} else if err != nil {
+		return fmt.Errorf("failed to get ServiceMonitor: %w", err)
+	} else {
+		// Update if spec has changed
+		existingSpec, _, _ := unstructured.NestedMap(existing.Object, "spec")
+		requiredSpec, _, _ := unstructured.NestedMap(obj.Object, "spec")
+
+		existingHash, _ := computeSpecHash(existingSpec)
+		requiredHash, _ := computeSpecHash(requiredSpec)
+
+		if existingHash != requiredHash {
+			klog.Infof("Updating ServiceMonitor: %s", obj.GetName())
+			obj.SetResourceVersion(existing.GetResourceVersion())
+			_, err = c.dynamicClient.Resource(gvr).Namespace(c.operatorNamespace).Update(
+				ctx,
+				obj,
+				metav1.UpdateOptions{},
+			)
+			if err != nil {
+				return fmt.Errorf("failed to update ServiceMonitor: %w", err)
+			}
+			klog.Info("Operator ServiceMonitor updated successfully")
+		} else {
+			klog.V(4).Info("Operator ServiceMonitor already up to date")
+		}
+	}
+
+	return nil
+}
+
+// ensureOperatorNetworkPolicies creates NetworkPolicies for the operator pod.
+// These are applied once during controller initialization and do not have owner references
+// since they need to persist even when no Kueue CR exists.
+func (c *TargetConfigReconciler) ensureOperatorNetworkPolicies(ctx context.Context) error {
+	klog.Info("Creating operator NetworkPolicies...")
+
+	networkPolicyDir := "assets/kueue-operator/networkpolicy/operator"
+	files, err := bindata.AssetDir(networkPolicyDir)
+	if err != nil {
+		return fmt.Errorf("failed to read networkpolicy from directory %q: %w", networkPolicyDir, err)
+	}
+
+	// Sort files to ensure consistent ordering (allow policies before deny-all)
+	// Note: AssetDir already filters out directories, so only files are returned
+	slices.Sort(files)
+
+	for _, file := range files {
+		assetPath := filepath.Join(networkPolicyDir, file)
+		want := utilresourceapply.ReadNetworkPolicyV1OrDie(bindata.MustAsset(assetPath))
+		want.Namespace = c.operatorNamespace
+
+		// Apply without owner reference - these policies persist independently
+		policy, updated, err := c.applyNetworkPolicyWithCache(ctx, want)
+		if err != nil {
+			return fmt.Errorf("failed to apply NetworkPolicy %s: %w", want.Name, err)
+		}
+		if updated {
+			klog.Infof("Operator NetworkPolicy %s updated", policy.Name)
+		} else {
+			klog.V(4).Infof("Operator NetworkPolicy %s already up to date", policy.Name)
+		}
+	}
+
+	klog.Info("Operator NetworkPolicies ensured successfully")
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageOpenshiftClusterRolesBindingForKueue(ctx context.Context, ownerReference metav1.OwnerReference) (*rbacv1.ClusterRoleBinding, bool, error) {

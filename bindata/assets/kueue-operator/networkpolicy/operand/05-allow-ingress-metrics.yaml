@@ -1,4 +1,10 @@
+<<<<<<<< HEAD:bindata/assets/kueue-operator/networkpolicy/10-allow-ingress-egress-metrics.yaml
 # allow ingress and egress traffic to/from metrics endpoint
+|||||||| parent of e772e32c (network policies and metrics tweaks):bindata/assets/kueue-operator/networkpolicy/allow-ingress-metrics.yaml
+# allow ingress traffic to metrics endpoint
+========
+# allow ingress traffic to metrics endpoint on kueue operand pod
+>>>>>>>> e772e32c (network policies and metrics tweaks):bindata/assets/kueue-operator/networkpolicy/operand/05-allow-ingress-metrics.yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -7,7 +13,8 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.openshift.io/name: kueue # applies to both the operator and kueue pod
+      app.kubernetes.io/name: kueue
+      control-plane: controller-manager
   ingress:
   - from:
     - namespaceSelector:

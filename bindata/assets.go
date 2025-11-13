@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-//go:embed assets/*
+//go:embed assets
 var f embed.FS
 
 // Asset reads and returns the content of the named file.
