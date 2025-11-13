@@ -450,23 +450,63 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
 			DeferCleanup(cleanupJobLowB)
 
-			By("Check if allowed users have access to LocalQueueA in bound namespaces")
+			By(fmt.Sprintf("Checking the pending workloads for local queue %s in namespace %s", localQueueA.Name, namespaceA.Name))
+			// Wait for job-blocker pod to be created
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+				for _, pod := range pods.Items {
+					for _, owner := range pod.OwnerReferences {
+						if owner.UID == jobBlockerA.UID {
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("pod for job-blocker not found yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Blocker job pod was not created")
 			Eventually(func() error {
 				localPendingWorkloadsA, err = testUserVisibilityClientA.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
 				return err
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueueA.Name)
 
-			Eventually(func() bool {
-				_, err = testUserVisibilityClientB.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
-				return err != nil && apierrors.IsForbidden(err)
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Expected a Forbidden error when user from namespaceB tries to access LocalQueue in namespaceA")
+			By("Verifying pending workloads for LocalQueue A")
+			Expect(localPendingWorkloadsA.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workload on LocalQueue %s", localQueueA.Name))
+			Expect(localPendingWorkloadsA.Items[0].Priority).To(Equal(int32(50)), "Pending workload should have low priority (50)")
 
-			By("Check if allowed users have access to LocalQueueB in bound namespaces")
+			By(fmt.Sprintf("Checking the pending workloads for local queue %s in namespace %s", localQueueB.Name, namespaceB.Name))
+			// Wait for job-blocker-b pod to be created
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceB.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+				for _, pod := range pods.Items {
+					for _, owner := range pod.OwnerReferences {
+						if owner.UID == jobBlockerB.UID {
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("pod for job-blocker-b not found yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Blocker job pod was not created")
 			Eventually(func() error {
 				localPendingWorkloadsB, err = testUserVisibilityClientB.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
 				return err
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueueB.Name)
 
+			By("Verifying pending workloads for LocalQueue B")
+			Expect(localPendingWorkloadsB.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workload on LocalQueue %s", localQueueB.Name))
+			Expect(localPendingWorkloadsB.Items[0].Priority).To(Equal(int32(50)), "Pending workload should have low priority (50)")
+
+			By("Check if not allowed users does not have access to LocalQueueA")
+			Eventually(func() bool {
+				_, err = testUserVisibilityClientB.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
+				return err != nil && apierrors.IsForbidden(err)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Expected a Forbidden error when user from namespaceB tries to access LocalQueue in namespaceA")
+
+			By("Check if not allowed users does not have access to LocalQueueB")
 			Eventually(func() bool {
 				_, err = testUserVisibilityClientA.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
 				return err != nil && apierrors.IsForbidden(err)
