@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"os"
+	"reflect"
 	"time"
 
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
@@ -29,6 +30,34 @@ import (
 type queueItem struct {
 	kind string
 	name string
+}
+
+// stripStatusTransform removes the status field from objects to prevent
+// status-only changes from triggering reconciliation loops.
+// This is critical for resources like APIService, FlowSchema, and
+// PriorityLevelConfiguration whose status changes frequently.
+func stripStatusTransform(obj interface{}) (interface{}, error) {
+	// Use reflection to find and clear the Status field
+	v := reflect.ValueOf(obj)
+
+	// Handle pointer types
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	// Only process struct types
+	if v.Kind() != reflect.Struct {
+		return obj, nil
+	}
+
+	// Look for a field named "Status"
+	statusField := v.FieldByName("Status")
+	if statusField.IsValid() && statusField.CanSet() {
+		// Set the Status field to its zero value
+		statusField.Set(reflect.Zero(statusField.Type()))
+	}
+
+	return obj, nil
 }
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
@@ -80,10 +109,23 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	crdInformer := apiextinformer.NewSharedInformerFactoryWithOptions(crdClientSet, 10*time.Minute)
-	apiregistrationInformer := apiregistrationinformers.NewSharedInformerFactory(clientset.NewForConfigOrDie(cc.KubeConfig), 5*time.Minute)
+	// Apply status strip transform to prevent status-only changes from triggering reconciliation
+	crdInformer := apiextinformer.NewSharedInformerFactoryWithOptions(
+		crdClientSet,
+		10*time.Minute,
+		apiextinformer.WithTransform(stripStatusTransform),
+	)
+	apiregistrationInformer := apiregistrationinformers.NewSharedInformerFactoryWithOptions(
+		clientset.NewForConfigOrDie(cc.KubeConfig),
+		5*time.Minute,
+		apiregistrationinformers.WithTransform(stripStatusTransform),
+	)
 
-	kubeInformer := informers.NewSharedInformerFactory(kubeClient, 5*time.Minute)
+	kubeInformer := informers.NewSharedInformerFactoryWithOptions(
+		kubeClient,
+		5*time.Minute,
+		informers.WithTransform(stripStatusTransform),
+	)
 
 	targetConfigReconciler, err := NewTargetConfigReconciler(
 		ctx,
