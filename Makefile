@@ -38,13 +38,13 @@ $(call verify-golang-versions,Dockerfile)
 
 $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1,./manifests/,./manifests/)
 
-.PHONY: test-e2e
-test-e2e: ginkgo
-	${GINKGO} --label-filter="!disruptive" -v ./test/e2e/...
+.PHONY: test-e2e-operator
+test-e2e-operator: ginkgo
+	${GINKGO} -v ./test/e2e/operator
 
-.PHONY: test-e2e-disruptive
-test-e2e-disruptive: ginkgo
-	${GINKGO} --label-filter="disruptive" -v ./test/e2e/...
+.PHONY: test-e2e-operand
+test-e2e-operand: ginkgo
+	${GINKGO} -v ./test/e2e/operand
 
 regen-crd:
 	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... output:crd:dir=./manifests
@@ -210,14 +210,17 @@ wait-for-cert-manager:
 	done
 
 .PHONY: e2e-ci-test
-e2e-ci-test: ginkgo
-	@echo "Running operator e2e tests..."
-	$(GINKGO) --label-filter="!disruptive" --junit-report=report.xml --no-color -v ./test/e2e/...
+e2e-ci-test: e2e-ci-operator-test
 
-.PHONY: e2e-ci-test-disruptive
-e2e-ci-test-disruptive: ginkgo
+.PHONY: e2e-ci-operator-test
+e2e-ci-operator-test: ginkgo
+	@echo "Running operator e2e tests..."
+	$(GINKGO) --junit-report=report.xml --no-color -v ./test/e2e/operator/
+
+.PHONY: e2e-ci-operand-test
+e2e-ci-operand-test: ginkgo
 	@echo "Running operator e2e tests disuptive..."
-	$(GINKGO) --label-filter="disruptive" --junit-report=report.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --junit-report=report.xml --no-color -v ./test/e2e/operand/
 
 .PHONY: e2e-upstream-test
 e2e-upstream-test: ginkgo

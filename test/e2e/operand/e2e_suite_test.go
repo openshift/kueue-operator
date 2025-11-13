@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package operand
 
 import (
 	"fmt"
@@ -43,10 +43,9 @@ var (
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
 	config, _ := GinkgoConfiguration()
-	config.ParallelProcess = 1
 	if config.DryRun {
-		GinkgoWriter.Printf("Starting kueue operator suite [DryRun]\n")
-		report := PreviewSpecs("E2E Suite", config)
+		GinkgoWriter.Printf("Starting kueue operand suite [DryRun]\n")
+		report := PreviewSpecs("Operand E2E Suite", config)
 		for _, sr := range report.SpecReports {
 			if sr.State == types.SpecStateSkipped {
 				continue
@@ -58,8 +57,8 @@ func TestE2E(t *testing.T) {
 			}
 		}
 	} else {
-		GinkgoWriter.Printf("Starting kueue operator suite\n")
-		RunSpecs(t, "e2e suite", config)
+		GinkgoWriter.Printf("Starting kueue operand suite\n")
+		RunSpecs(t, "Operand E2E Suite", config)
 	}
 }
 
