@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,9 +29,11 @@ import (
 
 // ResourceFlavor is the Schema for the resourceflavors API.
 type ResourceFlavor struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// metadata is the metadata of the ResourceFlavor.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// spec is the specification of the ResourceFlavor.
 	Spec ResourceFlavorSpec `json:"spec,omitempty"`
 }
 
@@ -63,6 +65,10 @@ type ResourceFlavorSpec struct {
 	// have.
 	// Workloads' podsets must have tolerations for these nodeTaints in order to
 	// get assigned this ResourceFlavor during admission.
+	// When this ResourceFlavor has also set the matching tolerations (in .spec.tolerations),
+	// then the nodeTaints are not considered during admission.
+	// Only the 'NoSchedule' and 'NoExecute' taint effects are evaluated,
+	// while 'PreferNoSchedule' is ignored.
 	//
 	// An example of a nodeTaint is
 	// cloud.provider.com/preemptible="true":NoSchedule
