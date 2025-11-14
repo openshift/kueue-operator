@@ -213,12 +213,7 @@ func (n *namespacedClient) Get(ctx context.Context, key ObjectKey, obj Object, o
 
 // List implements client.Client.
 func (n *namespacedClient) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
-	isNamespaceScoped, err := n.IsObjectNamespaced(obj)
-	if err != nil {
-		return fmt.Errorf("error finding the scope of the object: %w", err)
-	}
-
-	if isNamespaceScoped && n.namespace != "" {
+	if n.namespace != "" {
 		opts = append(opts, InNamespace(n.namespace))
 	}
 	return n.client.List(ctx, obj, opts...)

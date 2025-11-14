@@ -1,6 +1,6 @@
 module github.com/openshift/kueue-operator
 
-go 1.25.0
+go 1.24.0
 
 replace (
 	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250402141027-24f590ca0886
@@ -27,9 +27,9 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.33.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
-	sigs.k8s.io/controller-runtime v0.22.4
+	sigs.k8s.io/controller-runtime v0.22.1
 	sigs.k8s.io/controller-tools v0.4.1
-	sigs.k8s.io/kueue v0.10.2
+	sigs.k8s.io/kueue v0.0.0-00010101000000-000000000000
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0
 	sigs.k8s.io/yaml v1.6.0
 )
