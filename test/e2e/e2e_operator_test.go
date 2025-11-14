@@ -449,7 +449,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
-			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			// Test labeled namespace
@@ -683,7 +683,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
-			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			lwsGVR := schema.GroupVersionResource{
@@ -717,6 +717,39 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return fmt.Errorf("no workload found for LeaderWorkerSet")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
+			By("verifying LeaderWorkerSet pods are created in managed namespace")
+			var lwsPods []corev1.Pod
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdLWS.GetName()),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) == 0 {
+					return fmt.Errorf("no pods found for LeaderWorkerSet")
+				}
+				lwsPods = pods.Items
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "LeaderWorkerSet pods should be created in managed namespace")
+
+			By("verifying LeaderWorkerSet pods are in SchedulingGated state")
+			for _, pod := range lwsPods {
+				Eventually(func() error {
+					currentPod, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).Get(ctx, pod.Name, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					// If schedulingGates is not empty, the pod is in SchedulingGated state
+					if len(currentPod.Spec.SchedulingGates) == 0 {
+						return fmt.Errorf("pod %s does not have scheduling gates", pod.Name)
+					}
+
+					return nil
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Pod %s should be in SchedulingGated state", pod.Name)
+			}
+
 			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		})
 
@@ -727,7 +760,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
-			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			lwsGVR := schema.GroupVersionResource{
