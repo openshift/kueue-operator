@@ -37,13 +37,6 @@ function allow_privileged_access {
     $OC adm policy add-scc-to-group anyuid system:authenticated system:serviceaccounts
 }
 
-function revert_patches_on_exit() {
-	pushd ${SOURCE_DIR} >/dev/null
-	. utils.sh
-	revert_patches
-	popd >/dev/null
-}
-
 skips=(
         # do not deploy AppWrapper in OCP
         AppWrapper
@@ -85,9 +78,6 @@ pushd ${SOURCE_DIR} >/dev/null
 . utils.sh
 apply_patches
 popd >/dev/null
-
-trap revert_patches_on_exit EXIT
-# apply patches
 
 # Label two worker nodes for e2e tests (similar to the Kind setup).
 label_worker_nodes
