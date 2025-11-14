@@ -449,7 +449,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
-			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			// Test labeled namespace
@@ -675,6 +675,146 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				ss, _ := kubeClient.AppsV1().StatefulSets(testNamespaceWithoutLabel).Get(ctx, createdUnlabeledSS.Name, metav1.GetOptions{})
 				return ss.Status.ReadyReplicas
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(int32(1)), "StatefulSet in unlabeled namespace not ready")
+		})
+		It("should manage LeaderWorkerSet without queue name in labeled namespace when labelPolicy=None", func() {
+			kueueClientset := clients.KueueClient
+			ctx := context.TODO()
+
+			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance := kueueInstance.DeepCopy()
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			lwsGVR := schema.GroupVersionResource{
+				Group:    "leaderworkerset.x-k8s.io",
+				Version:  "v1",
+				Resource: "leaderworkersets",
+			}
+
+			By("creating LeaderWorkerSet without queue name in labeled namespace")
+			lwsWithoutQueue := builderWithLabel.NewLeaderWorkerSet()
+			createdLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithLabel).Create(ctx, lwsWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "Failed to create LeaderWorkerSet")
+			defer func() {
+				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithLabel).Delete(ctx, createdLWS.GetName(), metav1.DeleteOptions{})
+			}()
+
+			By("verifying workload is created for LeaderWorkerSet without queue name")
+			Eventually(func() error {
+				workloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+
+				for _, wl := range workloads.Items {
+					for _, ownerRef := range wl.OwnerReferences {
+						if ownerRef.UID == createdLWS.GetUID() {
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("no workload found for LeaderWorkerSet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("verifying LeaderWorkerSet pods are created in managed namespace")
+			var lwsPods []corev1.Pod
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdLWS.GetName()),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) == 0 {
+					return fmt.Errorf("no pods found for LeaderWorkerSet")
+				}
+				lwsPods = pods.Items
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "LeaderWorkerSet pods should be created in managed namespace")
+
+			By("verifying LeaderWorkerSet pods are in SchedulingGated state")
+			for _, pod := range lwsPods {
+				Eventually(func() error {
+					currentPod, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).Get(ctx, pod.Name, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					// If schedulingGates is not empty, the pod is in SchedulingGated state
+					if len(currentPod.Spec.SchedulingGates) == 0 {
+						return fmt.Errorf("pod %s does not have scheduling gates", pod.Name)
+					}
+
+					return nil
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Pod %s should be in SchedulingGated state", pod.Name)
+			}
+
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		})
+
+		It("should not manage LeaderWorkerSet without queue name in unlabeled namespace when labelPolicy=None", func() {
+			kueueClientset := clients.KueueClient
+			ctx := context.TODO()
+
+			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance := kueueInstance.DeepCopy()
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			lwsGVR := schema.GroupVersionResource{
+				Group:    "leaderworkerset.x-k8s.io",
+				Version:  "v1",
+				Resource: "leaderworkersets",
+			}
+
+			By("creating LeaderWorkerSet without queue name in unlabeled namespace")
+			lwsWithoutQueue := builderWithoutLabel.NewLeaderWorkerSet()
+			createdLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithoutLabel).Create(ctx, lwsWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "Failed to create LeaderWorkerSet")
+			defer func() {
+				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithoutLabel).Delete(ctx, createdLWS.GetName(), metav1.DeleteOptions{})
+			}()
+
+			By("verifying no workload is created for LeaderWorkerSet in unlabeled namespace")
+			Consistently(func() error {
+				allWorkloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithoutLabel).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+
+				for _, wl := range allWorkloads.Items {
+					for _, ownerRef := range wl.OwnerReferences {
+						if ownerRef.UID == createdLWS.GetUID() {
+							return fmt.Errorf("unexpected workload found in unlabeled namespace")
+						}
+					}
+				}
+
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "No workload should be created in unlabeled namespace")
+
+			By("verifying LeaderWorkerSet pods are running in unlabeled namespace")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithoutLabel).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdLWS.GetName()),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) == 0 {
+					return fmt.Errorf("no pods found for LeaderWorkerSet")
+				}
+				for _, pod := range pods.Items {
+					if pod.Status.Phase != corev1.PodRunning {
+						return fmt.Errorf("pod %s is not running, phase: %s", pod.Name, pod.Status.Phase)
+					}
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "LeaderWorkerSet pods should be running in unlabeled namespace")
+
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		})
 		It("should expose metrics endpoint with TLS", func() {
 			ctx := context.TODO()
