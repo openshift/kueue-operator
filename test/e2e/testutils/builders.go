@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 )
 
@@ -212,4 +213,85 @@ func (b *TestResourceBuilder) NewStatefulSetWithoutQueue() *appsv1.StatefulSet {
 	ss := b.NewStatefulSet()
 	delete(ss.Annotations, "kueue.x-k8s.io/queue-name")
 	return ss
+}
+
+// NewLeaderWorkerSet creates a LeaderWorkerSet without any queue labels.
+func (b *TestResourceBuilder) NewLeaderWorkerSet() *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "leaderworkerset.x-k8s.io/v1",
+			"kind":       "LeaderWorkerSet",
+			"metadata": map[string]interface{}{
+				"generateName": "test-lws-",
+				"namespace":    b.namespace,
+			},
+			"spec": map[string]interface{}{
+				"replicas": 1,
+				"leaderWorkerTemplate": map[string]interface{}{
+					"size": 2,
+					"leaderTemplate": map[string]interface{}{
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":  "leader",
+									"image": b.containerImage,
+									"command": []string{
+										"sh", "-c", "sleep 3600",
+									},
+									"resources": map[string]interface{}{
+										"requests": map[string]interface{}{
+											"cpu":    "100m",
+											"memory": "128Mi",
+										},
+									},
+									"securityContext": map[string]interface{}{
+										"allowPrivilegeEscalation": false,
+										"capabilities": map[string]interface{}{
+											"drop": []string{"ALL"},
+										},
+									},
+								},
+							},
+						},
+					},
+					"workerTemplate": map[string]interface{}{
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name":  "worker",
+									"image": b.containerImage,
+									"command": []string{
+										"sh", "-c", "sleep 3600",
+									},
+									"resources": map[string]interface{}{
+										"requests": map[string]interface{}{
+											"cpu":    "100m",
+											"memory": "128Mi",
+										},
+									},
+									"securityContext": map[string]interface{}{
+										"allowPrivilegeEscalation": false,
+										"capabilities": map[string]interface{}{
+											"drop": []string{"ALL"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// AddQueueLabelToLWS adds the queue name label to an existing LeaderWorkerSet.
+func AddQueueLabelToLWS(lws *unstructured.Unstructured, queueName string) *unstructured.Unstructured {
+	labels, found, err := unstructured.NestedStringMap(lws.Object, "metadata", "labels")
+	if err != nil || !found {
+		labels = make(map[string]string)
+	}
+	labels["kueue.x-k8s.io/queue-name"] = queueName
+	_ = unstructured.SetNestedStringMap(lws.Object, labels, "metadata", "labels")
+	return lws
 }
