@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 // +kubebuilder:object:generate=true
+// +k8s:conversion-gen=sigs.k8s.io/kueue/apis/kueue/v1beta2
 // +groupName=kueue.x-k8s.io
 
 package v1beta1
