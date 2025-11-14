@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2025-10-13T15:25:56Z"
+    createdAt: "2025-11-14T19:51:19Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -248,6 +248,7 @@ spec:
           template:
             metadata:
               labels:
+                app.openshift.io/component: operator
                 app.openshift.io/name: kueue
                 name: openshift-kueue-operator
             spec:
