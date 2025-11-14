@@ -19,16 +19,18 @@ package v1beta1
 
 import (
 	v1 "k8s.io/api/core/v1"
-	v1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
+	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 )
 
 // ProvisioningRequestConfigSpecApplyConfiguration represents a declarative configuration of the ProvisioningRequestConfigSpec type for use
 // with apply.
 type ProvisioningRequestConfigSpecApplyConfiguration struct {
-	ProvisioningClassName *string                                             `json:"provisioningClassName,omitempty"`
-	Parameters            map[string]v1beta1.Parameter                        `json:"parameters,omitempty"`
-	ManagedResources      []v1.ResourceName                                   `json:"managedResources,omitempty"`
-	RetryStrategy         *ProvisioningRequestRetryStrategyApplyConfiguration `json:"retryStrategy,omitempty"`
+	ProvisioningClassName *string                                                  `json:"provisioningClassName,omitempty"`
+	Parameters            map[string]kueuev1beta1.Parameter                        `json:"parameters,omitempty"`
+	ManagedResources      []v1.ResourceName                                        `json:"managedResources,omitempty"`
+	RetryStrategy         *ProvisioningRequestRetryStrategyApplyConfiguration      `json:"retryStrategy,omitempty"`
+	PodSetUpdates         *ProvisioningRequestPodSetUpdatesApplyConfiguration      `json:"podSetUpdates,omitempty"`
+	PodSetMergePolicy     *kueuev1beta1.ProvisioningRequestConfigPodSetMergePolicy `json:"podSetMergePolicy,omitempty"`
 }
 
 // ProvisioningRequestConfigSpecApplyConfiguration constructs a declarative configuration of the ProvisioningRequestConfigSpec type for use with
@@ -49,9 +51,9 @@ func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithProvisioningClassN
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Parameters field,
 // overwriting an existing map entries in Parameters field with the same key.
-func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithParameters(entries map[string]v1beta1.Parameter) *ProvisioningRequestConfigSpecApplyConfiguration {
+func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithParameters(entries map[string]kueuev1beta1.Parameter) *ProvisioningRequestConfigSpecApplyConfiguration {
 	if b.Parameters == nil && len(entries) > 0 {
-		b.Parameters = make(map[string]v1beta1.Parameter, len(entries))
+		b.Parameters = make(map[string]kueuev1beta1.Parameter, len(entries))
 	}
 	for k, v := range entries {
 		b.Parameters[k] = v
@@ -74,5 +76,21 @@ func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithManagedResources(v
 // If called multiple times, the RetryStrategy field is set to the value of the last call.
 func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithRetryStrategy(value *ProvisioningRequestRetryStrategyApplyConfiguration) *ProvisioningRequestConfigSpecApplyConfiguration {
 	b.RetryStrategy = value
+	return b
+}
+
+// WithPodSetUpdates sets the PodSetUpdates field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PodSetUpdates field is set to the value of the last call.
+func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithPodSetUpdates(value *ProvisioningRequestPodSetUpdatesApplyConfiguration) *ProvisioningRequestConfigSpecApplyConfiguration {
+	b.PodSetUpdates = value
+	return b
+}
+
+// WithPodSetMergePolicy sets the PodSetMergePolicy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PodSetMergePolicy field is set to the value of the last call.
+func (b *ProvisioningRequestConfigSpecApplyConfiguration) WithPodSetMergePolicy(value kueuev1beta1.ProvisioningRequestConfigPodSetMergePolicy) *ProvisioningRequestConfigSpecApplyConfiguration {
+	b.PodSetMergePolicy = &value
 	return b
 }
