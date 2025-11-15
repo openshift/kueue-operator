@@ -40,12 +40,13 @@ func ResourceFlavor(name string) *ResourceFlavorApplyConfiguration {
 	b.WithAPIVersion("kueue.x-k8s.io/v1beta1")
 	return b
 }
+func (b ResourceFlavorApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithKind(value string) *ResourceFlavorApplyConfiguration {
-	b.Kind = &value
+	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
 
@@ -53,7 +54,7 @@ func (b *ResourceFlavorApplyConfiguration) WithKind(value string) *ResourceFlavo
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithAPIVersion(value string) *ResourceFlavorApplyConfiguration {
-	b.APIVersion = &value
+	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
 
@@ -62,7 +63,7 @@ func (b *ResourceFlavorApplyConfiguration) WithAPIVersion(value string) *Resourc
 // If called multiple times, the Name field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithName(value string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.Name = &value
+	b.ObjectMetaApplyConfiguration.Name = &value
 	return b
 }
 
@@ -71,7 +72,7 @@ func (b *ResourceFlavorApplyConfiguration) WithName(value string) *ResourceFlavo
 // If called multiple times, the GenerateName field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithGenerateName(value string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.GenerateName = &value
+	b.ObjectMetaApplyConfiguration.GenerateName = &value
 	return b
 }
 
@@ -80,7 +81,7 @@ func (b *ResourceFlavorApplyConfiguration) WithGenerateName(value string) *Resou
 // If called multiple times, the Namespace field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithNamespace(value string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.Namespace = &value
+	b.ObjectMetaApplyConfiguration.Namespace = &value
 	return b
 }
 
@@ -89,7 +90,7 @@ func (b *ResourceFlavorApplyConfiguration) WithNamespace(value string) *Resource
 // If called multiple times, the UID field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithUID(value types.UID) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.UID = &value
+	b.ObjectMetaApplyConfiguration.UID = &value
 	return b
 }
 
@@ -98,7 +99,7 @@ func (b *ResourceFlavorApplyConfiguration) WithUID(value types.UID) *ResourceFla
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithResourceVersion(value string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.ResourceVersion = &value
+	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
 	return b
 }
 
@@ -107,7 +108,7 @@ func (b *ResourceFlavorApplyConfiguration) WithResourceVersion(value string) *Re
 // If called multiple times, the Generation field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithGeneration(value int64) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.Generation = &value
+	b.ObjectMetaApplyConfiguration.Generation = &value
 	return b
 }
 
@@ -116,7 +117,7 @@ func (b *ResourceFlavorApplyConfiguration) WithGeneration(value int64) *Resource
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithCreationTimestamp(value metav1.Time) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.CreationTimestamp = &value
+	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
 	return b
 }
 
@@ -125,7 +126,7 @@ func (b *ResourceFlavorApplyConfiguration) WithCreationTimestamp(value metav1.Ti
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithDeletionTimestamp(value metav1.Time) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.DeletionTimestamp = &value
+	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
 	return b
 }
 
@@ -134,7 +135,7 @@ func (b *ResourceFlavorApplyConfiguration) WithDeletionTimestamp(value metav1.Ti
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
 func (b *ResourceFlavorApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	b.DeletionGracePeriodSeconds = &value
+	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
 	return b
 }
 
@@ -144,11 +145,11 @@ func (b *ResourceFlavorApplyConfiguration) WithDeletionGracePeriodSeconds(value 
 // overwriting an existing map entries in Labels field with the same key.
 func (b *ResourceFlavorApplyConfiguration) WithLabels(entries map[string]string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	if b.Labels == nil && len(entries) > 0 {
-		b.Labels = make(map[string]string, len(entries))
+	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
+		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
 	}
 	for k, v := range entries {
-		b.Labels[k] = v
+		b.ObjectMetaApplyConfiguration.Labels[k] = v
 	}
 	return b
 }
@@ -159,11 +160,11 @@ func (b *ResourceFlavorApplyConfiguration) WithLabels(entries map[string]string)
 // overwriting an existing map entries in Annotations field with the same key.
 func (b *ResourceFlavorApplyConfiguration) WithAnnotations(entries map[string]string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
-	if b.Annotations == nil && len(entries) > 0 {
-		b.Annotations = make(map[string]string, len(entries))
+	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
+		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
 	}
 	for k, v := range entries {
-		b.Annotations[k] = v
+		b.ObjectMetaApplyConfiguration.Annotations[k] = v
 	}
 	return b
 }
@@ -177,7 +178,7 @@ func (b *ResourceFlavorApplyConfiguration) WithOwnerReferences(values ...*v1.Own
 		if values[i] == nil {
 			panic("nil value passed to WithOwnerReferences")
 		}
-		b.OwnerReferences = append(b.OwnerReferences, *values[i])
+		b.ObjectMetaApplyConfiguration.OwnerReferences = append(b.ObjectMetaApplyConfiguration.OwnerReferences, *values[i])
 	}
 	return b
 }
@@ -188,7 +189,7 @@ func (b *ResourceFlavorApplyConfiguration) WithOwnerReferences(values ...*v1.Own
 func (b *ResourceFlavorApplyConfiguration) WithFinalizers(values ...string) *ResourceFlavorApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
-		b.Finalizers = append(b.Finalizers, values[i])
+		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
 	}
 	return b
 }
@@ -207,8 +208,24 @@ func (b *ResourceFlavorApplyConfiguration) WithSpec(value *ResourceFlavorSpecApp
 	return b
 }
 
+// GetKind retrieves the value of the Kind field in the declarative configuration.
+func (b *ResourceFlavorApplyConfiguration) GetKind() *string {
+	return b.TypeMetaApplyConfiguration.Kind
+}
+
+// GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
+func (b *ResourceFlavorApplyConfiguration) GetAPIVersion() *string {
+	return b.TypeMetaApplyConfiguration.APIVersion
+}
+
 // GetName retrieves the value of the Name field in the declarative configuration.
 func (b *ResourceFlavorApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
-	return b.Name
+	return b.ObjectMetaApplyConfiguration.Name
+}
+
+// GetNamespace retrieves the value of the Namespace field in the declarative configuration.
+func (b *ResourceFlavorApplyConfiguration) GetNamespace() *string {
+	b.ensureObjectMetaApplyConfigurationExists()
+	return b.ObjectMetaApplyConfiguration.Namespace
 }
