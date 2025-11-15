@@ -3,7 +3,7 @@ module github.com/openshift/kueue-operator
 go 1.24.0
 
 replace (
-	github.com/kubernetes-sigs/kueue => github.com/openshift/kubernetes-sigs-kueue v0.0.0-20250410200144-aecd0b7e565a
+	github.com/kubernetes-sigs/kueue => ./upstream/kueue/src
 	sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250402141027-24f590ca0886
 )
 
