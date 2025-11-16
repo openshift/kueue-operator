@@ -60,6 +60,7 @@ skips=(
         "should allow to schedule a group of diverse pods"
         # relies on particular CPU setup.
         "StatefulSet created with WorkloadPriorityClass"
+        "LeaderWorkerSet created with WorkloadPriorityClass"
         # For tests that rely on CPU setup, we need to fix upstream to get cpu allocatables from node
         # rather than hardcoding CPU limits.
         # We do not have kueuectl in our operator
