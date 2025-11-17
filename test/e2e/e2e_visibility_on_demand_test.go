@@ -560,7 +560,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		labelKey := testutils.OpenShiftManagedLabel
 		labelValue := trueLabelValue
 
-		It("Should use the correct PriorityLevelConfiguration and FlowSchema", func(ctx context.Context) {
+		It("Should use the correct PriorityLevelConfiguration and FlowSchema for ClusterQueue and LocalQueue", func(ctx context.Context) {
 			// capturedHeaders stores HTTP response headers captured by headerCaptureRoundTripper during API calls.
 			var capturedHeaders = make(http.Header)
 
@@ -586,7 +586,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 				deleteNamespace(ctx, namespace)
 			})
 
-			_, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
 			DeferCleanup(cleanupLocalQueue)
 
@@ -628,16 +628,33 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for ClusterQueue %s", clusterQueue.Name)
 
 			By("Extracting response headers from API call")
-			priorityLevelUIDHeader := capturedHeaders.Get("X-Kubernetes-Pf-Prioritylevel-Uid")
-			flowSchemaUIDHeader := capturedHeaders.Get("X-Kubernetes-Pf-Flowschema-Uid")
+			priorityLevelUIDHeaderClusterQueue := capturedHeaders.Get("X-Kubernetes-Pf-Prioritylevel-Uid")
+			flowSchemaUIDHeaderClusterQueue := capturedHeaders.Get("X-Kubernetes-Pf-Flowschema-Uid")
 
-			By("Checking that response headers match expected PriorityLevelConfiguration and FlowSchema UIDs")
-			Expect(priorityLevelUIDHeader).To(Equal(string(priorityLevelConfiguration.UID)),
-				"X-Kubernetes-Pf-Prioritylevel-Uid header does not match \"kueue-visibility\" PriorityLevelConfiguration UID")
-			Expect(flowSchemaUIDHeader).To(Equal(string(flowSchema.UID)),
-				"X-Kubernetes-Pf-Flowschema-Uid header does not match \"visibility\" FlowSchema UID")
+			By("Checking that response headers match expected PriorityLevelConfiguration and FlowSchema UIDs for ClusterQueue")
+			Expect(priorityLevelUIDHeaderClusterQueue).To(Equal(string(priorityLevelConfiguration.UID)),
+				"X-Kubernetes-Pf-Prioritylevel-Uid header does not match \"kueue-visibility\" PriorityLevelConfiguration UID for ClusterQueue")
+			Expect(flowSchemaUIDHeaderClusterQueue).To(Equal(string(flowSchema.UID)),
+				"X-Kubernetes-Pf-Flowschema-Uid header does not match \"visibility\" FlowSchema UID for ClusterQueue")
+
+			By("Getting the pending workloads for the LocalQueue API response")
+			Eventually(func() error {
+				_, err = testUserVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, localQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueue.Name)
+
+			By("Extracting response headers from API call")
+			priorityLevelUIDHeaderLocalQueue := capturedHeaders.Get("X-Kubernetes-Pf-Prioritylevel-Uid")
+			flowSchemaUIDHeaderLocalQueue := capturedHeaders.Get("X-Kubernetes-Pf-Flowschema-Uid")
+
+			By("Checking that response headers match expected PriorityLevelConfiguration and FlowSchema UIDs for LocalQueue")
+			Expect(priorityLevelUIDHeaderLocalQueue).To(Equal(string(priorityLevelConfiguration.UID)),
+				"X-Kubernetes-Pf-Prioritylevel-Uid header does not match \"kueue-visibility\" PriorityLevelConfiguration UID for LocalQueue")
+			Expect(flowSchemaUIDHeaderLocalQueue).To(Equal(string(flowSchema.UID)),
+				"X-Kubernetes-Pf-Flowschema-Uid header does not match \"visibility\" FlowSchema UID for LocalQueue")
 
 		})
+
 	})
 })
 
@@ -831,7 +848,7 @@ func createCustomJob(ctx context.Context, name, namespace, queueName, priorityCl
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
-							Image:   "quay.io/centos/centos:stream9",
+							Image:   "quay.io/prometheus/busybox:latest",
 							Command: []string{"sh", "-c", "echo 'Hello Kueue'; sleep 40"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
