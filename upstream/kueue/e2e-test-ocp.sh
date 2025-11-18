@@ -54,14 +54,14 @@ skips=(
         Fair
         # we do not enable this feature in our operator
         TopologyAwareScheduling
-        # relies on particular CPU setup to force pods to not schedule
-        "Failed Pod can be replaced in group"
-        # relies on particular CPU setup
-        "should allow to schedule a group of diverse pods"
-        # relies on particular CPU setup.
-        "StatefulSet created with WorkloadPriorityClass"
         # For tests that rely on CPU setup, we need to fix upstream to get cpu allocatables from node
         # rather than hardcoding CPU limits.
+        # relies on particular CPU setup to force pods to not schedule
+        "Failed Pod can be replaced in group"
+        "should allow to schedule a group of diverse pods"
+        "StatefulSet created with WorkloadPriorityClass"
+        "LeaderWorkerSet created with WorkloadPriorityClass"
+        "Pod groups when Single CQ"
         # We do not have kueuectl in our operator
         "Kueuectl"
 )
