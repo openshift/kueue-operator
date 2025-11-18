@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,14 +31,17 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	flowcontrolclientv1 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	visibilityv1beta1 "sigs.k8s.io/kueue/apis/visibility/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
 
 const (
-	priorityName = "kueue-visibility"
+	priorityName   = "kueue-visibility"
+	trueLabelValue = "true"
 )
 
 var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, func() {
@@ -50,7 +54,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 	When("kueue.openshift.io/allow-nominal-concurrency-shares-update annotation is set to true", func() {
 		labelKey := testutils.OpenShiftManagedLabel
-		labelValue := "true"
+		labelValue := trueLabelValue
 		testQueue := "test-queue"
 
 		var cleanupClusterQueue, cleanupLocalQueue, cleanupResourceFlavor func()
@@ -102,7 +106,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 		It("should allow modification of the nominal concurrency shares to 0", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 0")
-			updateNominalConcurrencyShares(ctx, priorityClient, 0)
+			err := updateNominalConcurrencyShares(ctx, priorityClient, 0)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Ensure the value of nominal concurrency shares is changed to 0")
 			priority, err := priorityClient.Get(ctx, priorityName, metav1.GetOptions{})
@@ -115,7 +120,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 		It("should allow modification of the nominal concurrency shares to 5", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 5")
-			updateNominalConcurrencyShares(ctx, priorityClient, 5)
+			err := updateNominalConcurrencyShares(ctx, priorityClient, 5)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Try to access the pending workload")
 			_, err = visibilityClient.LocalQueues(ns.Name).GetPendingWorkloadsSummary(ctx, testQueue, metav1.GetOptions{})
@@ -127,7 +133,9 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 		It("should not allow modification of the nominal concurrency shares to 1", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 1")
-			updateNominalConcurrencyShares(ctx, priorityClient, 1)
+			err := updateNominalConcurrencyShares(ctx, priorityClient, 1)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Wait to verify the value of nominal concurrency shares is changed back to the default")
 			Eventually(func() int32 {
 				priority, err := priorityClient.Get(ctx, priorityName, metav1.GetOptions{})
@@ -137,7 +145,9 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 		It("should not allow modification of the nominal concurrency shares to 6", func(ctx context.Context) {
 			By("Modifying the PriorityLevelConfiguration with nominal concurrency shares set to 6")
-			updateNominalConcurrencyShares(ctx, priorityClient, 6)
+			err := updateNominalConcurrencyShares(ctx, priorityClient, 6)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Wait to verify the value of nominal concurrency shares is changed back to the default")
 			Eventually(func() int32 {
 				priority, err := priorityClient.Get(ctx, priorityName, metav1.GetOptions{})
@@ -145,12 +155,27 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 				return *priority.Spec.Limited.NominalConcurrencyShares
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(int32(2)), "Nominal concurrency shares did not change back to the default")
 		})
+
+		It("should not allow modification of the nominal concurrency shares if it's not admin", func(ctx context.Context) {
+
+			By("Creating Kubernetes client with impersonation for non-admin service account")
+			cfg := *clients.RestConfig
+			cfg.Impersonate.UserName = fmt.Sprintf("system:serviceaccount:%s:%s", ns.Name, "deployer")
+			nonAdminKubeClient, err := kubernetes.NewForConfig(&cfg)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create Kubernetes client with impersonation")
+			nonAdminPriorityClient := nonAdminKubeClient.FlowcontrolV1().PriorityLevelConfigurations()
+
+			By("Attempting to modify PriorityLevelConfiguration with nominal concurrency shares set to 4")
+			err = updateNominalConcurrencyShares(ctx, nonAdminPriorityClient, 4)
+			Expect(err).To(HaveOccurred(), "Expected an error when non-admin tries to update PriorityLevelConfiguration")
+			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "Expected a Forbidden error when non-admin tries to update PriorityLevelConfiguration")
+		})
 	})
 
 	When("PendingWorkloads list should be checked for a ClusterQueue and LocalQueue", func() {
 		var (
 			labelKey   = testutils.OpenShiftManagedLabel
-			labelValue = "true"
+			labelValue = trueLabelValue
 		)
 
 		It("Should allow admin to access ClusterQueues, deny user access, and order pending workloads by priority", func(ctx context.Context) {
@@ -258,7 +283,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
 			DeferCleanup(cleanupJobHighB)
 
-			By(fmt.Sprintf("Checking the pending workloads for cluster queue %s", clusterQueueA.Name))
+			Byf("Checking the pending workloads for cluster queue %s", clusterQueueA.Name)
 			// Wait for job-blocker pod to be created
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{})
@@ -285,7 +310,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(clusterPendingWorkloadsA.Items[1].Priority).To(Equal(int32(75)), "Second workload should have medium priority (75)")
 			Expect(clusterPendingWorkloadsA.Items[2].Priority).To(Equal(int32(50)), "Third workload should have low priority (50)")
 
-			By(fmt.Sprintf("Checking the pending workloads for cluster queue %s", clusterQueueB.Name))
+			Byf("Checking the pending workloads for cluster queue %s", clusterQueueB.Name)
 			// Wait for job-blocker-b pod to be created
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceB.Name).List(ctx, metav1.ListOptions{})
@@ -439,9 +464,9 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
 			DeferCleanup(cleanupJobBlockerA)
-			cleanupJobHighA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, lowPriorityClass.Name, "1", "512Mi")
+			cleanupJobLowA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, lowPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority job")
-			DeferCleanup(cleanupJobHighA)
+			DeferCleanup(cleanupJobLowA)
 			cleanupJobBlockerB, jobBlockerB, err := createCustomJob(ctx, "job-blocker-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
@@ -450,7 +475,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
 			DeferCleanup(cleanupJobLowB)
 
-			By(fmt.Sprintf("Checking the pending workloads for local queue %s in namespace %s", localQueueA.Name, namespaceA.Name))
+			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueueA.Name, namespaceA.Name)
 			// Wait for job-blocker pod to be created
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{})
@@ -475,7 +500,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(localPendingWorkloadsA.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workload on LocalQueue %s", localQueueA.Name))
 			Expect(localPendingWorkloadsA.Items[0].Priority).To(Equal(int32(50)), "Pending workload should have low priority (50)")
 
-			By(fmt.Sprintf("Checking the pending workloads for local queue %s in namespace %s", localQueueB.Name, namespaceB.Name))
+			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueueB.Name, namespaceB.Name)
 			// Wait for job-blocker-b pod to be created
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceB.Name).List(ctx, metav1.ListOptions{})
@@ -530,20 +555,126 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(localPendingWorkloadsB.Items).To(BeEmpty(), "Pending workloads list should be empty after workloads were executed")
 		})
 	})
+
+	When("PendingWorkloads Endpoints should be checked", func() {
+		labelKey := testutils.OpenShiftManagedLabel
+		labelValue := trueLabelValue
+
+		It("Should use the correct PriorityLevelConfiguration and FlowSchema for ClusterQueue and LocalQueue", func(ctx context.Context) {
+			// capturedHeaders stores HTTP response headers captured by headerCaptureRoundTripper during API calls.
+			var capturedHeaders = make(http.Header)
+
+			By("Creating Cluster Resources")
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
+			DeferCleanup(cleanupResourceFlavor)
+			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
+			DeferCleanup(cleanupClusterQueue)
+
+			By("Creating Namespaces and LocalQueues")
+			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "namespace-",
+					Labels: map[string]string{
+						labelKey: labelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespace)
+			})
+
+			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
+			DeferCleanup(cleanupLocalQueue)
+
+			By("Creating RBAC kueue-batch-admin-role for Visibility API")
+			cleanupClusterRoleBinding, err := createClusterRoleBinding(ctx, "default", namespace.Name, "kueue-batch-admin-role")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster role binding")
+			DeferCleanup(cleanupClusterRoleBinding)
+
+			By("Creating custom visibility client for ClusterQueue user")
+			testUserVisibilityClient, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespace.Name, "default"))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespace.Name, "default")
+
+			By("Getting the PriorityLevelConfiguration and FlowSchema")
+			priorityLevelConfiguration, err := kubeClient.FlowcontrolV1().PriorityLevelConfigurations().Get(ctx, "kueue-visibility", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			flowSchema, err := kubeClient.FlowcontrolV1().FlowSchemas().Get(ctx, "visibility", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Setting up HTTP header capture")
+			// Set up header capture: wrap the RESTClient's HTTP transport to intercept response headers
+			restClient := testUserVisibilityClient.RESTClient().(*rest.RESTClient)
+			originalClient := restClient.Client
+
+			restClient.Client = &http.Client{
+				Transport: &headerCaptureRoundTripper{
+					original: originalClient.Transport,
+					headers:  &capturedHeaders,
+				},
+			}
+			DeferCleanup(func() {
+				restClient.Client = originalClient
+			})
+
+			By("Getting the pending workloads for the ClusterQueue API response")
+			Eventually(func() error {
+				_, err = testUserVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for ClusterQueue %s", clusterQueue.Name)
+
+			By("Extracting response headers from API call")
+			priorityLevelUIDHeaderClusterQueue := capturedHeaders.Get("X-Kubernetes-Pf-Prioritylevel-Uid")
+			flowSchemaUIDHeaderClusterQueue := capturedHeaders.Get("X-Kubernetes-Pf-Flowschema-Uid")
+
+			By("Checking that response headers match expected PriorityLevelConfiguration and FlowSchema UIDs for ClusterQueue")
+			Expect(priorityLevelUIDHeaderClusterQueue).To(Equal(string(priorityLevelConfiguration.UID)),
+				"X-Kubernetes-Pf-Prioritylevel-Uid header does not match \"kueue-visibility\" PriorityLevelConfiguration UID for ClusterQueue")
+			Expect(flowSchemaUIDHeaderClusterQueue).To(Equal(string(flowSchema.UID)),
+				"X-Kubernetes-Pf-Flowschema-Uid header does not match \"visibility\" FlowSchema UID for ClusterQueue")
+
+			By("Getting the pending workloads for the LocalQueue API response")
+			Eventually(func() error {
+				_, err = testUserVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, localQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueue.Name)
+
+			By("Extracting response headers from API call")
+			priorityLevelUIDHeaderLocalQueue := capturedHeaders.Get("X-Kubernetes-Pf-Prioritylevel-Uid")
+			flowSchemaUIDHeaderLocalQueue := capturedHeaders.Get("X-Kubernetes-Pf-Flowschema-Uid")
+
+			By("Checking that response headers match expected PriorityLevelConfiguration and FlowSchema UIDs for LocalQueue")
+			Expect(priorityLevelUIDHeaderLocalQueue).To(Equal(string(priorityLevelConfiguration.UID)),
+				"X-Kubernetes-Pf-Prioritylevel-Uid header does not match \"kueue-visibility\" PriorityLevelConfiguration UID for LocalQueue")
+			Expect(flowSchemaUIDHeaderLocalQueue).To(Equal(string(flowSchema.UID)),
+				"X-Kubernetes-Pf-Flowschema-Uid header does not match \"visibility\" FlowSchema UID for LocalQueue")
+
+		})
+
+	})
 })
 
 // updateNominalConcurrencyShares updates the nominal concurrency shares of the priority level configuration
 // and verifies the update is successful
-func updateNominalConcurrencyShares(ctx context.Context, priorityClient flowcontrolclientv1.PriorityLevelConfigurationInterface, nominalConcurrencyShares int32) {
+func updateNominalConcurrencyShares(ctx context.Context, priorityClient flowcontrolclientv1.PriorityLevelConfigurationInterface, nominalConcurrencyShares int32) error {
 	priority, err := priorityClient.Get(ctx, priorityName, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return err
+	}
 	priority.Annotations = map[string]string{
-		"kueue.openshift.io/allow-nominal-concurrency-shares-update": "true",
+		"kueue.openshift.io/allow-nominal-concurrency-shares-update": trueLabelValue,
 	}
 	priority.Spec.Limited.NominalConcurrencyShares = &nominalConcurrencyShares
 	updatedPriority, err := priorityClient.Update(ctx, priority, metav1.UpdateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return err
+	}
 	Expect(updatedPriority.Spec.Limited.NominalConcurrencyShares).To(Equal(&nominalConcurrencyShares))
+	return nil
 }
 
 // createPriorityClass creates a PriorityClass with the specified value and description
@@ -564,7 +695,7 @@ func createPriorityClass(ctx context.Context, value int32, description string) (
 
 	cleanup := func() {
 		ctx := context.TODO()
-		By(fmt.Sprintf("Deleting PriorityClass %s", createdPriorityClass.Name))
+		Byf("Deleting PriorityClass %s", createdPriorityClass.Name)
 		err := kubeClient.SchedulingV1().PriorityClasses().Delete(ctx, createdPriorityClass.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
@@ -624,7 +755,7 @@ func createClusterRoleBinding(ctx context.Context, serviceAccountName, serviceAc
 
 	cleanup := func() {
 		ctx := context.TODO()
-		By(fmt.Sprintf("Deleting ClusterRoleBinding %s", createdClusterRoleBinding.Name))
+		Byf("Deleting ClusterRoleBinding %s", createdClusterRoleBinding.Name)
 		err := kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, createdClusterRoleBinding.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
@@ -670,7 +801,7 @@ func createRoleBinding(ctx context.Context, namespace, serviceAccountName, clust
 
 	cleanup := func() {
 		ctx := context.TODO()
-		By(fmt.Sprintf("Deleting RoleBinding %s in namespace %s", createdRoleBinding.Name, namespace))
+		Byf("Deleting RoleBinding %s in namespace %s", createdRoleBinding.Name, namespace)
 		err := kubeClient.RbacV1().RoleBindings(namespace).Delete(ctx, createdRoleBinding.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
@@ -717,7 +848,7 @@ func createCustomJob(ctx context.Context, name, namespace, queueName, priorityCl
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
-							Image:   "busybox",
+							Image:   "quay.io/prometheus/busybox:latest",
 							Command: []string{"sh", "-c", "echo 'Hello Kueue'; sleep 40"},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -738,7 +869,7 @@ func createCustomJob(ctx context.Context, name, namespace, queueName, priorityCl
 
 	cleanup := func() {
 		ctx := context.TODO()
-		By(fmt.Sprintf("Deleting Job %s in namespace %s", name, namespace))
+		Byf("Deleting Job %s in namespace %s", name, namespace)
 		propagationPolicy := metav1.DeletePropagationBackground
 		err := kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
 			PropagationPolicy: &propagationPolicy,
@@ -780,4 +911,27 @@ func verifyWorkloadCompleted(kueueClient *upstreamkueueclient.Clientset, namespa
 		}
 		return false
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), fmt.Sprintf("Workload for job UID %s in namespace %s did not complete within timeout", uid, namespace))
+}
+
+// headerCaptureRoundTripper wraps an http.RoundTripper to capture response headers
+type headerCaptureRoundTripper struct {
+	original http.RoundTripper
+	headers  *http.Header
+}
+
+// RoundTrip executes the request using the original transport and captures response headers
+func (rt *headerCaptureRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := rt.original.RoundTrip(req)
+	if err == nil && resp != nil {
+		// Copy response headers to the captured headers map
+		for key, values := range resp.Header {
+			(*rt.headers)[key] = values
+		}
+	}
+	return resp, err
+}
+
+// Byf is a helper function that wraps By(fmt.Sprintf(...)) to reduce verbosity
+func Byf(format string, args ...interface{}) {
+	By(fmt.Sprintf(format, args...))
 }
