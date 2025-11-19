@@ -42,9 +42,9 @@ skips=(
         AppWrapper
         # do not deploy PyTorch in OCP
         PyTorch
-        # do not deploy JobSet in OCP
+        # do not deploy TrainJob in OCP
         TrainJob
-        # do not deploy LWS in OCP
+        # do not deploy JAX in OCP
         JAX
         # do not deploy KubeRay in OCP
         Kuberay
