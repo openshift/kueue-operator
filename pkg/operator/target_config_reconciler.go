@@ -423,6 +423,28 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 	specAnnotations["rolebinding/"+roleBindingLeader.Name] = hash
 
+	managerSecretsRole, _, err := c.manageRole("assets/kueue-operator/role-manager-secrets.yaml", ownerReference)
+	if err != nil {
+		klog.Error("unable to create role manager-secrets")
+		return err
+	}
+	hash, err = computeSpecHash(managerSecretsRole.Rules)
+	if err != nil {
+		return fmt.Errorf("failed to hash Role rules: %w", err)
+	}
+	specAnnotations["role/"+managerSecretsRole.Name] = hash
+
+	roleBindingManagerSecrets, _, err := c.manageRoleBindings("assets/kueue-operator/rolebinding-manager-secrets.yaml", ownerReference, true)
+	if err != nil {
+		klog.Error("unable to bind role manager-secrets")
+		return err
+	}
+	hash, err = computeSpecHash(roleBindingManagerSecrets)
+	if err != nil {
+		return fmt.Errorf("failed to hash RoleBinding: %w", err)
+	}
+	specAnnotations["rolebinding/"+roleBindingManagerSecrets.Name] = hash
+
 	if c.serviceMonitorSupport {
 		prometheusRole, _, err := c.manageRole("assets/kueue-operator/role-prometheus.yaml", ownerReference)
 		if err != nil {
@@ -1240,29 +1262,37 @@ func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference 
 }
 
 func (c *TargetConfigReconciler) manageAPIService(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
-	required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset("assets/kueue-operator/apiservice.yaml"))
-	required.Spec.InsecureSkipTLSVerify = false
-	required.Spec.Service.Namespace = c.operatorNamespace
-	required.Spec.Service.Name = "kueue-visibility-server"
-	required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
-	newAnnotation := required.Annotations
-	if newAnnotation == nil {
-		newAnnotation = map[string]string{}
+	// Manage both v1beta1 and v1beta2 APIService versions
+	apiServiceFiles := []string{
+		"assets/kueue-operator/apiservice-v1beta1.visibility.kueue.x-k8s.io.yaml",
+		"assets/kueue-operator/apiservice-v1beta2.visibility.kueue.x-k8s.io.yaml",
 	}
-	newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
-	required.Annotations = newAnnotation
-	required.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
+
+	for _, assetPath := range apiServiceFiles {
+		required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset(assetPath))
+		required.Spec.InsecureSkipTLSVerify = false
+		required.Spec.Service.Namespace = c.operatorNamespace
+		required.Spec.Service.Name = "kueue-visibility-server"
+		required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
+		newAnnotation := required.Annotations
+		if newAnnotation == nil {
+			newAnnotation = map[string]string{}
+		}
+		newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
+		required.Annotations = newAnnotation
+		required.OwnerReferences = []metav1.OwnerReference{
+			ownerReference,
+		}
+		apiService, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
+		if err != nil {
+			return err
+		}
+		hash, err := computeSpecHash(apiService.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to hash APIService spec: %w", err)
+		}
+		specAnnotations["apiservice/"+apiService.Name] = hash
 	}
-	apiService, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
-	if err != nil {
-		return err
-	}
-	hash, err := computeSpecHash(apiService.Spec)
-	if err != nil {
-		return fmt.Errorf("failed to hash APIService spec: %w", err)
-	}
-	specAnnotations["apiservice/"+apiService.Name] = hash
 	return nil
 }
 
@@ -1418,6 +1448,16 @@ func (c *TargetConfigReconciler) manageCustomResources(specAnnotations map[strin
 		}
 
 		required.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
+
+		// Update conversion webhook namespace if it exists
+		if required.Spec.Conversion != nil && required.Spec.Conversion.Strategy == apiextensionsv1.WebhookConverter {
+			if required.Spec.Conversion.Webhook != nil &&
+				required.Spec.Conversion.Webhook.ClientConfig != nil &&
+				required.Spec.Conversion.Webhook.ClientConfig.Service != nil {
+				required.Spec.Conversion.Webhook.ClientConfig.Service.Namespace = c.operatorNamespace
+			}
+		}
+
 		crd, _, err := c.applyCustomResourceDefinitionWithCache(required)
 		if err != nil {
 			return err
@@ -1900,6 +1940,18 @@ func (c *TargetConfigReconciler) applyCustomResourceDefinitionWithCache(
 	existing, err := c.crdInformer.Apiextensions().V1().CustomResourceDefinitions().Lister().Get(required.Name)
 	if err != nil && !errors.IsNotFound(err) {
 		return nil, false, err
+	}
+
+	// Preserve the caBundle from the existing CRD if it exists
+	// This prevents us from overwriting cert-manager's injected caBundle
+	if existing != nil &&
+		existing.Spec.Conversion != nil &&
+		existing.Spec.Conversion.Webhook != nil &&
+		existing.Spec.Conversion.Webhook.ClientConfig != nil &&
+		required.Spec.Conversion != nil &&
+		required.Spec.Conversion.Webhook != nil &&
+		required.Spec.Conversion.Webhook.ClientConfig != nil {
+		required.Spec.Conversion.Webhook.ClientConfig.CABundle = existing.Spec.Conversion.Webhook.ClientConfig.CABundle
 	}
 
 	// Check cache to see if we can skip this apply

@@ -1,0 +1,3 @@
+# ShellCheck configuration
+# Use two-space indentation
+severity=style

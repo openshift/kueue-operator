@@ -32,7 +32,7 @@ import (
 )
 
 func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev1.ConfigMap, error) {
-	config := defaultKueueConfigurationTemplate(kueueCfg)
+	config := defaultKueueConfigurationTemplate(namespace, kueueCfg)
 	cfg, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, err
@@ -137,12 +137,13 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
-func defaultKueueConfigurationTemplate(kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
 			APIVersion: "config.kueue.x-k8s.io/v1beta1",
 		},
+		Namespace: ptr.To(namespace),
 		ControllerManager: configapi.ControllerManager{
 			Health: configapi.ControllerHealth{
 				HealthProbeBindAddress: ":8081",

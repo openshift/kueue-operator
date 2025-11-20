@@ -342,14 +342,14 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
-      path: /mutate-kueue-x-k8s-io-v1beta1-clusterqueue
+      path: /mutate-kueue-x-k8s-io-v1beta2-clusterqueue
   failurePolicy: Fail
   name: mclusterqueue.kb.io
   rules:
   - apiGroups:
     - kueue.x-k8s.io
     apiVersions:
-    - v1beta1
+    - v1beta2
     operations:
     - CREATE
     resources:
@@ -361,14 +361,14 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
-      path: /mutate-kueue-x-k8s-io-v1beta1-resourceflavor
+      path: /mutate-kueue-x-k8s-io-v1beta2-resourceflavor
   failurePolicy: Fail
   name: mresourceflavor.kb.io
   rules:
   - apiGroups:
     - kueue.x-k8s.io
     apiVersions:
-    - v1beta1
+    - v1beta2
     operations:
     - CREATE
     resources:
@@ -380,14 +380,14 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
-      path: /mutate-kueue-x-k8s-io-v1beta1-workload
+      path: /mutate-kueue-x-k8s-io-v1beta2-workload
   failurePolicy: Fail
   name: mworkload.kb.io
   rules:
   - apiGroups:
     - kueue.x-k8s.io
     apiVersions:
-    - v1beta1
+    - v1beta2
     operations:
     - CREATE
     resources:
