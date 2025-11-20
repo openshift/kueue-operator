@@ -1146,7 +1146,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			ctx := context.TODO()
 
 			klog.Infof("Redeploying Kueue instance")
-			requiredSS := testutils.NewKueueDefault().EnableDebug()
+			requiredSS := testutils.NewKueueDefault()
 			_, err := kueueClientset.KueueV1().Kueues().Create(ctx, requiredSS.GetKueue(), metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred(), "Failed to create Kueue instance")
 			defer testutils.CleanUpKueueInstance(ctx, kueueClientset, "cluster", kubeClient)
@@ -1458,7 +1458,7 @@ func deployOperand() error {
 
 	Eventually(func() error {
 		klog.Infof("Creating Kueue instance")
-		requiredSS := testutils.NewKueueDefault().EnableDebug()
+		requiredSS := testutils.NewKueueDefault()
 		_, err := ssClient.KueueV1().Kueues().Create(ctx, requiredSS.GetKueue(), metav1.CreateOptions{})
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
