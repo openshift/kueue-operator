@@ -77,8 +77,6 @@ pushd ${SOURCE_DIR} >/dev/null
 apply_patches
 popd >/dev/null
 
-# apply patches
-
 # Label two worker nodes for e2e tests (similar to the Kind setup).
 label_worker_nodes
 
@@ -91,3 +89,4 @@ $GINKGO $GINKGO_ARGS \
   --json-report=e2e.json \
   --output-dir="$ARTIFACTS" \
   -v ./upstream/kueue/src/test/e2e/$E2E_TARGET_FOLDER/...
+
