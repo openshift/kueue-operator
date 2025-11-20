@@ -57,6 +57,8 @@ skips=(
   Fair
   # we do not enable this feature in our operator
   TopologyAwareScheduling
+  # This job is having difficult scheduling in OCP.
+  "Should unsuspend a job and set nodeSelectors"
   # For tests that rely on CPU setup, we need to fix upstream to get cpu allocatables from node
   # rather than hardcoding CPU limits.
   # relies on particular CPU setup to force pods to not schedule
@@ -68,6 +70,7 @@ skips=(
   # We do not have kueuectl in our operator
   "Kueuectl"
 )
+
 skipsRegex=$(
   IFS="|"
   printf "%s" "${skips[*]}"
