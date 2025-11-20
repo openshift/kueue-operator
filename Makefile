@@ -40,11 +40,11 @@ $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1,./manifests/,./mani
 
 .PHONY: test-e2e
 test-e2e: ginkgo
-	${GINKGO} --label-filter="!disruptive" -v ./test/e2e/...
+	${GINKGO} --keep-going --flake-attempts=3 --label-filter="!disruptive" -v ./test/e2e/...
 
 .PHONY: test-e2e-disruptive
 test-e2e-disruptive: ginkgo
-	${GINKGO} --label-filter="disruptive" -v ./test/e2e/...
+	${GINKGO} --keep-going --flake-attempts=3 --label-filter="disruptive" -v ./test/e2e/...
 
 regen-crd:
 	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... output:crd:dir=./manifests

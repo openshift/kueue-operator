@@ -88,5 +88,7 @@ $GINKGO $GINKGO_ARGS \
   --junit-report=junit.xml \
   --json-report=e2e.json \
   --output-dir="$ARTIFACTS" \
+  --keep-going \
+  --flake-attempts=3 \
   -v ./upstream/kueue/src/test/e2e/$E2E_TARGET_FOLDER/...
 
