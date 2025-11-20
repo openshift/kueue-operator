@@ -38,33 +38,36 @@ function allow_privileged_access {
 }
 
 skips=(
-        # do not deploy AppWrapper in OCP
-        AppWrapper
-        # do not deploy PyTorch in OCP
-        PyTorch
-        # do not deploy JobSet in OCP
-        TrainJob
-        # do not deploy LWS in OCP
-        JAX
-        # do not deploy KubeRay in OCP
-        Kuberay
-        # metrics setup is different than our OCP setup
-        Metrics
-        # ring -> we do not enable Fair sharing by default in our operator
-        Fair
-        # we do not enable this feature in our operator
-        TopologyAwareScheduling
-        # For tests that rely on CPU setup, we need to fix upstream to get cpu allocatables from node
-        # rather than hardcoding CPU limits.
-        # relies on particular CPU setup to force pods to not schedule
-        "Failed Pod can be replaced in group"
-        "should allow to schedule a group of diverse pods"
-        "StatefulSet created with WorkloadPriorityClass"
-        "LeaderWorkerSet created with WorkloadPriorityClass"
-        "Pod groups when Single CQ"
-        # We do not have kueuectl in our operator
-        "Kueuectl"
+  # do not deploy AppWrapper in OCP
+  AppWrapper
+  # do not deploy PyTorch in OCP
+  PyTorch
+  # do not deploy JobSet in OCP
+  TrainJob
+  # do not deploy LWS in OCP
+  JAX
+  # do not deploy KubeRay in OCP
+  Kuberay
+  # metrics setup is different than our OCP setup
+  Metrics
+  # ring -> we do not enable Fair sharing by default in our operator
+  Fair
+  # we do not enable this feature in our operator
+  TopologyAwareScheduling
+  # This job is having difficult scheduling in OCP.
+  "Should unsuspend a job and set nodeSelectors"
+  # For tests that rely on CPU setup, we need to fix upstream to get cpu allocatables from node
+  # rather than hardcoding CPU limits.
+  # relies on particular CPU setup to force pods to not schedule
+  "Failed Pod can be replaced in group"
+  "should allow to schedule a group of diverse pods"
+  "StatefulSet created with WorkloadPriorityClass"
+  "LeaderWorkerSet created with WorkloadPriorityClass"
+  "Pod groups when Single CQ"
+  # We do not have kueuectl in our operator
+  "Kueuectl"
 )
+
 skipsRegex=$(
         IFS="|"
         printf "%s" "${skips[*]}"
