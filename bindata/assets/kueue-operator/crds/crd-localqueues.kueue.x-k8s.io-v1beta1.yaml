@@ -16,7 +16,7 @@ spec:
       clientConfig:
         service:
           name: kueue-webhook-service
-          namespace: openshift-kueue-operator
+          namespace: kueue-system
           path: /convert
       conversionReviewVersions:
       - v1

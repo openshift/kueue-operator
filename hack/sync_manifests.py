@@ -258,13 +258,14 @@ def main():
             if base_filename == "crd":
                 continue
 
-            # Handle RoleBinding, ClusterRoleBinding, Role, Service, and ClusterRole naming.
+            # Handle RoleBinding, ClusterRoleBinding, Role, Service, ClusterRole, and APIService naming.
             if base_filename in [
                 "rolebinding",
                 "clusterrolebinding",
                 "role",
                 "service",
                 "clusterrole",
+                "apiservice",
             ]:
                 name = doc["metadata"]["name"]
                 name = clean_name(name, doc["kind"])
@@ -276,6 +277,9 @@ def main():
                     bindata_file = os.path.join(
                         bindata_dir, "clusterroles", f"clusterrole-{name}.yaml"
                     )
+                elif base_filename == "apiservice":
+                    # APIService names already include version (e.g., v1beta2.visibility.kueue.x-k8s.io)
+                    bindata_file = os.path.join(bindata_dir, f"apiservice-{name}.yaml")
                 else:
                     bindata_file = os.path.join(
                         bindata_dir, f"{base_filename}-{name}.yaml"
@@ -296,7 +300,19 @@ def main():
                         bindata_dir, "clusterroles", f"clusterrole-{name}.yaml"
                     )
                 else:
-                    bindata_file = os.path.join(bindata_dir, "crds", f"crd-{name}.yaml")
+                    # Find the storage version for CRDs
+                    storage_version = None
+                    if "spec" in doc and "versions" in doc["spec"]:
+                        for version in doc["spec"]["versions"]:
+                            if version.get("storage", False):
+                                storage_version = version["name"]
+                                break
+
+                    # Include storage version in filename if found
+                    if storage_version:
+                        bindata_file = os.path.join(bindata_dir, "crds", f"crd-{name}-{storage_version}.yaml")
+                    else:
+                        bindata_file = os.path.join(bindata_dir, "crds", f"crd-{name}.yaml")
 
                 write_yaml_if_changed(bindata_file, doc, add_header=True)
 

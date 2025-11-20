@@ -1262,29 +1262,37 @@ func (c *TargetConfigReconciler) manageService(assetPath string, ownerReference 
 }
 
 func (c *TargetConfigReconciler) manageAPIService(specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
-	required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset("assets/kueue-operator/apiservice.yaml"))
-	required.Spec.InsecureSkipTLSVerify = false
-	required.Spec.Service.Namespace = c.operatorNamespace
-	required.Spec.Service.Name = "kueue-visibility-server"
-	required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
-	newAnnotation := required.Annotations
-	if newAnnotation == nil {
-		newAnnotation = map[string]string{}
+	// Manage both v1beta1 and v1beta2 APIService versions
+	apiServiceFiles := []string{
+		"assets/kueue-operator/apiservice-v1beta1.visibility.kueue.x-k8s.io.yaml",
+		"assets/kueue-operator/apiservice-v1beta2.visibility.kueue.x-k8s.io.yaml",
 	}
-	newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
-	required.Annotations = newAnnotation
-	required.OwnerReferences = []metav1.OwnerReference{
-		ownerReference,
+
+	for _, assetPath := range apiServiceFiles {
+		required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset(assetPath))
+		required.Spec.InsecureSkipTLSVerify = false
+		required.Spec.Service.Namespace = c.operatorNamespace
+		required.Spec.Service.Name = "kueue-visibility-server"
+		required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
+		newAnnotation := required.Annotations
+		if newAnnotation == nil {
+			newAnnotation = map[string]string{}
+		}
+		newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
+		required.Annotations = newAnnotation
+		required.OwnerReferences = []metav1.OwnerReference{
+			ownerReference,
+		}
+		apiService, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
+		if err != nil {
+			return err
+		}
+		hash, err := computeSpecHash(apiService.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to hash APIService spec: %w", err)
+		}
+		specAnnotations["apiservice/"+apiService.Name] = hash
 	}
-	apiService, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
-	if err != nil {
-		return err
-	}
-	hash, err := computeSpecHash(apiService.Spec)
-	if err != nil {
-		return fmt.Errorf("failed to hash APIService spec: %w", err)
-	}
-	specAnnotations["apiservice/"+apiService.Name] = hash
 	return nil
 }
 
