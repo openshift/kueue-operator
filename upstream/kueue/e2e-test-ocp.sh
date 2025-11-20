@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1091,SC2164
 # e2e-test-ocp.sh
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
-export OC=$(which oc) # OpenShift CLI
-export GINKGO=$(pwd)/bin/ginkgo
+OC=$(which oc) # OpenShift CLI
+export OC
+GINKGO=$(pwd)/bin/ginkgo
+export GINKGO
 SOURCE_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-ROOT_DIR="$SOURCE_DIR/.."
 export KUEUE_NAMESPACE="openshift-kueue-operator"
 # This is required to reuse the exisiting code.
 # Set this to empty value for OCP tests.
@@ -18,7 +20,8 @@ export E2E_KIND_VERSION=""
 function label_worker_nodes() {
     echo "Labeling two worker nodes for e2e tests..."
     # Retrieve the names of nodes with the "worker" role.
-    local nodes=($($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'))
+    local nodes
+    IFS=' ' read -r -a nodes <<< "$($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}')"
     
     if [ ${#nodes[@]} -lt 2 ]; then
         echo "Error: Found less than 2 worker nodes. Cannot assign labels."
@@ -72,7 +75,7 @@ skipsRegex=$(
 
 GINKGO_SKIP_PATTERN="($skipsRegex)"
 
-pushd ${SOURCE_DIR} >/dev/null
+pushd "${SOURCE_DIR}" >/dev/null
 . utils.sh
 apply_patches
 popd >/dev/null
@@ -83,12 +86,13 @@ label_worker_nodes
 # Disable scc rules for e2e pod tests
 allow_privileged_access
 
-$GINKGO $GINKGO_ARGS \
+# shellcheck disable=SC2086
+$GINKGO ${GINKGO_ARGS:-} \
   --skip="${GINKGO_SKIP_PATTERN}" \
   --junit-report=junit.xml \
   --json-report=e2e.json \
   --output-dir="$ARTIFACTS" \
   --keep-going \
   --flake-attempts=3 \
-  -v ./upstream/kueue/src/test/e2e/$E2E_TARGET_FOLDER/...
+  -v ./upstream/kueue/src/test/e2e/"$E2E_TARGET_FOLDER"/...
 

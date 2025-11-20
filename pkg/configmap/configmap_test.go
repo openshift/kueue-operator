@@ -77,6 +77,7 @@ managedJobsNamespaceSelector:
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+namespace: test
 waitForPodsReady: {}
 webhook:
   port: 9443
@@ -139,6 +140,7 @@ managedJobsNamespaceSelector:
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+namespace: test
 waitForPodsReady:
   blockAdmission: false
   enable: true
@@ -200,6 +202,7 @@ managedJobsNamespaceSelector:
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+namespace: test
 waitForPodsReady: {}
 webhook:
   port: 9443
@@ -258,6 +261,7 @@ managedJobsNamespaceSelector:
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+namespace: test
 waitForPodsReady: {}
 webhook:
   port: 9443
@@ -321,6 +325,7 @@ managedJobsNamespaceSelector:
 metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
+namespace: test
 waitForPodsReady:
   blockAdmission: true
   enable: true
