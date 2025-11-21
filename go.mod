@@ -11,9 +11,9 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20251126092650-ef9f99496051
+	github.com/openshift/api v0.0.0-20251120170915-d0a162aa04d3
 	github.com/openshift/build-machinery-go v0.0.0-20251023084048-5d77c1a5e5af
-	github.com/openshift/client-go v0.0.0-20251125141819-b6281947c285
+	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
 	github.com/openshift/library-go v0.0.0-20251120164824-14a789e09884
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.74.0
 	github.com/prometheus/client_golang v1.23.2
