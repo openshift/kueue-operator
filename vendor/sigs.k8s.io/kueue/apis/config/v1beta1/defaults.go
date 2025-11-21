@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@ limitations under the License.
 package v1beta1
 
 import (
+	"cmp"
 	"os"
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
@@ -28,28 +30,27 @@ import (
 )
 
 const (
-	DefaultNamespace                                    = "kueue-system"
-	DefaultWebhookServiceName                           = "kueue-webhook-service"
-	DefaultWebhookSecretName                            = "kueue-webhook-server-cert"
-	DefaultWebhookPort                                  = 9443
-	DefaultHealthProbeBindAddress                       = ":8081"
-	DefaultMetricsBindAddress                           = ":8080"
-	DefaultLeaderElectionID                             = "c1f6bfd2.kueue.x-k8s.io"
-	DefaultLeaderElectionLeaseDuration                  = 15 * time.Second
-	DefaultLeaderElectionRenewDeadline                  = 10 * time.Second
-	DefaultLeaderElectionRetryPeriod                    = 2 * time.Second
-	DefaultClientConnectionQPS                  float32 = 20.0
-	DefaultClientConnectionBurst                int32   = 30
-	defaultPodsReadyTimeout                             = 5 * time.Minute
-	DefaultQueueVisibilityUpdateIntervalSeconds int32   = 5
-	DefaultClusterQueuesMaxCount                int32   = 10
-	defaultJobFrameworkName                             = "batch/job"
-	DefaultMultiKueueGCInterval                         = time.Minute
-	DefaultMultiKueueOrigin                             = "multikueue"
-	DefaultMultiKueueWorkerLostTimeout                  = 15 * time.Minute
-	DefaultRequeuingBackoffBaseSeconds                  = 60
-	DefaultRequeuingBackoffMaxSeconds                   = 3600
-	DefaultResourceTransformationStrategy               = Retain
+	DefaultNamespace                              = "kueue-system"
+	DefaultWebhookServiceName                     = "kueue-webhook-service"
+	DefaultWebhookSecretName                      = "kueue-webhook-server-cert"
+	DefaultWebhookPort                            = 9443
+	DefaultWebhookCertDir                         = "/tmp/k8s-webhook-server/serving-certs"
+	DefaultHealthProbeBindAddress                 = ":8081"
+	DefaultMetricsBindAddress                     = ":8443"
+	DefaultLeaderElectionID                       = "c1f6bfd2.kueue.x-k8s.io"
+	DefaultLeaderElectionLeaseDuration            = 15 * time.Second
+	DefaultLeaderElectionRenewDeadline            = 10 * time.Second
+	DefaultLeaderElectionRetryPeriod              = 2 * time.Second
+	DefaultClientConnectionQPS            float32 = 20.0
+	DefaultClientConnectionBurst          int32   = 30
+	defaultPodsReadyTimeout                       = 5 * time.Minute
+	defaultJobFrameworkName                       = "batch/job"
+	DefaultMultiKueueGCInterval                   = time.Minute
+	DefaultMultiKueueOrigin                       = "multikueue"
+	DefaultMultiKueueWorkerLostTimeout            = 15 * time.Minute
+	DefaultRequeuingBackoffBaseSeconds            = 60
+	DefaultRequeuingBackoffMaxSeconds             = 3600
+	DefaultResourceTransformationStrategy         = Retain
 )
 
 func getOperatorNamespace() string {
@@ -65,155 +66,73 @@ func getOperatorNamespace() string {
 //
 //nolint:revive // format required by generated code for defaulting
 func SetDefaults_Configuration(cfg *Configuration) {
-	if cfg.Namespace == nil {
-		cfg.Namespace = ptr.To(getOperatorNamespace())
-	}
-	if cfg.Webhook.Port == nil {
-		cfg.Webhook.Port = ptr.To(DefaultWebhookPort)
-	}
-	if len(cfg.Metrics.BindAddress) == 0 {
-		cfg.Metrics.BindAddress = DefaultMetricsBindAddress
-	}
-	if len(cfg.Health.HealthProbeBindAddress) == 0 {
-		cfg.Health.HealthProbeBindAddress = DefaultHealthProbeBindAddress
-	}
+	cfg.Namespace = cmp.Or(cfg.Namespace, ptr.To(getOperatorNamespace()))
+	cfg.Webhook.Port = cmp.Or(cfg.Webhook.Port, ptr.To(DefaultWebhookPort))
+	cfg.Webhook.CertDir = cmp.Or(cfg.Webhook.CertDir, DefaultWebhookCertDir)
+	cfg.Metrics.BindAddress = cmp.Or(cfg.Metrics.BindAddress, DefaultMetricsBindAddress)
+	cfg.Health.HealthProbeBindAddress = cmp.Or(cfg.Health.HealthProbeBindAddress, DefaultHealthProbeBindAddress)
+	cfg.LeaderElection = cmp.Or(cfg.LeaderElection, &configv1alpha1.LeaderElectionConfiguration{})
+	cfg.LeaderElection.ResourceName = cmp.Or(cfg.LeaderElection.ResourceName, DefaultLeaderElectionID)
 
-	if cfg.LeaderElection == nil {
-		cfg.LeaderElection = &configv1alpha1.LeaderElectionConfiguration{}
-	}
-	if len(cfg.LeaderElection.ResourceName) == 0 {
-		cfg.LeaderElection.ResourceName = DefaultLeaderElectionID
-	}
-	if len(cfg.LeaderElection.ResourceLock) == 0 {
-		// Default to Lease as component-base still defaults to endpoint resources
-		// until core components migrate to using Leases. See k/k #80289 for more details.
-		cfg.LeaderElection.ResourceLock = resourcelock.LeasesResourceLock
-	}
+	// Default to Lease as component-base still defaults to endpoint resources
+	// until core components migrate to using Leases. See k/k #80289 for more details.
+	cfg.LeaderElection.ResourceLock = cmp.Or(cfg.LeaderElection.ResourceLock, resourcelock.LeasesResourceLock)
+
 	// Use the default LeaderElectionConfiguration options
 	configv1alpha1.RecommendedDefaultLeaderElectionConfiguration(cfg.LeaderElection)
 
-	if cfg.InternalCertManagement == nil {
-		cfg.InternalCertManagement = &InternalCertManagement{}
-	}
-	if cfg.InternalCertManagement.Enable == nil {
-		cfg.InternalCertManagement.Enable = ptr.To(true)
-	}
+	cfg.InternalCertManagement = cmp.Or(cfg.InternalCertManagement, &InternalCertManagement{})
+	cfg.InternalCertManagement.Enable = cmp.Or(cfg.InternalCertManagement.Enable, ptr.To(true))
 	if *cfg.InternalCertManagement.Enable {
-		if cfg.InternalCertManagement.WebhookServiceName == nil {
-			cfg.InternalCertManagement.WebhookServiceName = ptr.To(DefaultWebhookServiceName)
-		}
-		if cfg.InternalCertManagement.WebhookSecretName == nil {
-			cfg.InternalCertManagement.WebhookSecretName = ptr.To(DefaultWebhookSecretName)
-		}
+		cfg.InternalCertManagement.WebhookServiceName = cmp.Or(cfg.InternalCertManagement.WebhookServiceName, ptr.To(DefaultWebhookServiceName))
+		cfg.InternalCertManagement.WebhookSecretName = cmp.Or(cfg.InternalCertManagement.WebhookSecretName, ptr.To(DefaultWebhookSecretName))
 	}
-	if cfg.ClientConnection == nil {
-		cfg.ClientConnection = &ClientConnection{}
+
+	cfg.ClientConnection = cmp.Or(cfg.ClientConnection, &ClientConnection{})
+	cfg.ClientConnection.QPS = cmp.Or(cfg.ClientConnection.QPS, ptr.To(DefaultClientConnectionQPS))
+	cfg.ClientConnection.Burst = cmp.Or(cfg.ClientConnection.Burst, ptr.To(DefaultClientConnectionBurst))
+
+	cfg.WaitForPodsReady = cmp.Or(cfg.WaitForPodsReady, &WaitForPodsReady{Enable: false})
+	if cfg.WaitForPodsReady.Enable {
+		cfg.WaitForPodsReady.Timeout = cmp.Or(cfg.WaitForPodsReady.Timeout, &metav1.Duration{Duration: defaultPodsReadyTimeout})
+		cfg.WaitForPodsReady.BlockAdmission = cmp.Or(cfg.WaitForPodsReady.BlockAdmission, &cfg.WaitForPodsReady.Enable)
+		cfg.WaitForPodsReady.RequeuingStrategy = cmp.Or(cfg.WaitForPodsReady.RequeuingStrategy, &RequeuingStrategy{})
+		cfg.WaitForPodsReady.RequeuingStrategy.Timestamp = cmp.Or(cfg.WaitForPodsReady.RequeuingStrategy.Timestamp, ptr.To(EvictionTimestamp))
+		cfg.WaitForPodsReady.RequeuingStrategy.BackoffBaseSeconds = cmp.Or(cfg.WaitForPodsReady.RequeuingStrategy.BackoffBaseSeconds, ptr.To[int32](DefaultRequeuingBackoffBaseSeconds))
+		cfg.WaitForPodsReady.RequeuingStrategy.BackoffMaxSeconds = cmp.Or(cfg.WaitForPodsReady.RequeuingStrategy.BackoffMaxSeconds, ptr.To[int32](DefaultRequeuingBackoffMaxSeconds))
 	}
-	if cfg.ClientConnection.QPS == nil {
-		cfg.ClientConnection.QPS = ptr.To(DefaultClientConnectionQPS)
-	}
-	if cfg.ClientConnection.Burst == nil {
-		cfg.ClientConnection.Burst = ptr.To(DefaultClientConnectionBurst)
-	}
-	if cfg.WaitForPodsReady != nil {
-		if cfg.WaitForPodsReady.Timeout == nil {
-			cfg.WaitForPodsReady.Timeout = &metav1.Duration{Duration: defaultPodsReadyTimeout}
-		}
-		if cfg.WaitForPodsReady.BlockAdmission == nil {
-			defaultBlockAdmission := true
-			if !cfg.WaitForPodsReady.Enable {
-				defaultBlockAdmission = false
-			}
-			cfg.WaitForPodsReady.BlockAdmission = &defaultBlockAdmission
-		}
-		if cfg.WaitForPodsReady.RequeuingStrategy == nil {
-			cfg.WaitForPodsReady.RequeuingStrategy = &RequeuingStrategy{}
-		}
-		if cfg.WaitForPodsReady.RequeuingStrategy.Timestamp == nil {
-			cfg.WaitForPodsReady.RequeuingStrategy.Timestamp = ptr.To(EvictionTimestamp)
-		}
-		if cfg.WaitForPodsReady.RequeuingStrategy.BackoffBaseSeconds == nil {
-			cfg.WaitForPodsReady.RequeuingStrategy.BackoffBaseSeconds = ptr.To[int32](DefaultRequeuingBackoffBaseSeconds)
-		}
-		if cfg.WaitForPodsReady.RequeuingStrategy.BackoffMaxSeconds == nil {
-			cfg.WaitForPodsReady.RequeuingStrategy.BackoffMaxSeconds = ptr.To[int32](DefaultRequeuingBackoffMaxSeconds)
-		}
-	}
-	if cfg.Integrations == nil {
-		cfg.Integrations = &Integrations{}
-	}
-	if cfg.Integrations.Frameworks == nil {
+
+	cfg.Integrations = cmp.Or(cfg.Integrations, &Integrations{})
+	if len(cfg.Integrations.Frameworks) == 0 {
 		cfg.Integrations.Frameworks = []string{defaultJobFrameworkName}
 	}
-	if cfg.QueueVisibility == nil {
-		cfg.QueueVisibility = &QueueVisibility{}
-	}
-	if cfg.QueueVisibility.UpdateIntervalSeconds == 0 {
-		cfg.QueueVisibility.UpdateIntervalSeconds = DefaultQueueVisibilityUpdateIntervalSeconds
-	}
-	if cfg.QueueVisibility.ClusterQueues == nil {
-		cfg.QueueVisibility.ClusterQueues = &ClusterQueueVisibility{
-			MaxCount: DefaultClusterQueuesMaxCount,
-		}
-	}
 
-	if cfg.Integrations.PodOptions == nil {
-		cfg.Integrations.PodOptions = &PodIntegrationOptions{}
-	}
-
-	if cfg.Integrations.PodOptions.NamespaceSelector == nil {
-		matchExpressionsValues := []string{"kube-system", *cfg.Namespace}
-
-		cfg.Integrations.PodOptions.NamespaceSelector = &metav1.LabelSelector{
-			MatchExpressions: []metav1.LabelSelectorRequirement{
-				{
-					Key:      "kubernetes.io/metadata.name",
-					Operator: metav1.LabelSelectorOpNotIn,
-					Values:   matchExpressionsValues,
-				},
+	cfg.ManagedJobsNamespaceSelector = cmp.Or(cfg.ManagedJobsNamespaceSelector, &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      corev1.LabelMetadataName,
+				Operator: metav1.LabelSelectorOpNotIn,
+				Values:   []string{"kube-system", *cfg.Namespace},
 			},
-		}
-	}
+		},
+	})
 
-	if cfg.Integrations.PodOptions.PodSelector == nil {
-		cfg.Integrations.PodOptions.PodSelector = &metav1.LabelSelector{}
-	}
+	cfg.MultiKueue = cmp.Or(cfg.MultiKueue, &MultiKueue{})
+	cfg.MultiKueue.GCInterval = cmp.Or(cfg.MultiKueue.GCInterval, &metav1.Duration{Duration: DefaultMultiKueueGCInterval})
+	cfg.MultiKueue.Origin = ptr.To(cmp.Or(ptr.Deref(cfg.MultiKueue.Origin, ""), DefaultMultiKueueOrigin))
+	cfg.MultiKueue.WorkerLostTimeout = cmp.Or(cfg.MultiKueue.WorkerLostTimeout, &metav1.Duration{Duration: DefaultMultiKueueWorkerLostTimeout})
+	cfg.MultiKueue.DispatcherName = cmp.Or(cfg.MultiKueue.DispatcherName, ptr.To(MultiKueueDispatcherModeAllAtOnce))
 
-	if cfg.ManagedJobsNamespaceSelector == nil {
-		matchExpressionsValues := []string{"kube-system", *cfg.Namespace}
-
-		cfg.ManagedJobsNamespaceSelector = &metav1.LabelSelector{
-			MatchExpressions: []metav1.LabelSelectorRequirement{
-				{
-					Key:      "kubernetes.io/metadata.name",
-					Operator: metav1.LabelSelectorOpNotIn,
-					Values:   matchExpressionsValues,
-				},
-			},
-		}
-	}
-
-	if cfg.MultiKueue == nil {
-		cfg.MultiKueue = &MultiKueue{}
-	}
-	if cfg.MultiKueue.GCInterval == nil {
-		cfg.MultiKueue.GCInterval = &metav1.Duration{Duration: DefaultMultiKueueGCInterval}
-	}
-	if ptr.Deref(cfg.MultiKueue.Origin, "") == "" {
-		cfg.MultiKueue.Origin = ptr.To(DefaultMultiKueueOrigin)
-	}
-	if cfg.MultiKueue.WorkerLostTimeout == nil {
-		cfg.MultiKueue.WorkerLostTimeout = &metav1.Duration{Duration: DefaultMultiKueueWorkerLostTimeout}
-	}
 	if fs := cfg.FairSharing; fs != nil && fs.Enable && len(fs.PreemptionStrategies) == 0 {
 		fs.PreemptionStrategies = []PreemptionStrategy{LessThanOrEqualToFinalShare, LessThanInitialShare}
+	}
+	if afs := cfg.AdmissionFairSharing; afs != nil {
+		afs.UsageSamplingInterval.Duration = cmp.Or(afs.UsageSamplingInterval.Duration, 5*time.Minute)
 	}
 
 	if cfg.Resources != nil {
 		for idx := range cfg.Resources.Transformations {
-			if ptr.Deref(cfg.Resources.Transformations[idx].Strategy, "") == "" {
-				cfg.Resources.Transformations[idx].Strategy = ptr.To(DefaultResourceTransformationStrategy)
-			}
+			cfg.Resources.Transformations[idx].Strategy = ptr.To(cmp.Or(ptr.Deref(cfg.Resources.Transformations[idx].Strategy, ""), DefaultResourceTransformationStrategy))
 		}
 	}
 }
