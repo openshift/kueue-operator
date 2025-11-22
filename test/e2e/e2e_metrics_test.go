@@ -47,9 +47,6 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 	var curlPod *corev1.Pod
 
 	BeforeAll(func() {
-		By("Deploying Kueue operand if not already deployed")
-		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
-
 		By("Ensuring monitoring namespace exists")
 		_, err := kubeClient.CoreV1().Namespaces().Get(context.Background(), monitoringNamespace, metav1.GetOptions{})
 		if err != nil {

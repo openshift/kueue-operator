@@ -41,12 +41,6 @@ var (
 )
 
 var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, func() {
-	BeforeAll(func() {
-		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
-	})
-	AfterAll(func(ctx context.Context) {
-		testutils.CleanUpKueueInstance(ctx, clients.KueueClient, "cluster", clients.KubeClient)
-	})
 
 	When("labelPolicy=None and LocalQueue default in a managed namespace", func() {
 		var initialKueueInstance *kueueoperatorv1.Kueue
