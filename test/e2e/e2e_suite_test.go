@@ -70,4 +70,8 @@ var _ = BeforeSuite(func() {
 
 	visibilityClient, err = testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:default", testutils.OperatorNamespace))
 	Expect(err).NotTo(HaveOccurred())
+
+	// Deploy the Kueue operand once for all tests
+	By("Deploying Kueue operand for all test suites")
+	Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
 })
