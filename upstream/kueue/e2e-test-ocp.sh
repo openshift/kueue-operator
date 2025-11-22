@@ -94,5 +94,6 @@ $GINKGO ${GINKGO_ARGS:-} \
   --output-dir="$ARTIFACTS" \
   --keep-going \
   --flake-attempts=3 \
+  --no-color \
   -v ./upstream/kueue/src/test/e2e/"$E2E_TARGET_FOLDER"/...
 

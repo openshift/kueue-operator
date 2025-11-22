@@ -45,12 +45,6 @@ const (
 )
 
 var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, func() {
-	BeforeAll(func() {
-		Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
-	})
-	AfterAll(func(ctx context.Context) {
-		testutils.CleanUpKueueInstance(ctx, clients.KueueClient, "cluster", clients.KubeClient)
-	})
 
 	When("kueue.openshift.io/allow-nominal-concurrency-shares-update annotation is set to true", func() {
 		labelKey := testutils.OpenShiftManagedLabel

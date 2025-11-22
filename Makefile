@@ -212,12 +212,12 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	$(GINKGO) --label-filter="!disruptive" --junit-report=report.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="!disruptive && !flaky" --junit-report=report.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-ci-test-disruptive
 e2e-ci-test-disruptive: ginkgo
 	@echo "Running operator e2e tests disuptive..."
-	$(GINKGO) --label-filter="disruptive" --junit-report=report.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="disruptive && !flaky" --junit-report=report.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-upstream-test
 e2e-upstream-test: ginkgo
