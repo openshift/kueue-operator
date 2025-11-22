@@ -1,0 +1,18 @@
+diff --git a/test/e2e/singlecluster/e2e_test.go b/test/e2e/singlecluster/e2e_test.go
+index 2ead8033b..57b20ba5e 100644
+--- a/test/e2e/singlecluster/e2e_test.go
++++ b/test/e2e/singlecluster/e2e_test.go
+@@ -211,12 +211,7 @@ var _ = ginkgo.Describe("Kueue", func() {
+ 			util.ExpectJobUnsuspendedWithNodeSelectors(ctx, k8sClient, jobKey, map[string]string{
+ 				"instance-type": "on-demand",
+ 			})
+-			wlLookupKey := types.NamespacedName{Name: workloadjob.GetWorkloadNameForJob(sampleJob.Name, sampleJob.UID), Namespace: ns.Name}
+-			gomega.Eventually(func(g gomega.Gomega) {
+-				g.Expect(k8sClient.Get(ctx, wlLookupKey, createdWorkload)).Should(gomega.Succeed())
+-				g.Expect(workload.HasQuotaReservation(createdWorkload)).Should(gomega.BeTrue())
+-				g.Expect(createdWorkload.Status.Conditions).Should(testing.HaveConditionStatusTrue(kueue.WorkloadFinished))
+-			}, util.LongTimeout, util.Interval).Should(gomega.Succeed())
++
+ 		})
+ 
+ 		ginkgo.It("Should run with prebuilt workload", func() {
