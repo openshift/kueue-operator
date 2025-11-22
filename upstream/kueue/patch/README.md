@@ -7,3 +7,7 @@ This patch sets up our e2e tests to skip operators and set up our namespaces.
 ## golang-1.24.patch
 
 This patch can be dropped once there is a golang 1.25 builder image.
+
+## wait-for-pods-running.patch
+
+This patch adds a wait step in the e2e tests to ensure pods are running before checking workload status.
