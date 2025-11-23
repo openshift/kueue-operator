@@ -18,21 +18,23 @@ export E2E_KIND_VERSION=""
 
 # To label worker nodes for e2e tests.
 function label_worker_nodes() {
-  echo "Labeling two worker nodes for e2e tests..."
+  echo "Labeling three worker nodes for e2e tests..."
   # Retrieve the names of nodes with the "worker" role.
   local nodes
   IFS=' ' read -r -a nodes <<< "$($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}')"
 
-  if [ ${#nodes[@]} -lt 2 ]; then
-    echo "Error: Found less than 2 worker nodes. Cannot assign labels."
+  if [ ${#nodes[@]} -lt 3 ]; then
+    echo "Error: Found less than 3 worker nodes. Cannot assign labels."
     exit 1
   fi
 
   # Label the first node as "on-demand"
   $OC patch node "${nodes[0]}" --type=merge -p '{"metadata":{"labels":{"instance-type":"on-demand"}}}'
+  # Label the second node as "on-demand" also
+  $OC patch node "${nodes[1]}" --type=merge -p '{"metadata":{"labels":{"instance-type":"on-demand"}}}'
   # Label the second node as "spot"
-  $OC patch node "${nodes[1]}" --type=merge -p '{"metadata":{"labels":{"instance-type":"spot"}}}'
-  echo "Labeled ${nodes[0]} as on-demand and ${nodes[1]} as spot."
+  $OC patch node "${nodes[2]}" --type=merge -p '{"metadata":{"labels":{"instance-type":"spot"}}}'
+  echo "Labeled ${nodes[0]} and ${nodes[1]} as on-demand and ${nodes[2]} as spot."
 }
 
 function allow_privileged_access {
