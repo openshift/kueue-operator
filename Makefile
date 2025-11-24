@@ -29,6 +29,8 @@ CODEGEN_OUTPUT_PACKAGE :=github.com/openshift/kueue-operator/pkg/generated
 CODEGEN_API_PACKAGE :=github.com/openshift/kueue-operator/pkg/apis
 CODEGEN_GROUPS_VERSION :=kueue:v1
 
+ARTIFACT_DIR ?= reports
+
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
@@ -212,7 +214,7 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="!disruptive && !flaky" --junit-report=report.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="!disruptive && !flaky" --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-ci-test-disruptive
 e2e-ci-test-disruptive: ginkgo
@@ -225,8 +227,9 @@ e2e-upstream-test: ginkgo
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	./hack/wait-for-kueue-leader-election.sh
 	@echo "Running e2e tests on OpenShift cluster ($(shell oc whoami --show-server))"
-	ARTIFACTS="$(LOCALBIN)/$@" IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS)" \
-	E2E_TARGET_FOLDER="singlecluster" \
+	mkdir -p "$(ARTIFACT_DIR)"
+	IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS)" \
+	ARTIFACT_DIR=$(ARTIFACT_DIR) E2E_TARGET_FOLDER="singlecluster" \
 	SKIP_DEPLOY=true \
 	./upstream/kueue/e2e-test-ocp.sh
 

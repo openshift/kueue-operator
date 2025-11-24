@@ -92,9 +92,9 @@ allow_privileged_access
 # shellcheck disable=SC2086
 $GINKGO ${GINKGO_ARGS:-} \
   --skip="${GINKGO_SKIP_PATTERN}" \
-  --junit-report=junit.xml \
-  --json-report=e2e.json \
-  --output-dir="$ARTIFACTS" \
+  --junit-report=e2e-upstream-junit.xml \
+  --json-report=e2e-upstream.json \
+  --output-dir="$ARTIFACT_DIR" \
   --keep-going \
   --flake-attempts=3 \
   --no-color \
