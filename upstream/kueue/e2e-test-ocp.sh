@@ -29,9 +29,9 @@ function label_worker_nodes() {
   fi
 
   # Label the first node as "on-demand"
-  $OC label node "${nodes[0]}" instance-type=on-demand --overwrite
+  $OC patch node "${nodes[0]}" --type=merge -p '{"metadata":{"labels":{"instance-type":"on-demand"}}}'
   # Label the second node as "spot"
-  $OC label node "${nodes[1]}" instance-type=spot --overwrite
+  $OC patch node "${nodes[1]}" --type=merge -p '{"metadata":{"labels":{"instance-type":"spot"}}}'
   echo "Labeled ${nodes[0]} as on-demand and ${nodes[1]} as spot."
 }
 
@@ -97,5 +97,6 @@ $GINKGO ${GINKGO_ARGS:-} \
   --output-dir="$ARTIFACTS" \
   --keep-going \
   --flake-attempts=3 \
+  --no-color \
   -v ./upstream/kueue/src/test/e2e/"$E2E_TARGET_FOLDER"/...
 
