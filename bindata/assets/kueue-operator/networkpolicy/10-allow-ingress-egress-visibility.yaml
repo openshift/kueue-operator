@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: kueue-allow-ingress-visibility
+  name: kueue-allow-ingress-egress-visibility
   namespace: openshift-kueue-operator
 spec:
   podSelector:
@@ -13,5 +13,12 @@ spec:
     ports:
     - protocol: TCP
       port: visibility
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow responses to all namespaces
+    ports:
+    - protocol: TCP
+      port: visibility
   policyTypes:
   - Ingress
+  - Egress
