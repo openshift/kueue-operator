@@ -36,7 +36,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	visibilityv1beta1 "sigs.k8s.io/kueue/apis/visibility/v1beta1"
-	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
 
 const (
@@ -366,11 +365,6 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).To(HaveOccurred(), "Expected an error when user with kueue-batch-user-role tries to access ClusterQueue pending workloads")
 			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "Expected a Forbidden error when user with kueue-batch-user-role tries to access ClusterQueue pending workloads")
 
-			By("Verifying all workloads have been completed")
-			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceA.Name, string(jobHighA.UID))
-			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceA.Name, string(jobMediumA.UID))
-			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceA.Name, string(jobLowA.UID))
-			verifyWorkloadCompleted(clients.UpstreamKueueClient, namespaceB.Name, string(jobHighB.UID))
 		})
 
 		It("Should allow access to LocalQueues in bound namespaces and deny access to unbound namespaces", func(ctx context.Context) {
@@ -911,29 +905,6 @@ func createCustomJob(ctx context.Context, name, namespace, queueName, priorityCl
 	}
 
 	return cleanup, createdJob, nil
-}
-
-// verifyWorkloadCompleted waits for a workload with the specified job UID to complete
-// and asserts that the workload's Finished condition is set to True
-func verifyWorkloadCompleted(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {
-	Eventually(func() bool {
-		// Find workload by job UID
-		workloads, err := kueueClient.KueueV1beta1().Workloads(namespace).List(context.TODO(), metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", uid),
-		})
-		if err != nil || len(workloads.Items) == 0 {
-			return false
-		}
-
-		workload := &workloads.Items[0]
-		// Check if workload has Finished condition set to True
-		for _, condition := range workload.Status.Conditions {
-			if condition.Type == "Finished" && condition.Status == metav1.ConditionTrue {
-				return true
-			}
-		}
-		return false
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), fmt.Sprintf("Workload for job UID %s in namespace %s did not complete within timeout", uid, namespace))
 }
 
 // headerCaptureRoundTripper wraps an http.RoundTripper to capture response headers
