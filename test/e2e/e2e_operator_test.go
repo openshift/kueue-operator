@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1348,7 +1349,7 @@ func waitForWebhookReady(ctx context.Context, kubeClient *kubernetes.Clientset) 
 		}
 		klog.Infof("Webhook success %d/%d", consecutiveSuccesses, requiredSuccesses)
 		return fmt.Errorf("waiting for webhook stability (%d/%d successes)", consecutiveSuccesses, requiredSuccesses)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook failed to respond to requests")
+	}, testutils.OperatorReadyTime, 3*time.Second).Should(Succeed(), "webhook failed to respond to requests")
 }
 
 func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue, framework string) {
@@ -1460,8 +1461,10 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 		if err != nil {
 			return false
 		}
-		return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Workload not admitted")
+		// Accept workloads that are either admitted or finished (which means they were admitted and completed)
+		return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted) ||
+			apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadFinished)
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Workload not admitted or finished")
 	return workload.Name
 }
 
