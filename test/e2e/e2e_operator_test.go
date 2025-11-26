@@ -1422,7 +1422,7 @@ func fetchWorkload(kueueClient *upstreamkueueclient.Clientset, namespace, uid st
 
 func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) string {
 	ctx := context.TODO()
-	By("verifying workload created")
+	By(fmt.Sprintf("verifying workload created in namespace %s and uid %s", namespace, uid))
 	// Verify that a Workload with the expected label is created and admitted
 	var workload *kueuev1beta1.Workload
 	Eventually(func() error {
@@ -1453,18 +1453,21 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 			}
 		}
 
-		return fmt.Errorf("no workload found")
+		return fmt.Errorf("no workload found in namespace %s with uid %s", namespace, uid)
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
-	Eventually(func() bool {
+	Eventually(func() error {
 		updatedWorkload, err := kueueClient.KueueV1beta1().Workloads(namespace).Get(ctx, workload.Name, metav1.GetOptions{})
 		if err != nil {
-			return false
+			return err
 		}
 		// Accept workloads that are either admitted or finished (which means they were admitted and completed)
-		return apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted) ||
-			apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadFinished)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Workload not admitted or finished")
+		if apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted) ||
+			apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadFinished) {
+			return nil
+		}
+		return fmt.Errorf("workload %s/%s not admitted or finished", namespace, workload.Name)
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 	return workload.Name
 }
 
