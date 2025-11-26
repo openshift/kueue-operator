@@ -475,6 +475,35 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
 			DeferCleanup(cleanupJobLowB)
 
+			// Wait for all workloads to be created before checking pending status
+			By("Waiting for job-high-a workload to be created")
+			Eventually(func() error {
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(namespaceA.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobHighA.UID),
+				})
+				if err != nil {
+					return err
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("workload for job-high-a not found yet")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "job-high-a workload was not created")
+
+			By("Waiting for job-low-b workload to be created")
+			Eventually(func() error {
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(namespaceB.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobLowB.UID),
+				})
+				if err != nil {
+					return err
+				}
+				if len(workloads.Items) == 0 {
+					return fmt.Errorf("workload for job-low-b not found yet")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "job-low-b workload was not created")
+
 			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueueA.Name, namespaceA.Name)
 			// Wait for job-blocker pod to be created
 			Eventually(func() error {

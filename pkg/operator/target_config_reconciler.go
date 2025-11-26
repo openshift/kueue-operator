@@ -425,28 +425,6 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 	specAnnotations["rolebinding/"+roleBindingLeader.Name] = hash
 
-	managerSecretsRole, _, err := c.manageRole(ctx, "assets/kueue-operator/role-manager-secrets.yaml", ownerReference)
-	if err != nil {
-		klog.Error("unable to create role manager-secrets")
-		return err
-	}
-	hash, err = computeSpecHash(managerSecretsRole.Rules)
-	if err != nil {
-		return fmt.Errorf("failed to hash Role rules: %w", err)
-	}
-	specAnnotations["role/"+managerSecretsRole.Name] = hash
-
-	roleBindingManagerSecrets, _, err := c.manageRoleBindings(ctx, "assets/kueue-operator/rolebinding-manager-secrets.yaml", ownerReference, true)
-	if err != nil {
-		klog.Error("unable to bind role manager-secrets")
-		return err
-	}
-	hash, err = computeSpecHash(roleBindingManagerSecrets)
-	if err != nil {
-		return fmt.Errorf("failed to hash RoleBinding: %w", err)
-	}
-	specAnnotations["rolebinding/"+roleBindingManagerSecrets.Name] = hash
-
 	if c.serviceMonitorSupport {
 		prometheusRole, _, err := c.manageRole(ctx, "assets/kueue-operator/role-prometheus.yaml", ownerReference)
 		if err != nil {
@@ -1264,38 +1242,22 @@ func (c *TargetConfigReconciler) manageService(ctx context.Context, assetPath st
 }
 
 func (c *TargetConfigReconciler) manageAPIService(ctx context.Context, specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
-	// Manage both v1beta1 and v1beta2 APIService versions
-	apiServiceFiles := []string{
-		"assets/kueue-operator/apiservice-v1beta1.visibility.kueue.x-k8s.io.yaml",
-		"assets/kueue-operator/apiservice-v1beta2.visibility.kueue.x-k8s.io.yaml",
+	assetPath := "assets/kueue-operator/apiservice.yaml"
+	required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset(assetPath))
+	required.Spec.InsecureSkipTLSVerify = false
+	required.Spec.Service.Namespace = c.operatorNamespace
+	required.Spec.Service.Name = "kueue-visibility-server"
+	required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
+	newAnnotation := required.Annotations
+	if newAnnotation == nil {
+		newAnnotation = map[string]string{}
 	}
-
-	for _, assetPath := range apiServiceFiles {
-		required := resourceread.ReadAPIServiceOrDie(bindata.MustAsset(assetPath))
-		required.Spec.InsecureSkipTLSVerify = false
-		required.Spec.Service.Namespace = c.operatorNamespace
-		required.Spec.Service.Name = "kueue-visibility-server"
-		required.Annotations = cert.InjectCertAnnotation(required.Annotations, c.operatorNamespace)
-		newAnnotation := required.Annotations
-		if newAnnotation == nil {
-			newAnnotation = map[string]string{}
-		}
-		newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
-		required.Annotations = newAnnotation
-		required.OwnerReferences = []metav1.OwnerReference{
-			ownerReference,
-		}
-		apiService, _, err := resourceapply.ApplyAPIService(ctx, c.apiRegistrationClient, c.eventRecorder, required)
-		if err != nil {
-			return err
-		}
-		hash, err := computeSpecHash(apiService.Spec)
-		if err != nil {
-			return fmt.Errorf("failed to hash APIService spec: %w", err)
-		}
-		specAnnotations["apiservice/"+apiService.Name] = hash
+	newAnnotation["cert-manager.io/inject-ca-from"] = fmt.Sprintf("%s/kueue-visibility-server-cert", c.operatorNamespace)
+	required.Annotations = newAnnotation
+	required.OwnerReferences = []metav1.OwnerReference{
+		ownerReference,
 	}
-	apiService, _, err := resourceapply.ApplyAPIService(c.ctx, c.apiRegistrationClient, c.eventRecorder, required)
+	apiService, _, err := resourceapply.ApplyAPIService(ctx, c.apiRegistrationClient, c.eventRecorder, required)
 	if err != nil {
 		return err
 	}
@@ -1713,7 +1675,7 @@ func (c *TargetConfigReconciler) manageDeployment(ctx context.Context, kueueoper
 
 	resourcemerge.MergeMap(ptr.To(false), &required.Spec.Template.Annotations, specAnnotations)
 
-	deploy, updated, err := c.applyDeploymentWithCache(ctx, 
+	deploy, updated, err := c.applyDeploymentWithCache(ctx,
 		required,
 		resourcemerge.ExpectedDeploymentGeneration(required, kueueoperator.Status.Generations))
 	if err != nil {
