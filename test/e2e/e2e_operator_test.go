@@ -1234,6 +1234,51 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 		return fmt.Errorf("deployment is not ready")
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager deployment failed to be ready")
 
+	// Wait for all old controller pods to be terminated to
+	By("Waiting for old kueue-controller-manager pods to be fully terminated")
+	Eventually(func() error {
+		// List all ReplicaSets for this deployment
+		replicaSets, err := kClient.AppsV1().ReplicaSets(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: "control-plane=controller-manager",
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list replicasets: %w", err)
+		}
+
+		// Find the current (active) ReplicaSet - it should have desired replicas > 0
+		// Old ReplicaSets will have Spec.Replicas = 0 even if pods are still terminating
+		var currentTemplateHash string
+		for _, rs := range replicaSets.Items {
+			if rs.Spec.Replicas != nil && *rs.Spec.Replicas > 0 {
+				currentTemplateHash = rs.Labels["pod-template-hash"]
+				break
+			}
+		}
+
+		if currentTemplateHash == "" {
+			return fmt.Errorf("could not find current active replicaset")
+		}
+
+		// List all controller pods
+		pods, err := kClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: "control-plane=controller-manager",
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list controller pods: %w", err)
+		}
+
+		// Check if any old pods still exist
+		for _, pod := range pods.Items {
+			podTemplateHash := pod.Labels["pod-template-hash"]
+			if podTemplateHash != currentTemplateHash {
+				return fmt.Errorf("old pod %s (hash: %s) still exists, waiting for termination", pod.Name, podTemplateHash)
+			}
+		}
+
+		By(fmt.Sprintf("All old controller pods terminated, %d new pods running with hash %s", len(pods.Items), currentTemplateHash))
+		return nil
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "old controller pods failed to terminate")
+
 	// Wait for webhook configurations to be created/updated
 	By("Waiting for webhook configurations to exist")
 	Eventually(func() error {
