@@ -13,7 +13,7 @@ GO_BUILD_FLAGS :=-tags strictfipsruntime
 
 IMAGE_REGISTRY ?=registry.svc.ci.openshift.org
 
-OPERATOR_VERSION ?= 1.2.0
+OPERATOR_VERSION ?= 1.3.0
 OPERATOR_SDK_VERSION ?= v1.37.0
 # These are targets for pushing images
 OPERATOR_IMAGE ?= registry.redhat.io/kueue/kueue-rhel9-operator:latest
@@ -63,7 +63,7 @@ code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject
 
 .PHONY: generate-clients
 generate-clients:
-	GO=GO111MODULE=on GOTOOLCHAIN=go1.24.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
+	GO=GO111MODULE=on GOTOOLCHAIN=go1.25.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
 
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:
