@@ -539,7 +539,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return &job.Status
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not started in unlabeled namespace")
 		})
-		It("should manage pods only in labeled namespaces", Label("flaky"), func() {
+		It("should manage pods only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
 				validateWebhookConfig(kubeClient, labelKey, labelValue, "pod")
@@ -579,7 +579,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return pod.Status.Phase
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(corev1.PodRunning), "Pod not running in unlabeled namespace")
 		})
-		It("should manage deployments only in labeled namespaces", Label("flaky"), func() {
+		It("should manage deployments only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
 				validateWebhookConfig(kubeClient, labelKey, labelValue, "deployment")
@@ -635,7 +635,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return deploy.Status.AvailableReplicas
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(int32(1)), "Deployment in unlabeled namespace not available")
 		})
-		It("should manage statefulsets only in labeled namespaces", Label("flaky"), func() {
+		It("should manage statefulsets only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
 				validateWebhookConfig(kubeClient, labelKey, labelValue, "statefulset")
