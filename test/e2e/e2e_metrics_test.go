@@ -39,7 +39,7 @@ const (
 	serviceMonitorName       = "kueue-metrics"
 	metricsPort              = 8443
 	metricsSecretName        = "metrics-server-cert"
-	metricsNetworkPolicyName = "kueue-allow-ingress-metrics"
+	metricsNetworkPolicyName = "kueue-allow-ingress-egress-metrics"
 	monitoringNamespace      = "openshift-monitoring"
 )
 

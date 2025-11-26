@@ -1,0 +1,27 @@
+# allow ingress and egress traffic to/from the visibility server
+# The visibility API has RBAC controls, so we allow from all namespaces
+# Note: On KIND/vanilla k8s, this is automatically adjusted to allow host network too
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kueue-allow-ingress-egress-visibility
+  namespace: openshift-kueue-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kueue # applies to the kueue pod only
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow from all namespaces (visibility server has RBAC controls)
+    ports:
+    - protocol: TCP
+      port: visibility
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow responses to all namespaces
+    ports:
+    - protocol: TCP
+      port: visibility
+  policyTypes:
+  - Ingress
+  - Egress
