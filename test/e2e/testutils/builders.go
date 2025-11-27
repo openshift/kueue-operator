@@ -45,7 +45,7 @@ func (b *TestResourceBuilder) NewPod() *corev1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-pod-",
 			Namespace:    b.namespace,
-			Annotations: map[string]string{
+			Labels: map[string]string{
 				"kueue.x-k8s.io/queue-name": b.queueName,
 			},
 		},
@@ -105,7 +105,7 @@ func (b *TestResourceBuilder) NewStatefulSet() *appsv1.StatefulSet {
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-ss-",
 			Namespace:    b.namespace,
-			Annotations: map[string]string{
+			Labels: map[string]string{
 				"kueue.x-k8s.io/queue-name": b.queueName,
 			},
 		},
@@ -150,7 +150,7 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-deploy-",
 			Namespace:    b.namespace,
-			Annotations: map[string]string{
+			Labels: map[string]string{
 				"kueue.x-k8s.io/queue-name": b.queueName,
 			},
 		},
@@ -191,7 +191,7 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 
 func (b *TestResourceBuilder) NewPodWithoutQueue() *corev1.Pod {
 	pod := b.NewPod()
-	delete(pod.Annotations, "kueue.x-k8s.io/queue-name")
+	delete(pod.Labels, "kueue.x-k8s.io/queue-name")
 	return pod
 }
 
@@ -205,13 +205,13 @@ func (b *TestResourceBuilder) NewJobWithoutQueue() *batchv1.Job {
 
 func (b *TestResourceBuilder) NewDeploymentWithoutQueue() *appsv1.Deployment {
 	deploy := b.NewDeployment()
-	delete(deploy.Annotations, "kueue.x-k8s.io/queue-name")
+	delete(deploy.Labels, "kueue.x-k8s.io/queue-name")
 	return deploy
 }
 
 func (b *TestResourceBuilder) NewStatefulSetWithoutQueue() *appsv1.StatefulSet {
 	ss := b.NewStatefulSet()
-	delete(ss.Annotations, "kueue.x-k8s.io/queue-name")
+	delete(ss.Labels, "kueue.x-k8s.io/queue-name")
 	return ss
 }
 
