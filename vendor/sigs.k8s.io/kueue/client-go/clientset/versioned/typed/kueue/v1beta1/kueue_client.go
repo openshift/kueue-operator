@@ -18,22 +18,24 @@ limitations under the License.
 package v1beta1
 
 import (
-	"net/http"
+	http "net/http"
 
 	rest "k8s.io/client-go/rest"
-	v1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
-	"sigs.k8s.io/kueue/client-go/clientset/versioned/scheme"
+	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
+	scheme "sigs.k8s.io/kueue/client-go/clientset/versioned/scheme"
 )
 
 type KueueV1beta1Interface interface {
 	RESTClient() rest.Interface
 	AdmissionChecksGetter
 	ClusterQueuesGetter
+	CohortsGetter
 	LocalQueuesGetter
 	MultiKueueClustersGetter
 	MultiKueueConfigsGetter
 	ProvisioningRequestConfigsGetter
 	ResourceFlavorsGetter
+	TopologiesGetter
 	WorkloadsGetter
 	WorkloadPriorityClassesGetter
 }
@@ -49,6 +51,10 @@ func (c *KueueV1beta1Client) AdmissionChecks() AdmissionCheckInterface {
 
 func (c *KueueV1beta1Client) ClusterQueues() ClusterQueueInterface {
 	return newClusterQueues(c)
+}
+
+func (c *KueueV1beta1Client) Cohorts() CohortInterface {
+	return newCohorts(c)
 }
 
 func (c *KueueV1beta1Client) LocalQueues(namespace string) LocalQueueInterface {
@@ -71,6 +77,10 @@ func (c *KueueV1beta1Client) ResourceFlavors() ResourceFlavorInterface {
 	return newResourceFlavors(c)
 }
 
+func (c *KueueV1beta1Client) Topologies() TopologyInterface {
+	return newTopologies(c)
+}
+
 func (c *KueueV1beta1Client) Workloads(namespace string) WorkloadInterface {
 	return newWorkloads(c, namespace)
 }
@@ -84,9 +94,7 @@ func (c *KueueV1beta1Client) WorkloadPriorityClasses() WorkloadPriorityClassInte
 // where httpClient was generated with rest.HTTPClientFor(c).
 func NewForConfig(c *rest.Config) (*KueueV1beta1Client, error) {
 	config := *c
-	if err := setConfigDefaults(&config); err != nil {
-		return nil, err
-	}
+	setConfigDefaults(&config)
 	httpClient, err := rest.HTTPClientFor(&config)
 	if err != nil {
 		return nil, err
@@ -98,9 +106,7 @@ func NewForConfig(c *rest.Config) (*KueueV1beta1Client, error) {
 // Note the http client provided takes precedence over the configured transport values.
 func NewForConfigAndClient(c *rest.Config, h *http.Client) (*KueueV1beta1Client, error) {
 	config := *c
-	if err := setConfigDefaults(&config); err != nil {
-		return nil, err
-	}
+	setConfigDefaults(&config)
 	client, err := rest.RESTClientForConfigAndClient(&config, h)
 	if err != nil {
 		return nil, err
@@ -123,17 +129,15 @@ func New(c rest.Interface) *KueueV1beta1Client {
 	return &KueueV1beta1Client{c}
 }
 
-func setConfigDefaults(config *rest.Config) error {
-	gv := v1beta1.SchemeGroupVersion
+func setConfigDefaults(config *rest.Config) {
+	gv := kueuev1beta1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	config.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(scheme.Scheme, scheme.Codecs).WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
-
-	return nil
 }
 
 // RESTClient returns a RESTClient that is used to communicate

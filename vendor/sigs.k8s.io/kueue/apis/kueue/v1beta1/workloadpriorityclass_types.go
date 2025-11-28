@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,7 +29,8 @@ import (
 
 // WorkloadPriorityClass is the Schema for the workloadPriorityClass API
 type WorkloadPriorityClass struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// metadata is the metadata of the WorkloadPriorityClass.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// value represents the integer value of this workloadPriorityClass. This is the actual priority that workloads
