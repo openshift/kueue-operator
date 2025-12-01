@@ -65,7 +65,7 @@ code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject
 
 .PHONY: generate-clients
 generate-clients:
-	GO=GO111MODULE=on GOTOOLCHAIN=go1.24.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
+	GO=GO111MODULE=on GOTOOLCHAIN=go1.25.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
 
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:
@@ -144,7 +144,7 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.3.1
+GOLANGCI_LINT_VERSION ?= v2.7.2
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 	set -e ;\
