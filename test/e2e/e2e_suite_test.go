@@ -29,6 +29,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
@@ -64,6 +66,7 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	log.SetLogger(zap.New(zap.UseDevMode(true)))
 	clients = testutils.NewTestClients()
 	kubeClient = clients.KubeClient
 	genericClient = clients.GenericClient

@@ -34,11 +34,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
@@ -50,6 +52,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/klog/v2"
+	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -693,6 +696,99 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return ss.Status.ReadyReplicas
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Equal(int32(1)), "StatefulSet in unlabeled namespace not ready")
 		})
+
+		It("should suspend jobsets only in labeled namespaces when labelPolicy=None", func(ctx context.Context) {
+			kueueClientset := clients.KueueClient
+
+			By("Updating Kueue configuration with labelPolicy=None")
+			kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance := kueueInstance.DeepCopy()
+			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			jobsetInUnlabeledNamespace := &jobsetapi.JobSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-jobset-unmanaged",
+					Namespace: testNamespaceWithoutLabel,
+				},
+				Spec: jobsetapi.JobSetSpec{
+					Suspend: ptr.To(false),
+					ReplicatedJobs: []jobsetapi.ReplicatedJob{
+						{
+							Name:     "test-jobset",
+							Replicas: 1,
+							Template: batchv1.JobTemplateSpec{
+								Spec: batchv1.JobSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "test-jobset",
+													Image: "busybox",
+													Args:  []string{"sleep", "10s"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			jobsetInLabeledNamespace := jobsetInUnlabeledNamespace.DeepCopy()
+			jobsetInLabeledNamespace.Name = "test-jobset-managed"
+			jobsetInLabeledNamespace.Namespace = testNamespaceWithLabel
+
+			By("creating jobset in unlabeled namespace")
+			Expect(genericClient.Create(ctx, jobsetInUnlabeledNamespace)).Should(Succeed())
+			defer testutils.CleanUpObject(ctx, genericClient, jobsetInUnlabeledNamespace)
+
+			By("verifying jobset did start in unlabeled namespace")
+			Eventually(func() error {
+				jobset := &jobsetapi.JobSet{}
+				err := genericClient.Get(ctx, client.ObjectKeyFromObject(jobsetInUnlabeledNamespace), jobset)
+				if err != nil {
+					return err
+				}
+				if len(jobset.Status.ReplicatedJobsStatus) == 0 {
+					return fmt.Errorf("no replicated jobs status found")
+				}
+				if jobset.Status.ReplicatedJobsStatus[0].Suspended == 1 {
+					return fmt.Errorf("jobset is suspended")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Incorrect jobset status in unlabeled namespace")
+
+			By("creating jobset in labeled namespace")
+			err = genericClient.Create(ctx, jobsetInLabeledNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpObject(ctx, genericClient, jobsetInLabeledNamespace)
+
+			By("verifying workload is created")
+			fetchWorkload(kueueClient, testNamespaceWithLabel, string(jobsetInLabeledNamespace.UID))
+
+			By("verifying jobset did not start in labeled namespace")
+			Eventually(func() error {
+				jobset := &jobsetapi.JobSet{}
+				err := genericClient.Get(ctx, client.ObjectKeyFromObject(jobsetInLabeledNamespace), jobset)
+				if err != nil {
+					return err
+				}
+				if len(jobset.Status.ReplicatedJobsStatus) == 0 {
+					return fmt.Errorf("no replicated jobs status found")
+				}
+				if jobset.Status.ReplicatedJobsStatus[0].Suspended == 0 {
+					return fmt.Errorf("jobset is not suspended")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Incorrect jobset status in labeled namespace")
+
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		})
+
 		It("should manage LeaderWorkerSet without queue name in labeled namespace when labelPolicy=None", func() {
 			kueueClientset := clients.KueueClient
 			ctx := context.TODO()
