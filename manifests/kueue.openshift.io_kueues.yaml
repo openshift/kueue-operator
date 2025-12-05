@@ -273,6 +273,62 @@ spec:
                     required:
                     - preemptionPolicy
                     type: object
+                  resources:
+                    description: |-
+                      resources configures Dynamic Resource Allocation (DRA) support in Kueue.
+                      When resources.deviceClassMappings is configured, Kueue can track and
+                      enforce quotas for DRA devices in ClusterQueues.
+                      resources is optional.
+                    properties:
+                      deviceClassMappings:
+                        description: |-
+                          deviceClassMappings defines mappings from Kubernetes DeviceClass names
+                          to Kueue resource names for DRA quota tracking in ClusterQueues.
+                          Each DeviceClass name can only appear in one mapping.
+                          deviceClassMappings is limited to a maximum of 64 items.
+                        items:
+                          description: DeviceClassMapping maps Kubernetes DeviceClass
+                            names to a Kueue resource name.
+                          properties:
+                            deviceClassNames:
+                              description: |-
+                                deviceClassNames is the list of Kubernetes DeviceClass names
+                                (e.g., "gpu.nvidia.com") that map to the resource name above.
+                              items:
+                                type: string
+                              maxItems: 64
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: set
+                              x-kubernetes-validations:
+                              - message: each device class name must be a valid Kubernetes
+                                  resource name
+                                rule: self.all(x, x.matches(r"""^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?$"""))
+                            name:
+                              description: |-
+                                name is the Kueue resource name used in ClusterQueue quotas
+                                (e.g., "nvidia.com/gpu").
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                              x-kubernetes-validations:
+                              - message: name must be a valid Kubernetes resource
+                                  name
+                                rule: self.matches(r"""^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?$""")
+                          required:
+                          - deviceClassNames
+                          - name
+                          type: object
+                        maxItems: 64
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                        x-kubernetes-validations:
+                        - message: each DeviceClass name can only appear in one mapping
+                          rule: self.all(m1, m1.deviceClassNames.all(d, self.all(m2,
+                            m2 == m1 || !m2.deviceClassNames.exists(e, e == d))))
+                    type: object
                   workloadManagement:
                     description: |-
                       workloadManagement controls how Kueue manages workloads.
