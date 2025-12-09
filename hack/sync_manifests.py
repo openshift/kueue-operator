@@ -228,7 +228,13 @@ def main():
 
         separated_manifests[base_filename].append(doc)
 
+    # Track all generated files to detect orphaned files later
+    generated_files = set()
+
     def write_yaml_if_changed(bindata_file, doc, add_header=False):
+        # Track this file as generated
+        generated_files.add(os.path.abspath(bindata_file))
+
         # Read existing file content if it exists.
         existing_content = ""
         if os.path.exists(bindata_file):
@@ -316,9 +322,28 @@ def main():
 
                 write_yaml_if_changed(bindata_file, doc, add_header=True)
 
+    # Clean up orphaned CRD files that are no longer generated
+    crds_dir = os.path.join(bindata_dir, "crds")
+    if os.path.exists(crds_dir):
+        print("\nChecking for orphaned CRD files...")
+        orphaned_files = []
+        for crd_file in os.listdir(crds_dir):
+            if crd_file.endswith(".yaml"):
+                full_path = os.path.abspath(os.path.join(crds_dir, crd_file))
+                if full_path not in generated_files:
+                    orphaned_files.append(full_path)
+
+        if orphaned_files:
+            print(f"Found {len(orphaned_files)} orphaned CRD file(s):")
+            for orphaned_file in orphaned_files:
+                print(f"  Removing: {os.path.relpath(orphaned_file, bindata_dir)}")
+                os.remove(orphaned_file)
+        else:
+            print("No orphaned CRD files found.")
+
     # Delete manifests.yaml after processing.
     os.remove(input_file)
-    print(f"Processing complete. YAML manifests saved in {bindata_dir}/")
+    print(f"\nProcessing complete. YAML manifests saved in {bindata_dir}/")
 
 
 if __name__ == "__main__":
