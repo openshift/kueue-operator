@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// LocalQueueName is the name of the LocalQueue.
+// It must be a DNS (RFC 1123) and has the maximum length of 253 characters.
+//
+// +kubebuilder:validation:MaxLength=253
+// +kubebuilder:validation:Pattern="^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+type LocalQueueName string
+
 // LocalQueueSpec defines the desired state of LocalQueue
 type LocalQueueSpec struct {
 	// clusterQueue is a reference to a clusterQueue that backs this localQueue.
@@ -41,13 +48,15 @@ type LocalQueueSpec struct {
 	// +kubebuilder:validation:Enum=None;Hold;HoldAndDrain
 	// +kubebuilder:default="None"
 	StopPolicy *StopPolicy `json:"stopPolicy,omitempty"`
+
+	// fairSharing defines the properties of the LocalQueue when
+	// participating in AdmissionFairSharing.  The values are only relevant
+	// if AdmissionFairSharing is enabled in the Kueue configuration.
+	// +optional
+	FairSharing *FairSharing `json:"fairSharing,omitempty"`
 }
 
-// ClusterQueueReference is the name of the ClusterQueue.
-// +kubebuilder:validation:MaxLength=253
-// +kubebuilder:validation:Pattern="^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
-type ClusterQueueReference string
-
+// Deprecated: LocalQueueFlavorStatus is deprecated and marked for removal in v1beta2.
 type LocalQueueFlavorStatus struct {
 	// name of the flavor.
 	// +required
@@ -73,11 +82,45 @@ type LocalQueueFlavorStatus struct {
 	// +kubebuilder:validation:MaxItems=8
 	// +optional
 	NodeTaints []corev1.Taint `json:"nodeTaints,omitempty"`
+
+	// topology is the topology that associated with this ResourceFlavor.
+	//
+	// This is a beta field and requires enabling the TopologyAwareScheduling
+	// feature gate.
+	//
+	// +optional
+	Topology *TopologyInfo `json:"topology,omitempty"`
+}
+
+type TopologyInfo struct {
+	// name is the name of the topology.
+	//
+	// +required
+	// +kubebuilder:validation:Required
+	Name TopologyReference `json:"name"`
+
+	// levels define the levels of topology.
+	//
+	// +required
+	// +listType=atomic
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	Levels []string `json:"levels"`
 }
 
 // LocalQueueStatus defines the observed state of LocalQueue
 type LocalQueueStatus struct {
-	// PendingWorkloads is the number of Workloads in the LocalQueue not yet admitted to a ClusterQueue
+	// conditions hold the latest available observations of the LocalQueue
+	// current state.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// pendingWorkloads is the number of Workloads in the LocalQueue not yet admitted to a ClusterQueue
 	// +optional
 	PendingWorkloads int32 `json:"pendingWorkloads"`
 
@@ -91,15 +134,6 @@ type LocalQueueStatus struct {
 	// +optional
 	AdmittedWorkloads int32 `json:"admittedWorkloads"`
 
-	// Conditions hold the latest available observations of the LocalQueue
-	// current state.
-	// +optional
-	// +listType=map
-	// +listMapKey=type
-	// +patchStrategy=merge
-	// +patchMergeKey=type
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-
 	// flavorsReservation are the reserved quotas, by flavor currently in use by the
 	// workloads assigned to this LocalQueue.
 	// +listType=map
@@ -108,7 +142,7 @@ type LocalQueueStatus struct {
 	// +optional
 	FlavorsReservation []LocalQueueFlavorUsage `json:"flavorsReservation"`
 
-	// flavorsUsage are the used quotas, by flavor currently in use by the
+	// flavorUsage are the used quotas, by flavor currently in use by the
 	// workloads assigned to this LocalQueue.
 	// +listType=map
 	// +listMapKey=name
@@ -121,7 +155,13 @@ type LocalQueueStatus struct {
 	// +listMapKey=name
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
+	//
+	// Deprecated: Flavors is deprecated and marked for removal in v1beta2.
 	Flavors []LocalQueueFlavorStatus `json:"flavors,omitempty"`
+
+	// fairSharing contains the information about the current status of fair sharing.
+	// +optional
+	FairSharing *FairSharingStatus `json:"fairSharing,omitempty"`
 }
 
 const (
@@ -160,10 +200,13 @@ type LocalQueueResourceUsage struct {
 
 // LocalQueue is the Schema for the localQueues API
 type LocalQueue struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// metadata is the metadata of the LocalQueue.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   LocalQueueSpec   `json:"spec,omitempty"`
+	// spec is the specification of the LocalQueue.
+	Spec LocalQueueSpec `json:"spec,omitempty"`
+	// status is the status of the LocalQueue.
 	Status LocalQueueStatus `json:"status,omitempty"`
 }
 

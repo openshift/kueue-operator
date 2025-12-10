@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ type Configuration struct {
 	ControllerManager `json:",inline"`
 
 	// ManageJobsWithoutQueueName controls whether or not Kueue reconciles
-	// jobs that don't set the annotation kueue.x-k8s.io/queue-name.
+	// jobs that don't set the label kueue.x-k8s.io/queue-name.
 	// If set to true, then those jobs will be suspended and never started unless
 	// they are assigned a queue and eventually admitted. This also applies to
 	// jobs created before starting the kueue controller.
@@ -48,7 +48,21 @@ type Configuration struct {
 	// unsuspended, they will start immediately.
 	ManageJobsWithoutQueueName bool `json:"manageJobsWithoutQueueName"`
 
-	// ManagedJobsNamespaceSelector can be used to omit some namespaces from ManagedJobsWithoutQueueName
+	// ManagedJobsNamespaceSelector provides a namespace-based mechanism to exempt jobs
+	// from management by Kueue.
+	//
+	// It provides a strong exemption for the Pod-based integrations (pod, deployment, statefulset, etc.),
+	// For Pod-based integrations, only jobs whose namespaces match ManagedJobsNamespaceSelector are
+	// eligible to be managed by Kueue.  Pods, deployments, etc. in non-matching namespaces will
+	// never be managed by Kueue, even if they have a kueue.x-k8s.io/queue-name label.
+	// This strong exemption ensures that Kueue will not interfere with the basic operation
+	// of system namespace.
+	//
+	// For all other integrations, ManagedJobsNamespaceSelector provides a weaker exemption
+	// by only modulating the effects of ManageJobsWithoutQueueName.  For these integrations,
+	// a job that has a kueue.x-k8s.io/queue-name label will always be managed by Kueue. Jobs without
+	// a kueue.x-k8s.io/queue-name label will be managed by Kueue only when ManageJobsWithoutQueueName is
+	// true and the job's namespace matches ManagedJobsNamespaceSelector.
 	ManagedJobsNamespaceSelector *metav1.LabelSelector `json:"managedJobsNamespaceSelector,omitempty"`
 
 	// InternalCertManagement is configuration for internalCertManagement
@@ -70,6 +84,7 @@ type Configuration struct {
 
 	// QueueVisibility is configuration to expose the information about the top
 	// pending workloads.
+	//
 	// Deprecated: This field will be removed on v1beta2, use VisibilityOnDemand
 	// (https://kueue.sigs.k8s.io/docs/tasks/manage/monitor_pending_workloads/pending_workloads_on_demand/)
 	// instead.
@@ -78,8 +93,11 @@ type Configuration struct {
 	// MultiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
 	MultiKueue *MultiKueue `json:"multiKueue,omitempty"`
 
-	// FairSharing controls the fair sharing semantics across the cluster.
+	// FairSharing controls the Fair Sharing semantics across the cluster.
 	FairSharing *FairSharing `json:"fairSharing,omitempty"`
+
+	// admissionFairSharing indicates configuration of FairSharing with the `AdmissionTime` mode on
+	AdmissionFairSharing *AdmissionFairSharing `json:"admissionFairSharing,omitempty"`
 
 	// Resources provides additional configuration options for handling the resources.
 	Resources *Resources `json:"resources,omitempty"`
@@ -89,6 +107,11 @@ type Configuration struct {
 	// with passing the list of features via the command line argument "--feature-gates"
 	// for the Kueue Deployment.
 	FeatureGates map[string]bool `json:"featureGates,omitempty"`
+
+	// ObjectRetentionPolicies provides configuration options for automatic deletion
+	// of Kueue-managed objects. A nil value disables all automatic deletions.
+	// +optional
+	ObjectRetentionPolicies *ObjectRetentionPolicies `json:"objectRetentionPolicies,omitempty"`
 }
 
 type ControllerManager struct {
@@ -219,6 +242,16 @@ type WaitForPodsReady struct {
 	// RequeuingStrategy defines the strategy for requeuing a Workload.
 	// +optional
 	RequeuingStrategy *RequeuingStrategy `json:"requeuingStrategy,omitempty"`
+
+	// RecoveryTimeout defines an opt-in timeout, measured since the
+	// last transition to the PodsReady=false condition after a Workload is Admitted and running.
+	// Such a transition may happen when a Pod failed and the replacement Pod
+	// is awaited to be scheduled.
+	// After exceeding the timeout the corresponding job gets suspended again
+	// and requeued after the backoff delay. The timeout is enforced only if waitForPodsReady.enable=true.
+	// If not set, there is no timeout.
+	// +optional
+	RecoveryTimeout *metav1.Duration `json:"recoveryTimeout,omitempty"`
 }
 
 type MultiKueue struct {
@@ -241,7 +274,37 @@ type MultiKueue struct {
 	// Defaults to 15 minutes.
 	// +optional
 	WorkerLostTimeout *metav1.Duration `json:"workerLostTimeout,omitempty"`
+
+	// DispatcherName defines the dispatcher responsible for selecting worker clusters to handle the workload.
+	// - If specified, the workload will be handled by the named dispatcher.
+	// - If not specified, the workload will be handled by the default ("kueue.x-k8s.io/multikueue-dispatcher-all-at-once") dispatcher.
+	// +optional
+	DispatcherName *string `json:"dispatcherName,omitempty"`
+
+	// ExternalFrameworks defines a list of external frameworks that should be supported
+	// by the generic MultiKueue adapter. Each entry defines how to handle a specific
+	// GroupVersionKind (GVK) for MultiKueue operations.
+	// +optional
+	ExternalFrameworks []MultiKueueExternalFramework `json:"externalFrameworks,omitempty"`
 }
+
+// MultiKueueExternalFramework defines a framework that is not built-in.
+type MultiKueueExternalFramework struct {
+	// Name is the GVK of the resource that are
+	// managed by external controllers
+	// the expected format is `kind.version.group`.
+	Name string `json:"name"`
+}
+
+const (
+	// MultiKueueDispatcherModeAllAtOnce is the name of dispatcher mode where all worker clusters are considered at once
+	// and the first one accepting the workload is selected.
+	MultiKueueDispatcherModeAllAtOnce = "kueue.x-k8s.io/multikueue-dispatcher-all-at-once"
+
+	// MultiKueueDispatcherModeIncremental is the name of dispatcher mode where worker clusters are incrementally added to the pool of nominated clusters.
+	// The process begins with up to 3 initial clusters and expands the pool by up to 3 clusters at a time (if fewer remain, all are added).
+	MultiKueueDispatcherModeIncremental = "kueue.x-k8s.io/multikueue-dispatcher-incremental"
+)
 
 type RequeuingStrategy struct {
 	// Timestamp defines the timestamp used for re-queuing a Workload
@@ -294,9 +357,17 @@ const (
 )
 
 type InternalCertManagement struct {
-	// Enable controls whether to enable internal cert management or not.
-	// Defaults to true. If you want to use a third-party management, e.g. cert-manager,
-	// set it to false. See the user guide for more information.
+	// Enable controls the use of internal cert management for the webhook,
+	// metrics and visibility endpoints.
+	// When enabled Kueue is using libraries to generate and
+	// self-sign the certificates.
+	// When disabled, you need to provide the certificates for
+	// the webhooks, metrics and visibility through a third party certificate
+	// This secret is mounted to the kueue controller manager pod. The mount
+	// path for webhooks is /tmp/k8s-webhook-server/serving-certs, for
+	// metrics endpoint the expected path is `/etc/kueue/metrics/certs` and for
+	// visibility endpoint the expected path is `/visibility`.
+	// The keys and certs are named tls.key and tls.crt.
 	Enable *bool `json:"enable,omitempty"`
 
 	// WebhookServiceName is the name of the Service used as part of the DNSName.
@@ -311,6 +382,8 @@ type InternalCertManagement struct {
 type ClientConnection struct {
 	// QPS controls the number of queries per second allowed for K8S api server
 	// connection.
+	//
+	// Setting this to a negative value will disable client-side ratelimiting.
 	QPS *float32 `json:"qps,omitempty"`
 
 	// Burst allows extra queries to accumulate when a client is exceeding its rate.
@@ -325,19 +398,26 @@ type Integrations struct {
 	//  - "ray.io/rayjob"
 	//  - "ray.io/raycluster"
 	//  - "jobset.x-k8s.io/jobset"
-	//  - "kubeflow.org/mxjob"
 	//  - "kubeflow.org/paddlejob"
 	//  - "kubeflow.org/pytorchjob"
 	//  - "kubeflow.org/tfjob"
 	//  - "kubeflow.org/xgboostjob"
+	//  - "kubeflow.org/jaxjob"
+	//  - "trainer.kubeflow.org/trainjob"
+	//  - "workload.codeflare.dev/appwrapper"
 	//  - "pod"
 	//  - "deployment" (requires enabling pod integration)
 	//  - "statefulset" (requires enabling pod integration)
+	//  - "leaderworkerset.x-k8s.io/leaderworkerset" (requires enabling pod integration)
 	Frameworks []string `json:"frameworks,omitempty"`
 	// List of GroupVersionKinds that are managed for Kueue by external controllers;
 	// the expected format is `Kind.version.group.com`.
 	ExternalFrameworks []string `json:"externalFrameworks,omitempty"`
 	// PodOptions defines kueue controller behaviour for pod objects
+	//
+	// Deprecated: This field will be removed on v1beta2, use ManagedJobsNamespaceSelector
+	// (https://kueue.sigs.k8s.io/docs/tasks/run/plain_pods/)
+	// instead.
 	PodOptions *PodIntegrationOptions `json:"podOptions,omitempty"`
 
 	// labelKeysToCopy is a list of label keys that should be copied from the job into the
@@ -387,6 +467,11 @@ type Resources struct {
 	// Transformations defines how to transform PodSpec resources into Workload resource requests.
 	// This is intended to be a map with Input as the key (enforced by validation code)
 	Transformations []ResourceTransformation `json:"transformations,omitempty"`
+
+	// DeviceClassMappings defines mappings from device classes to logical resources
+	// for Dynamic Resource Allocation support.
+	// +optional
+	DeviceClassMappings []DeviceClassMapping `json:"deviceClassMappings,omitempty"`
 }
 
 type ResourceTransformationStrategy string
@@ -407,6 +492,28 @@ type ResourceTransformation struct {
 	Outputs corev1.ResourceList `json:"outputs,omitempty"`
 }
 
+// DeviceClassMapping holds device class to logical resource mappings
+// for Dynamic Resource Allocation support.
+type DeviceClassMapping struct {
+	// Name is referenced in ClusterQueue.nominalQuota and Workload status.
+	// Must be a valid fully qualified name consisting of an optional DNS subdomain prefix
+	// followed by a slash and a DNS label, or just a DNS label.
+	// DNS labels consist of lower-case alphanumeric characters or hyphens,
+	// and must start and end with an alphanumeric character.
+	// DNS subdomain prefixes follow the same rules as DNS labels but can contain periods.
+	// The total length must not exceed 253 characters.
+	Name corev1.ResourceName `json:"name"`
+
+	// DeviceClassNames enumerates the DeviceClasses represented by this resource name.
+	// Each device class name must be a valid qualified name consisting of an optional DNS subdomain prefix
+	// followed by a slash and a DNS label, or just a DNS label.
+	// DNS labels consist of lower-case alphanumeric characters or hyphens,
+	// and must start and end with an alphanumeric character.
+	// DNS subdomain prefixes follow the same rules as DNS labels but can contain periods.
+	// The total length of each name must not exceed 253 characters.
+	DeviceClassNames []corev1.ResourceName `json:"deviceClassNames"`
+}
+
 type PreemptionStrategy string
 
 const (
@@ -415,7 +522,7 @@ const (
 )
 
 type FairSharing struct {
-	// enable indicates whether to enable fair sharing for all cohorts.
+	// enable indicates whether to enable Fair Sharing for all cohorts.
 	// Defaults to false.
 	Enable bool `json:"enable"`
 
@@ -436,4 +543,50 @@ type FairSharing struct {
 	//   newest start time first.
 	// The default strategy is ["LessThanOrEqualToFinalShare", "LessThanInitialShare"].
 	PreemptionStrategies []PreemptionStrategy `json:"preemptionStrategies,omitempty"`
+}
+
+type AdmissionFairSharing struct {
+	// usageHalfLifeTime indicates the time after which the current usage will decay by a half
+	// If set to 0, usage will be reset to 0 immediately.
+	UsageHalfLifeTime metav1.Duration `json:"usageHalfLifeTime"`
+
+	// usageSamplingInterval indicates how often Kueue updates consumedResources in FairSharingStatus
+	// Defaults to 5min.
+	UsageSamplingInterval metav1.Duration `json:"usageSamplingInterval"`
+
+	// resourceWeights assigns weights to resources which then are used to calculate LocalQueue's
+	// resource usage and order Workloads.
+	// Defaults to 1.
+	ResourceWeights map[corev1.ResourceName]float64 `json:"resourceWeights,omitempty"`
+}
+
+// ObjectRetentionPolicies holds retention settings for different object types.
+type ObjectRetentionPolicies struct {
+	// Workloads configures retention for Workloads.
+	// A nil value disables automatic deletion of Workloads.
+	// +optional
+	Workloads *WorkloadRetentionPolicy `json:"workloads,omitempty"`
+}
+
+// WorkloadRetentionPolicy defines the policies for when Workloads should be deleted.
+type WorkloadRetentionPolicy struct {
+	// AfterFinished is the duration to wait after a Workload finishes
+	// before deleting it.
+	// A duration of 0 will delete immediately.
+	// A nil value disables automatic deletion.
+	// Represented using metav1.Duration (e.g. "10m", "1h30m").
+	// +optional
+	AfterFinished *metav1.Duration `json:"afterFinished,omitempty"`
+
+	// AfterDeactivatedByKueue is the duration to wait after *any* Kueue-managed Workload
+	// (such as a Job, JobSet, or other custom workload types) has been marked
+	// as deactivated by Kueue before automatically deleting it.
+	// Deletion of deactivated workloads may cascade to objects not created by
+	// Kueue, since deleting the parent Workload owner (e.g. JobSet) can trigger
+	// garbage-collection of dependent resources.
+	// A duration of 0 will delete immediately.
+	// A nil value disables automatic deletion.
+	// Represented using metav1.Duration (e.g. "10m", "1h30m").
+	// +optional
+	AfterDeactivatedByKueue *metav1.Duration `json:"afterDeactivatedByKueue,omitempty"`
 }

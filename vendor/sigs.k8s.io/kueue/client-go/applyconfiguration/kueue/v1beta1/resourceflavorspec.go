@@ -19,7 +19,7 @@ package v1beta1
 
 import (
 	v1 "k8s.io/client-go/applyconfigurations/core/v1"
-	v1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
+	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 )
 
 // ResourceFlavorSpecApplyConfiguration represents a declarative configuration of the ResourceFlavorSpec type for use
@@ -28,7 +28,7 @@ type ResourceFlavorSpecApplyConfiguration struct {
 	NodeLabels   map[string]string                 `json:"nodeLabels,omitempty"`
 	NodeTaints   []v1.TaintApplyConfiguration      `json:"nodeTaints,omitempty"`
 	Tolerations  []v1.TolerationApplyConfiguration `json:"tolerations,omitempty"`
-	TopologyName *v1beta1.TopologyReference        `json:"topologyName,omitempty"`
+	TopologyName *kueuev1beta1.TopologyReference   `json:"topologyName,omitempty"`
 }
 
 // ResourceFlavorSpecApplyConfiguration constructs a declarative configuration of the ResourceFlavorSpec type for use with
@@ -80,7 +80,7 @@ func (b *ResourceFlavorSpecApplyConfiguration) WithTolerations(values ...*v1.Tol
 // WithTopologyName sets the TopologyName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the TopologyName field is set to the value of the last call.
-func (b *ResourceFlavorSpecApplyConfiguration) WithTopologyName(value v1beta1.TopologyReference) *ResourceFlavorSpecApplyConfiguration {
+func (b *ResourceFlavorSpecApplyConfiguration) WithTopologyName(value kueuev1beta1.TopologyReference) *ResourceFlavorSpecApplyConfiguration {
 	b.TopologyName = &value
 	return b
 }
