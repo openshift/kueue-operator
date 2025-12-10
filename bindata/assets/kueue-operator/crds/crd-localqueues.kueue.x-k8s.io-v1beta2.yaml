@@ -5,6 +5,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
+  labels:
+    app.kubernetes.io/name: kueue
+    control-plane: controller-manager
   name: localqueues.kueue.x-k8s.io
 spec:
   conversion:
@@ -12,8 +15,8 @@ spec:
     webhook:
       clientConfig:
         service:
-          name: webhook-service
-          namespace: system
+          name: kueue-webhook-service
+          namespace: kueue-system
           path: /convert
       conversionReviewVersions:
       - v1

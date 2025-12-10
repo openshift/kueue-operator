@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
+	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -815,7 +816,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 			By("verifying workload is created for LeaderWorkerSet without queue name")
 			Eventually(func() error {
-				workloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithLabel).List(ctx, metav1.ListOptions{})
+				workloads, err := kueueClient.KueueV1beta2().Workloads(testNamespaceWithLabel).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return err
 				}
@@ -892,7 +893,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 			By("verifying no workload is created for LeaderWorkerSet in unlabeled namespace")
 			Consistently(func() error {
-				allWorkloads, err := kueueClient.KueueV1beta1().Workloads(testNamespaceWithoutLabel).List(ctx, metav1.ListOptions{})
+				allWorkloads, err := kueueClient.KueueV1beta2().Workloads(testNamespaceWithoutLabel).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return err
 				}
@@ -1066,7 +1067,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 			By("wait for workload to be created")
 			Eventually(func() error {
-				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failed to list workloads: %v", err)
 				}
@@ -1091,7 +1092,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 				By("verify that Kueue Custom Resources are NOT deleted when Kueue CR is deleted")
 
-				clusterQueues, err := clients.UpstreamKueueClient.KueueV1beta1().ClusterQueues().List(ctx, metav1.ListOptions{})
+				clusterQueues, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failed to list ClusterQueues: %v", err)
 				}
@@ -1100,7 +1101,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}
 				klog.Infof("Found %d ClusterQueues still existing after Kueue CR deletion", len(clusterQueues.Items))
 
-				resourceFlavors, err := clients.UpstreamKueueClient.KueueV1beta1().ResourceFlavors().List(ctx, metav1.ListOptions{})
+				resourceFlavors, err := clients.UpstreamKueueClient.KueueV1beta2().ResourceFlavors().List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failed to list ResourceFlavors: %v", err)
 				}
@@ -1109,7 +1110,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}
 				klog.Infof("Found %d ResourceFlavors still existing after Kueue CR deletion", len(resourceFlavors.Items))
 
-				localQueues, err := clients.UpstreamKueueClient.KueueV1beta1().LocalQueues(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				localQueues, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(testNamespace.Name).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failed to list LocalQueues: %v", err)
 				}
@@ -1118,7 +1119,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}
 				klog.Infof("Found %d LocalQueues still existing after Kueue CR deletion", len(localQueues.Items))
 
-				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failed to list Workloads: %v", err)
 				}
@@ -1295,6 +1296,9 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 	kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 
+	// Check if the config is actually changing
+	configChanged := !reflect.DeepEqual(kueueInstance.Spec.Config, config)
+
 	// Get the current resource version of kueue-controller-manager before updating config
 	initialDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch kueue-controller-manager deployment")
@@ -1305,18 +1309,23 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 	_, err = kueueClientset.KueueV1().Kueues().Update(ctx, kueueInstance, metav1.UpdateOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to update Kueue config")
 
-	// Wait for the deployment resource version to change
-	By(fmt.Sprintf("Waiting for kueue-controller-manager resource version to change from %s", initialResourceVersion))
-	Eventually(func() error {
-		managerDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("Unable to fetch manager deployment: %v", err)
-		}
-		if managerDeployment.ResourceVersion == initialResourceVersion {
-			return fmt.Errorf("deployment resource version has not changed yet (still %s)", initialResourceVersion)
-		}
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager deployment resource version did not change")
+	// Only wait for deployment update if the config actually changed
+	if configChanged {
+		// Wait for the deployment resource version to change
+		By(fmt.Sprintf("Waiting for kueue-controller-manager resource version to change from %s", initialResourceVersion))
+		Eventually(func() error {
+			managerDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("Unable to fetch manager deployment: %v", err)
+			}
+			if managerDeployment.ResourceVersion == initialResourceVersion {
+				return fmt.Errorf("deployment resource version has not changed yet (still %s)", initialResourceVersion)
+			}
+			return nil
+		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager deployment resource version did not change")
+	} else {
+		By("Skipping deployment update wait - config unchanged")
+	}
 
 	Eventually(func() error {
 		managerDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
@@ -1503,7 +1512,7 @@ func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValu
 func fetchWorkload(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {
 	ctx := context.TODO()
 	Eventually(func() error {
-		workloads, err := kueueClient.KueueV1beta1().Workloads(namespace).List(ctx, metav1.ListOptions{
+		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", uid),
 		})
 		if err != nil {
@@ -1520,9 +1529,9 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 	ctx := context.TODO()
 	By(fmt.Sprintf("verifying workload created in namespace %s and uid %s", namespace, uid))
 	// Verify that a Workload with the expected label is created and admitted
-	var workload *kueuev1beta1.Workload
+	var workload *kueuev1beta2.Workload
 	Eventually(func() error {
-		workloads, err := kueueClient.KueueV1beta1().Workloads(namespace).List(ctx, metav1.ListOptions{
+		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", uid),
 		})
 		if err != nil {
@@ -1534,7 +1543,7 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 		}
 
 		// If not found by job-uid label, look for workloads by ownerReference (for StatefulSets)
-		allWorkloads, err := kueueClient.KueueV1beta1().Workloads(namespace).List(ctx, metav1.ListOptions{})
+		allWorkloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -1553,13 +1562,13 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 	Eventually(func() error {
-		updatedWorkload, err := kueueClient.KueueV1beta1().Workloads(namespace).Get(ctx, workload.Name, metav1.GetOptions{})
+		updatedWorkload, err := kueueClient.KueueV1beta2().Workloads(namespace).Get(ctx, workload.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
 		// Accept workloads that are either admitted or finished (which means they were admitted and completed)
-		if apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadAdmitted) ||
-			apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta1.WorkloadFinished) {
+		if apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta2.WorkloadAdmitted) ||
+			apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta2.WorkloadFinished) {
 			return nil
 		}
 		return fmt.Errorf("workload %s/%s not admitted or finished", namespace, workload.Name)

@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	kueuev1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
+	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
 
@@ -54,26 +54,26 @@ type PodWrapper struct {
 
 // ClusterQueueWrapper wraps a ClusterQueue and provides builder methods.
 type ClusterQueueWrapper struct {
-	*kueuev1beta1.ClusterQueue
+	*kueuev1beta2.ClusterQueue
 }
 
 // NewClusterQueue creates a new wrapper with default values.
 func NewClusterQueue() *ClusterQueueWrapper {
-	cq := &kueuev1beta1.ClusterQueue{
+	cq := &kueuev1beta2.ClusterQueue{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "test-clusterqueue",
 		},
-		Spec: kueuev1beta1.ClusterQueueSpec{
+		Spec: kueuev1beta2.ClusterQueueSpec{
 			NamespaceSelector: &v1.LabelSelector{
 				MatchLabels: map[string]string{
 					"kueue.openshift.io/managed": "true",
 				},
 			},
-			ResourceGroups: []kueuev1beta1.ResourceGroup{{
+			ResourceGroups: []kueuev1beta2.ResourceGroup{{
 				CoveredResources: []corev1.ResourceName{"cpu", "memory"},
-				Flavors: []kueuev1beta1.FlavorQuotas{{
-					Name: kueuev1beta1.ResourceFlavorReference("default"),
-					Resources: []kueuev1beta1.ResourceQuota{
+				Flavors: []kueuev1beta2.FlavorQuotas{{
+					Name: kueuev1beta2.ResourceFlavorReference("default"),
+					Resources: []kueuev1beta2.ResourceQuota{
 						{Name: "cpu", NominalQuota: resource.MustParse("100")},
 						{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
 					},
@@ -123,7 +123,7 @@ func (cqw *ClusterQueueWrapper) WithMemory(memory string) *ClusterQueueWrapper {
 // WithFlavorName sets the resource flavor name.
 func (cqw *ClusterQueueWrapper) WithFlavorName(flavorName string) *ClusterQueueWrapper {
 	if len(cqw.Spec.ResourceGroups) > 0 && len(cqw.Spec.ResourceGroups[0].Flavors) > 0 {
-		cqw.Spec.ResourceGroups[0].Flavors[0].Name = kueuev1beta1.ResourceFlavorReference(flavorName)
+		cqw.Spec.ResourceGroups[0].Flavors[0].Name = kueuev1beta2.ResourceFlavorReference(flavorName)
 	}
 	return cqw
 }
@@ -135,8 +135,8 @@ func (cqw *ClusterQueueWrapper) Create(ctx context.Context, client *upstreamkueu
 }
 
 // CreateWithObject creates the ClusterQueue in the cluster and returns the created object, cleanup function, and error.
-func (cqw *ClusterQueueWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta1.ClusterQueue, func(), error) {
-	createdCQ, err := client.KueueV1beta1().ClusterQueues().Create(ctx, cqw.ClusterQueue, v1.CreateOptions{})
+func (cqw *ClusterQueueWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta2.ClusterQueue, func(), error) {
+	createdCQ, err := client.KueueV1beta2().ClusterQueues().Create(ctx, cqw.ClusterQueue, v1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -145,16 +145,16 @@ func (cqw *ClusterQueueWrapper) CreateWithObject(ctx context.Context, client *up
 		ctx := context.TODO()
 		By(fmt.Sprintf("Destroying ClusterQueue %s", createdCQ.Name))
 		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().ClusterQueues().Patch(ctx, createdCQ.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			_, err := client.KueueV1beta2().ClusterQueues().Patch(ctx, createdCQ.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 			return err
 		})
-		err := client.KueueV1beta1().ClusterQueues().Delete(ctx, createdCQ.Name, metav1.DeleteOptions{})
+		err := client.KueueV1beta2().ClusterQueues().Delete(ctx, createdCQ.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := client.KueueV1beta1().ClusterQueues().Get(ctx, createdCQ.Name, metav1.GetOptions{})
+			_, err := client.KueueV1beta2().ClusterQueues().Get(ctx, createdCQ.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
@@ -177,18 +177,18 @@ func CreateLocalQueue(ctx context.Context, client *upstreamkueueclient.Clientset
 
 // LocalQueueWrapper wraps a LocalQueue and provides builder methods.
 type LocalQueueWrapper struct {
-	*kueuev1beta1.LocalQueue
+	*kueuev1beta2.LocalQueue
 }
 
 // NewLocalQueue creates a new wrapper with default values.
 func NewLocalQueue(namespace, name string) *LocalQueueWrapper {
 	By(fmt.Sprintf("Creating LocalQueue %s in namespace %s", name, namespace))
-	lq := &kueuev1beta1.LocalQueue{
+	lq := &kueuev1beta2.LocalQueue{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: kueuev1beta1.LocalQueueSpec{
+		Spec: kueuev1beta2.LocalQueueSpec{
 			ClusterQueue: "test-clusterqueue",
 		},
 	}
@@ -207,7 +207,7 @@ func (lqw *LocalQueueWrapper) WithGenerateName() *LocalQueueWrapper {
 
 // WithClusterQueue sets the ClusterQueue name.
 func (lqw *LocalQueueWrapper) WithClusterQueue(clusterQueue string) *LocalQueueWrapper {
-	lqw.Spec.ClusterQueue = kueuev1beta1.ClusterQueueReference(clusterQueue)
+	lqw.Spec.ClusterQueue = kueuev1beta2.ClusterQueueReference(clusterQueue)
 	return lqw
 }
 
@@ -218,8 +218,8 @@ func (lqw *LocalQueueWrapper) Create(ctx context.Context, client *upstreamkueuec
 }
 
 // CreateWithObject creates the LocalQueue in the cluster and returns the created object, cleanup function, and error.
-func (lqw *LocalQueueWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta1.LocalQueue, func(), error) {
-	createdLQ, err := client.KueueV1beta1().LocalQueues(lqw.Namespace).Create(ctx, lqw.LocalQueue, v1.CreateOptions{})
+func (lqw *LocalQueueWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta2.LocalQueue, func(), error) {
+	createdLQ, err := client.KueueV1beta2().LocalQueues(lqw.Namespace).Create(ctx, lqw.LocalQueue, v1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,16 +228,16 @@ func (lqw *LocalQueueWrapper) CreateWithObject(ctx context.Context, client *upst
 		ctx := context.TODO()
 		By(fmt.Sprintf("Destroying LocalQueue %s/%s", createdLQ.Namespace, createdLQ.Name))
 		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().LocalQueues(createdLQ.Namespace).Patch(ctx, createdLQ.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			_, err := client.KueueV1beta2().LocalQueues(createdLQ.Namespace).Patch(ctx, createdLQ.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 			return err
 		})
-		err := client.KueueV1beta1().LocalQueues(createdLQ.Namespace).Delete(ctx, createdLQ.Name, metav1.DeleteOptions{})
+		err := client.KueueV1beta2().LocalQueues(createdLQ.Namespace).Delete(ctx, createdLQ.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := client.KueueV1beta1().LocalQueues(createdLQ.Namespace).Get(ctx, createdLQ.Name, metav1.GetOptions{})
+			_, err := client.KueueV1beta2().LocalQueues(createdLQ.Namespace).Get(ctx, createdLQ.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
@@ -255,16 +255,16 @@ func CreateResourceFlavor(ctx context.Context, client *upstreamkueueclient.Clien
 
 // ResourceFlavorWrapper wraps a ResourceFlavor and provides builder methods.
 type ResourceFlavorWrapper struct {
-	*kueuev1beta1.ResourceFlavor
+	*kueuev1beta2.ResourceFlavor
 }
 
 // NewResourceFlavor creates a new wrapper with default values.
 func NewResourceFlavor() *ResourceFlavorWrapper {
-	rf := &kueuev1beta1.ResourceFlavor{
+	rf := &kueuev1beta2.ResourceFlavor{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "default",
 		},
-		Spec: kueuev1beta1.ResourceFlavorSpec{},
+		Spec: kueuev1beta2.ResourceFlavorSpec{},
 	}
 
 	return &ResourceFlavorWrapper{
@@ -286,8 +286,8 @@ func (rfw *ResourceFlavorWrapper) Create(ctx context.Context, client *upstreamku
 }
 
 // CreateWithObject creates the ResourceFlavor in the cluster and returns the created object, cleanup function, and error.
-func (rfw *ResourceFlavorWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta1.ResourceFlavor, func(), error) {
-	createdRF, err := client.KueueV1beta1().ResourceFlavors().Create(ctx, rfw.ResourceFlavor, v1.CreateOptions{})
+func (rfw *ResourceFlavorWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta2.ResourceFlavor, func(), error) {
+	createdRF, err := client.KueueV1beta2().ResourceFlavors().Create(ctx, rfw.ResourceFlavor, v1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -296,16 +296,16 @@ func (rfw *ResourceFlavorWrapper) CreateWithObject(ctx context.Context, client *
 		ctx := context.TODO()
 		By(fmt.Sprintf("Destroying ResourceFlavor %s", createdRF.Name))
 		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().ResourceFlavors().Patch(ctx, createdRF.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			_, err := client.KueueV1beta2().ResourceFlavors().Patch(ctx, createdRF.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 			return err
 		})
-		err := client.KueueV1beta1().ResourceFlavors().Delete(ctx, createdRF.Name, metav1.DeleteOptions{})
+		err := client.KueueV1beta2().ResourceFlavors().Delete(ctx, createdRF.Name, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := client.KueueV1beta1().ResourceFlavors().Get(ctx, createdRF.Name, metav1.GetOptions{})
+			_, err := client.KueueV1beta2().ResourceFlavors().Get(ctx, createdRF.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
@@ -469,14 +469,14 @@ func (p *PodWrapper) Obj() *corev1.Pod {
 }
 
 func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName, workloadName string) (func(), error) {
-	workload := &kueuev1beta1.Workload{
+	workload := &kueuev1beta2.Workload{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      workloadName,
 			Namespace: namespace,
 		},
-		Spec: kueuev1beta1.WorkloadSpec{
-			QueueName: queueName,
-			PodSets: []kueuev1beta1.PodSet{
+		Spec: kueuev1beta2.WorkloadSpec{
+			QueueName: kueuev1beta2.LocalQueueName(queueName),
+			PodSets: []kueuev1beta2.PodSet{
 				{
 					Name:  "ps1",
 					Count: 1,
@@ -502,7 +502,7 @@ func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName,
 		},
 	}
 
-	_, err := client.KueueV1beta1().Workloads(namespace).Create(context.TODO(), workload, v1.CreateOptions{})
+	_, err := client.KueueV1beta2().Workloads(namespace).Create(context.TODO(), workload, v1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -511,16 +511,16 @@ func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName,
 		ctx := context.TODO()
 		By(fmt.Sprintf("Destroying Workload %s/%s", namespace, workloadName))
 		removeFinalizersWithPatch(func() error {
-			_, err := client.KueueV1beta1().Workloads(namespace).Patch(ctx, workloadName, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			_, err := client.KueueV1beta2().Workloads(namespace).Patch(ctx, workloadName, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 			return err
 		})
-		err := client.KueueV1beta1().Workloads(namespace).Delete(ctx, workloadName, metav1.DeleteOptions{})
+		err := client.KueueV1beta2().Workloads(namespace).Delete(ctx, workloadName, metav1.DeleteOptions{})
 		if apierrors.IsNotFound(err) {
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := client.KueueV1beta1().Workloads(namespace).Get(ctx, workloadName, metav1.GetOptions{})
+			_, err := client.KueueV1beta2().Workloads(namespace).Get(ctx, workloadName, metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
@@ -640,10 +640,10 @@ func CleanUpJob(ctx context.Context, kubeClient *kubernetes.Clientset, namespace
 func CleanUpWorkload(ctx context.Context, kueueClient *upstreamkueueclient.Clientset, namespace, name string) {
 	By(fmt.Sprintf("Destroying Workload %s", name))
 	removeFinalizersWithPatch(func() error {
-		_, err := kueueClient.KueueV1beta1().Workloads(namespace).Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+		_, err := kueueClient.KueueV1beta2().Workloads(namespace).Patch(ctx, name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
 		return err
 	})
-	err := kueueClient.KueueV1beta1().Workloads(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	err := kueueClient.KueueV1beta2().Workloads(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
