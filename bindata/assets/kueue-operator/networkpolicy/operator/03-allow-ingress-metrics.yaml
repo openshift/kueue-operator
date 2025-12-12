@@ -1,0 +1,30 @@
+# allow ingress traffic to metrics endpoint on operator pod
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kueue-operator-allow-ingress-metrics
+  namespace: openshift-kueue-operator
+  labels:
+    app.kubernetes.io/managed-by: kueue-operator
+    app.kubernetes.io/component: operator-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.openshift.io/component: operator
+      app.openshift.io/name: kueue
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          openshift.io/cluster-monitoring: "true"
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-monitoring
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-user-workload-monitoring
+    ports:
+    - protocol: TCP
+      port: 8443
+  policyTypes:
+  - Ingress
