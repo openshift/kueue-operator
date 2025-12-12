@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,6 @@ limitations under the License.
 // +kubebuilder:skip
 // +groupName=visibility.kueue.x-k8s.io
 // +k8s:openapi-gen=true
-// +k8s:conversion-gen=false
+// +k8s:conversion-gen=sigs.k8s.io/kueue/apis/visibility/v1beta2
 
 package v1beta1
