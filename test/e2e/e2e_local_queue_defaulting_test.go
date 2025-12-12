@@ -41,7 +41,6 @@ var (
 )
 
 var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, func() {
-
 	When("labelPolicy=None and LocalQueue default in a managed namespace", func() {
 		var initialKueueInstance *kueueoperatorv1.Kueue
 
@@ -136,7 +135,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 		It("should allow to label pod and job with default localqueue after they're created", func(ctx context.Context) {
 			// Job creation when there is no LocalQueue Default
 			By("Creating a new job without localQueue")
-			err := kueueClient.KueueV1beta1().LocalQueues(ns.Name).Delete(ctx, testutils.DefaultLocalQueueName, metav1.DeleteOptions{})
+			err := kueueClient.KueueV1beta2().LocalQueues(ns.Name).Delete(ctx, testutils.DefaultLocalQueueName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			jobWithoutQueue := builder.NewJobWithoutQueue()
 			createdJobWithoutQueue, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobWithoutQueue, metav1.CreateOptions{})
@@ -269,10 +268,10 @@ func deleteClusterQueueAndResourceFlavor(ctx context.Context, kueueClient *upstr
 		clusterQueueCleanup()
 		clusterQueueCleanup = nil
 	} else {
-		err := kueueClient.KueueV1beta1().ClusterQueues().Delete(ctx, "test-clusterqueue", metav1.DeleteOptions{})
+		err := kueueClient.KueueV1beta2().ClusterQueues().Delete(ctx, "test-clusterqueue", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := kueueClient.KueueV1beta1().ClusterQueues().Get(ctx, "test-clusterqueue", metav1.GetOptions{})
+			_, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, "test-clusterqueue", metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
@@ -284,10 +283,10 @@ func deleteClusterQueueAndResourceFlavor(ctx context.Context, kueueClient *upstr
 		resourceFlavorCleanup()
 		resourceFlavorCleanup = nil
 	} else {
-		err := kueueClient.KueueV1beta1().ResourceFlavors().Delete(ctx, "default", metav1.DeleteOptions{})
+		err := kueueClient.KueueV1beta2().ResourceFlavors().Delete(ctx, "default", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := kueueClient.KueueV1beta1().ResourceFlavors().Get(ctx, "default", metav1.GetOptions{})
+			_, err := kueueClient.KueueV1beta2().ResourceFlavors().Get(ctx, "default", metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				return nil
 			}

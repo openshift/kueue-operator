@@ -21,6 +21,8 @@ type AdmissionCheckExpansion interface{}
 
 type ClusterQueueExpansion interface{}
 
+type CohortExpansion interface{}
+
 type LocalQueueExpansion interface{}
 
 type MultiKueueClusterExpansion interface{}
@@ -30,6 +32,8 @@ type MultiKueueConfigExpansion interface{}
 type ProvisioningRequestConfigExpansion interface{}
 
 type ResourceFlavorExpansion interface{}
+
+type TopologyExpansion interface{}
 
 type WorkloadExpansion interface{}
 
