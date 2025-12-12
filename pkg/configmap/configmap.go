@@ -100,6 +100,25 @@ func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
 	return ret
 }
 
+func mapOperatorMultiKueueToKueue(multiKueue *kueue.MultiKueue) *configapi.MultiKueue {
+	if multiKueue == nil {
+		return nil
+	}
+	return &configapi.MultiKueue{
+		ExternalFrameworks: buildMultiKueueExternalFrameworkList(multiKueue.ExternalFrameworks),
+	}
+}
+
+func buildMultiKueueExternalFrameworkList(kueuelist []kueue.ExternalFramework) []configapi.MultiKueueExternalFramework {
+	ret := []configapi.MultiKueueExternalFramework{}
+	for _, val := range kueuelist {
+		ret = append(ret, configapi.MultiKueueExternalFramework{
+			Name: fmt.Sprintf("%s.%s.%s", val.Resource, val.Version, val.Group),
+		})
+	}
+	return ret
+}
+
 func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagement) bool {
 	return workloadManagement.LabelPolicy == kueue.LabelPolicyNone
 }
@@ -187,6 +206,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
+		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue),
 	}
 }
 

@@ -238,6 +238,73 @@ spec:
                     required:
                     - frameworks
                     type: object
+                  multiKueue:
+                    description: |-
+                      multiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+                      MultiKueue enables multi-cluster workload distribution.
+                      This field is optional.
+                      If multiKueue is not specified, MultiKueue is disabled.
+                    properties:
+                      externalFrameworks:
+                        description: |-
+                          externalFrameworks are a list of GroupVersionKinds that should be supported
+                          by the generic MultiKueue adapter. Each entry defines how to handle a specific
+                          GroupVersionKind (GVK) for MultiKueue operations.
+                          externalFrameworks are optional and should only be used if you have external frameworks
+                          that need MultiKueue support.
+                          externalFrameworks, if specified, must have at least one item and no more than 32 items.
+                        items:
+                          description: |-
+                            This is the GVR for an external framework.
+                            Controller runtime requires this in this format
+                            for api discoverability.
+                          properties:
+                            group:
+                              description: |-
+                                group is the API group of the externalFramework.
+                                Must be a valid DNS 1123 subdomain consisting of of lower-case alphanumeric characters,
+                                hyphens and periods, of at most 253 characters in length.
+                                Each period separated segment within the subdomain must start and end with an alphanumeric character.
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                              x-kubernetes-validations:
+                              - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$')
+                            resource:
+                              description: |-
+                                resource is the Resource type of the external framework.
+                                Resource types are lowercase and plural (e.g. pods, deployments).
+                                Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
+                                and hyphens of at most 63 characters in length.
+                                The value must start and end with an alphanumeric character.
+                              maxLength: 63
+                              minLength: 1
+                              type: string
+                              x-kubernetes-validations:
+                              - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+                            version:
+                              description: |-
+                                version is the version of the api (e.g. v1alpha1, v1beta1, v1).
+                                Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
+                                and hyphens of at most 63 characters in length.
+                                The value must start with an alphabetic character and end with an alphanumeric character.
+                              maxLength: 63
+                              minLength: 1
+                              type: string
+                              x-kubernetes-validations:
+                              - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+                          required:
+                          - group
+                          - resource
+                          - version
+                          type: object
+                        maxItems: 32
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - group
+                        x-kubernetes-list-type: map
+                    type: object
                   preemption:
                     description: |-
                       preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
