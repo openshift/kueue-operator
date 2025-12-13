@@ -24,6 +24,7 @@ type KueueConfigurationApplyConfiguration struct {
 	WorkloadManagement *WorkloadManagementApplyConfiguration `json:"workloadManagement,omitempty"`
 	GangScheduling     *GangSchedulingApplyConfiguration     `json:"gangScheduling,omitempty"`
 	Preemption         *PreemptionApplyConfiguration         `json:"preemption,omitempty"`
+	MultiKueue         *MultiKueueApplyConfiguration         `json:"multiKueue,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -61,5 +62,13 @@ func (b *KueueConfigurationApplyConfiguration) WithGangScheduling(value *GangSch
 // If called multiple times, the Preemption field is set to the value of the last call.
 func (b *KueueConfigurationApplyConfiguration) WithPreemption(value *PreemptionApplyConfiguration) *KueueConfigurationApplyConfiguration {
 	b.Preemption = value
+	return b
+}
+
+// WithMultiKueue sets the MultiKueue field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MultiKueue field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithMultiKueue(value *MultiKueueApplyConfiguration) *KueueConfigurationApplyConfiguration {
+	b.MultiKueue = value
 	return b
 }

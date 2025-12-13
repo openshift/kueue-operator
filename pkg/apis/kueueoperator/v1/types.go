@@ -70,6 +70,12 @@ type KueueConfiguration struct {
 	// This default could change over time.
 	// +optional
 	Preemption Preemption `json:"preemption"`
+	// multiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+	// MultiKueue enables multi-cluster workload distribution.
+	// This field is optional.
+	// If multiKueue is not specified, MultiKueue is disabled.
+	// +optional
+	MultiKueue *MultiKueue `json:"multiKueue,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -319,4 +325,55 @@ type Preemption struct {
 	// The current default is Classical.
 	// +required
 	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy"`
+}
+
+// MultiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+type MultiKueue struct {
+	// externalFrameworks are a list of GroupVersionKinds that should be supported
+	// by the generic MultiKueue adapter. Each entry defines how to handle a specific
+	// GroupVersionKind (GVK) for MultiKueue operations.
+	// externalFrameworks are optional and should only be used if you have external frameworks
+	// that need MultiKueue support.
+	// externalFrameworks, if specified, can not have more than 32 items.
+	// +listType=map
+	// +listMapKey=group
+	// +kubebuilder:validation:MaxItems=32
+	// +optional
+	ExternalFrameworks []MultiKueueExternalFramework `json:"externalFrameworks,omitempty"`
+}
+
+// MultiKueueExternalFramework defines a framework that is not built-in for MultiKueue.
+// This is the GVK for an external framework used by MultiKueue.
+type MultiKueueExternalFramework struct {
+	// group is the API group of the externalFramework.
+	// Must be a valid DNS 1123 subdomain consisting of of lower-case alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
+	// +group uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$')"
+	// +required
+	Group string `json:"group"`
+	// kind is the Kind type of the external framework.
+	// Kind types are capitalized singular (e.g. Job, Pod, Deployment).
+	// Must start with an uppercase letter followed by alphanumeric characters and hyphens,
+	// of at most 63 characters in length.
+	// The value must start with an uppercase alphabetic character and end with an alphanumeric character.
+	// +kind uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[A-Z][a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$')"
+	// +required
+	Kind string `json:"kind"`
+	// version is the version of the api (e.g. v1alpha1, v1beta1, v1).
+	// Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
+	// and hyphens of at most 63 characters in length.
+	// The value must start with an alphabetic character and end with an alphanumeric character.
+	// +version uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
+	// +required
+	Version string `json:"version"`
 }

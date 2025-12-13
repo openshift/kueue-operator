@@ -65,7 +65,7 @@ code-gen: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject
 
 .PHONY: generate-clients
 generate-clients:
-	GO=GO111MODULE=on GOTOOLCHAIN=go1.24.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
+	GO=GO111MODULE=on GOTOOLCHAIN=go1.25.0 GOFLAGS=-mod=readonly hack/update-codegen.sh
 
 .PHONY: get-kueue-must-gather-image
 get-kueue-must-gather-image:

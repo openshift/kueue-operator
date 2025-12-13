@@ -336,6 +336,79 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"multikueue with external frameworks": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				MultiKueue: &kueue.MultiKueue{
+					ExternalFrameworks: []kueue.MultiKueueExternalFramework{
+						{
+							Group:   "example.com",
+							Version: "v1",
+							Kind:    "CustomJob",
+						},
+						{
+							Group:   "test.io",
+							Version: "v1alpha1",
+							Kind:    "MyWorkload",
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: false
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+multiKueue:
+  externalFrameworks:
+  - name: CustomJob.v1.example.com
+  - name: MyWorkload.v1alpha1.test.io
+  gcInterval: null
+namespace: test
+waitForPodsReady: {}
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 	}
 
 	for desc, tc := range testCases {
