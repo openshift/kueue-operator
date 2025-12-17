@@ -26,6 +26,8 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -88,6 +90,35 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdPod.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdPod.UID))
+		})
+
+		It("should label and admit LeaderWorkerSet", func(ctx context.Context) {
+			lwsGVR := schema.GroupVersionResource{
+				Group:    "leaderworkerset.x-k8s.io",
+				Version:  "v1",
+				Resource: "leaderworkersets",
+			}
+
+			By("creating LeaderWorkerSet without queue name")
+			lwsWithoutQueue := builder.NewLeaderWorkerSet()
+			createdLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(ns.Name).Create(ctx, lwsWithoutQueue, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "Failed to create LeaderWorkerSet")
+			defer func() {
+				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(ns.Name).Delete(ctx, createdLWS.GetName(), metav1.DeleteOptions{})
+			}()
+
+			By("verifying LeaderWorkerSet has queue label added")
+			Eventually(func() map[string]string {
+				updatedLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(ns.Name).Get(ctx, createdLWS.GetName(), metav1.GetOptions{})
+				if err != nil {
+					return nil
+				}
+				labels, _, _ := unstructured.NestedStringMap(updatedLWS.Object, "metadata", "labels")
+				return labels
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName), "LeaderWorkerSet should have default queue label")
+
+			By("verifying workload is created for LeaderWorkerSet")
+			verifyWorkloadCreated(kueueClient, ns.Name, string(createdLWS.GetUID()))
 		})
 
 		It("should allow other local queues in same namespace without interfering", func(ctx context.Context) {
