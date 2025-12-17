@@ -295,3 +295,13 @@ func AddQueueLabelToLWS(lws *unstructured.Unstructured, queueName string) *unstr
 	_ = unstructured.SetNestedStringMap(lws.Object, labels, "metadata", "labels")
 	return lws
 }
+
+// SetLWSPriority sets the priority class for a LeaderWorkerSet.
+func SetLWSPriority(lws *unstructured.Unstructured, priorityClassName string) {
+	_ = unstructured.SetNestedField(lws.Object, priorityClassName, "spec", "leaderWorkerTemplate", "leaderTemplate", "spec", "priorityClassName")
+}
+
+// SetLWSSize sets the size for a LeaderWorkerSet.
+func SetLWSSize(lws *unstructured.Unstructured, size int) {
+	_ = unstructured.SetNestedField(lws.Object, int64(size), "spec", "leaderWorkerTemplate", "size")
+}
