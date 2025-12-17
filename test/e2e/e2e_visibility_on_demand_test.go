@@ -425,14 +425,14 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			kueueTestSAA, err := createServiceAccount(ctx, namespaceA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
-			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAA.Name, "kueue-batch-user-role")
+			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingA)
 
 			kueueTestSAB, err := createServiceAccount(ctx, namespaceB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
-			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAB.Name, "kueue-batch-user-role")
+			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingB)
 
@@ -761,14 +761,14 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			kueueTestSAUserA, err := createServiceAccount(ctx, namespaceA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
-			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAUserA.Name, "kueue-batch-user-role")
+			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAUserA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingA)
 
 			kueueTestSAUserB, err := createServiceAccount(ctx, namespaceB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
-			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAUserB.Name, "kueue-batch-user-role")
+			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAUserB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingB)
 
@@ -1154,9 +1154,9 @@ func createClusterRoleBinding(ctx context.Context, serviceAccountName, serviceAc
 	return cleanup, nil
 }
 
-// createRoleBinding creates a RoleBinding in the specified namespace for the given ServiceAccount and ClusterRole
-// and returns a cleanup function
-func createRoleBinding(ctx context.Context, namespace, serviceAccountName, clusterRoleName string) (func(), error) {
+// createRoleBinding creates a RoleBinding in the specified namespace for the given ServiceAccount
+// with kueue-batch-user-role ClusterRole and returns a cleanup function
+func createRoleBinding(ctx context.Context, namespace, serviceAccountName string) (func(), error) {
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "kueue-role-binding-",
@@ -1172,7 +1172,7 @@ func createRoleBinding(ctx context.Context, namespace, serviceAccountName, clust
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: rbacv1.GroupName,
 			Kind:     "ClusterRole",
-			Name:     clusterRoleName,
+			Name:     "kueue-batch-user-role",
 		},
 	}
 	createdRoleBinding, err := kubeClient.RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
