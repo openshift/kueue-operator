@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openshift-kueue-operator-metrics
+  namespace: openshift-kueue-operator
+spec:
+  secretName: openshift-kueue-operator-metrics-tls
+  commonName: openshift-kueue-operator-metrics.openshift-kueue-operator.svc
+  dnsNames:
+    - openshift-kueue-operator-metrics.openshift-kueue-operator.svc
+    - openshift-kueue-operator-metrics.openshift-kueue-operator.svc.cluster.local
+  issuerRef:
+    name: openshift-kueue-operator-issuer
+    kind: Issuer
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
