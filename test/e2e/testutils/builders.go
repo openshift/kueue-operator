@@ -305,4 +305,3 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet(queueName, priorityClassName st
 
 	return lws
 }
-

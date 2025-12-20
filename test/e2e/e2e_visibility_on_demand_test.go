@@ -36,9 +36,10 @@ import (
 	flowcontrolclientv1 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
-	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	visibilityv1beta1 "sigs.k8s.io/kueue/apis/visibility/v1beta1"
+	visibilityv1beta2 "sigs.k8s.io/kueue/apis/visibility/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 )
 
 const (
@@ -684,8 +685,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 		It("Should show pending LWS workloads ordered by priority and admit them sequentially based on resource availability", func(ctx context.Context) {
 			var (
-				clusterPendingWorkloads *visibilityv1beta1.PendingWorkloadsSummary
-				localPendingWorkloadsA  *visibilityv1beta1.PendingWorkloadsSummary
+				clusterPendingWorkloads *visibilityv1beta2.PendingWorkloadsSummary
+				localPendingWorkloadsA  *visibilityv1beta2.PendingWorkloadsSummary
 				err                     error
 			)
 
@@ -767,15 +768,15 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			DeferCleanup(cleanupRoleBindingB)
 
 			By("Creating custom visibility client for ClusterQueue access")
-			testUserVisibilityClient, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name))
+			testUserVisibilityClient, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name)
 
 			By("Creating custom visibility client for LocalQueue A access")
-			userVisibilityClientA, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAUserA.Name))
+			userVisibilityClientA, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAUserA.Name))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for LocalQueue A access")
 
 			By("Creating custom visibility client for LocalQueue B access")
-			userVisibilityClientB, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAUserB.Name))
+			userVisibilityClientB, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAUserB.Name))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for LocalQueue B access")
 
 			By("Creating blocker LWS in namespace A")
@@ -849,7 +850,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(localPendingWorkloadsA.Items[1].Priority).To(Equal(int32(50)), "Second workload should have low priority (50)")
 
 			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueueB.Name, namespaceB.Name)
-			var localPendingWorkloadsB *visibilityv1beta1.PendingWorkloadsSummary
+			var localPendingWorkloadsB *visibilityv1beta2.PendingWorkloadsSummary
 			Eventually(func() error {
 				localPendingWorkloadsB, err = userVisibilityClientB.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
 				return err
