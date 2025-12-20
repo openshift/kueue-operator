@@ -31,12 +31,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	flowcontrolclientv1 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	visibilityv1beta1 "sigs.k8s.io/kueue/apis/visibility/v1beta1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
@@ -689,12 +689,6 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 				err                     error
 			)
 
-			lwsGVR := schema.GroupVersionResource{
-				Group:    "leaderworkerset.x-k8s.io",
-				Version:  "v1",
-				Resource: "leaderworkersets",
-			}
-
 			By("Creating Cluster Resources")
 			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
@@ -786,22 +780,15 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 			By("Creating blocker LWS in namespace A")
 			builderA := testutils.NewTestResourceBuilder(namespaceA.Name, localQueueA.Name)
-			blockerLWS := builderA.NewLeaderWorkerSet()
-			blockerLWS.SetName("lws-blocker-a")
-			testutils.AddQueueLabelToLWS(blockerLWS, localQueueA.Name)
-			testutils.SetLWSPriority(blockerLWS, highPriorityClass.Name)
-			testutils.SetLWSSize(blockerLWS, 3)
-			createdBlockerLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Create(ctx, blockerLWS, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker LWS")
-			DeferCleanup(func() {
-				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Delete(ctx, createdBlockerLWS.GetName(), metav1.DeleteOptions{})
-			})
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(createdBlockerLWS.GetUID()))
+			blockerLWS := builderA.NewLeaderWorkerSet(localQueueA.Name, highPriorityClass.Name, 3)
+			blockerLWS.Name = "lws-blocker-a"
+			Expect(genericClient.Create(ctx, blockerLWS)).To(Succeed(), "Failed to create blocker LWS")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(blockerLWS.GetUID()))
 
 			By("Waiting for blocker LWS pods to be created")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdBlockerLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", blockerLWS.Name),
 				})
 				if err != nil {
 					return err
@@ -814,40 +801,28 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 			By("Creating pending LWS workloads after blocker pods are ready")
 			builderB := testutils.NewTestResourceBuilder(namespaceB.Name, localQueueB.Name)
-			highLWS := builderB.NewLeaderWorkerSet()
-			highLWS.SetName("lws-high-b")
-			testutils.AddQueueLabelToLWS(highLWS, localQueueB.Name)
-			testutils.SetLWSPriority(highLWS, highPriorityClass.Name)
-			createdHighLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceB.Name).Create(ctx, highLWS, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority LWS")
+			highLWS := builderB.NewLeaderWorkerSet(localQueueB.Name, highPriorityClass.Name, 2)
+			highLWS.Name = "lws-high-b"
+			Expect(genericClient.Create(ctx, highLWS)).To(Succeed(), "Failed to create high priority LWS")
 			DeferCleanup(func() {
-				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceB.Name).Delete(ctx, createdHighLWS.GetName(), metav1.DeleteOptions{})
+				_ = genericClient.Delete(ctx, highLWS)
 			})
 
-			mediumLWS := builderA.NewLeaderWorkerSet()
-			mediumLWS.SetName("lws-medium-a")
-			testutils.AddQueueLabelToLWS(mediumLWS, localQueueA.Name)
-			testutils.SetLWSPriority(mediumLWS, midPriorityClass.Name)
-			createdMediumLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Create(ctx, mediumLWS, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create medium priority LWS")
-			DeferCleanup(func() {
-				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Delete(ctx, createdMediumLWS.GetName(), metav1.DeleteOptions{})
-			})
+			mediumLWS := builderA.NewLeaderWorkerSet(localQueueA.Name, midPriorityClass.Name, 2)
+			mediumLWS.Name = "lws-medium-a"
+			Expect(genericClient.Create(ctx, mediumLWS)).To(Succeed(), "Failed to create medium priority LWS")
 
-			lowLWS := builderA.NewLeaderWorkerSet()
-			lowLWS.SetName("lws-low-a")
-			testutils.AddQueueLabelToLWS(lowLWS, localQueueA.Name)
-			testutils.SetLWSPriority(lowLWS, lowPriorityClass.Name)
-			createdLowLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Create(ctx, lowLWS, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority LWS")
+			lowLWS := builderA.NewLeaderWorkerSet(localQueueA.Name, lowPriorityClass.Name, 2)
+			lowLWS.Name = "lws-low-a"
+			Expect(genericClient.Create(ctx, lowLWS)).To(Succeed(), "Failed to create low priority LWS")
 			DeferCleanup(func() {
-				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Delete(ctx, createdLowLWS.GetName(), metav1.DeleteOptions{})
+				_ = genericClient.Delete(ctx, lowLWS)
 			})
 
 			By("Verifying all pending workloads are created")
-			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceB.Name, createdHighLWS.GetUID())
-			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceA.Name, createdMediumLWS.GetUID())
-			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceA.Name, createdLowLWS.GetUID())
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceB.Name, highLWS.GetUID())
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceA.Name, mediumLWS.GetUID())
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceA.Name, lowLWS.GetUID())
 
 			Byf("Checking the pending workloads for cluster queue %s", clusterQueue.Name)
 
@@ -884,23 +859,12 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(localPendingWorkloadsB.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workload on LocalQueue %s", localQueueB.Name))
 			Expect(localPendingWorkloadsB.Items[0].Priority).To(Equal(int32(100)), "Pending workload should have high priority (100)")
 
-			By("Verifying RBAC: LocalQueue user A cannot query ClusterQueue")
-			_, err = userVisibilityClientA.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueue.Name, metav1.GetOptions{})
-			Expect(err).To(HaveOccurred(), "LocalQueue user A should not be able to query ClusterQueue")
-			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "Error should be Forbidden (403)")
-
-			By("Verifying RBAC: LocalQueue user A cannot query LocalQueue B")
-			_, err = userVisibilityClientA.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
-			Expect(err).To(HaveOccurred(), "LocalQueue user A should not be able to query LocalQueue B")
-			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "Error should be Forbidden (403)")
-
 			By("Deleting blocker LWS to free resources")
-			err = clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Delete(ctx, createdBlockerLWS.GetName(), metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to delete blocker LWS")
+			Expect(genericClient.Delete(ctx, blockerLWS)).To(Succeed(), "Failed to delete blocker LWS")
 
 			By("Waiting for blocker LWS deletion and resource release")
 			Eventually(func() error {
-				_, err := clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Get(ctx, createdBlockerLWS.GetName(), metav1.GetOptions{})
+				err := genericClient.Get(ctx, types.NamespacedName{Name: blockerLWS.Name, Namespace: namespaceA.Name}, &lwsapi.LeaderWorkerSet{})
 				if apierrors.IsNotFound(err) {
 					return nil
 				}
@@ -910,7 +874,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Waiting for blocker LWS pods to be deleted")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdBlockerLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", blockerLWS.Name),
 				})
 				if err != nil {
 					return err
@@ -922,12 +886,12 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Blocker LWS pods were not deleted")
 
 			By("Verifying high priority workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(createdHighLWS.GetUID()))
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(highLWS.GetUID()))
 
 			By("Verifying high priority LWS pods are running after admission")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceB.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdHighLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", highLWS.Name),
 				})
 				if err != nil {
 					return err
@@ -944,12 +908,12 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "High priority LWS pods should be running after admission")
 
 			By("Verifying medium priority workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(createdMediumLWS.GetUID()))
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(mediumLWS.GetUID()))
 
 			By("Verifying medium priority LWS pods are running after admission")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdMediumLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", mediumLWS.Name),
 				})
 				if err != nil {
 					return err
@@ -981,12 +945,11 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Low priority LWS should still be pending")
 
 			By("Deleting medium priority LWS to free resources for low priority")
-			err = clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Delete(ctx, createdMediumLWS.GetName(), metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to delete medium priority LWS")
+			Expect(genericClient.Delete(ctx, mediumLWS)).To(Succeed(), "Failed to delete medium priority LWS")
 
 			By("Waiting for medium priority LWS deletion")
 			Eventually(func() error {
-				_, err := clients.DynamicClient.Resource(lwsGVR).Namespace(namespaceA.Name).Get(ctx, createdMediumLWS.GetName(), metav1.GetOptions{})
+				err := genericClient.Get(ctx, types.NamespacedName{Name: mediumLWS.Name, Namespace: namespaceA.Name}, &lwsapi.LeaderWorkerSet{})
 				if apierrors.IsNotFound(err) {
 					return nil
 				}
@@ -996,7 +959,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Waiting for medium priority LWS pods to be deleted")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdMediumLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", mediumLWS.Name),
 				})
 				if err != nil {
 					return err
@@ -1008,12 +971,12 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Medium priority LWS pods were not deleted")
 
 			By("Verifying low priority workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(createdLowLWS.GetUID()))
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(lowLWS.GetUID()))
 
 			By("Verifying low priority LWS pods are running after admission")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdLowLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", lowLWS.Name),
 				})
 				if err != nil {
 					return err

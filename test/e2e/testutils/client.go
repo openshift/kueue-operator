@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 	visibilityv1beta1 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta1"
 )
@@ -105,6 +106,9 @@ func getGenericClient(config *rest.Config) client.Client {
 
 	if err := jobsetapi.AddToScheme(customScheme); err != nil {
 		klog.Fatalf("Unable to add jobset scheme: %v", err)
+	}
+	if err := lwsapi.AddToScheme(customScheme); err != nil {
+		klog.Fatalf("Unable to add leaderworkerset scheme: %v", err)
 	}
 
 	client, err := client.New(config, client.Options{Scheme: customScheme})

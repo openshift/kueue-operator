@@ -800,19 +800,10 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
-			lwsGVR := schema.GroupVersionResource{
-				Group:    "leaderworkerset.x-k8s.io",
-				Version:  "v1",
-				Resource: "leaderworkersets",
-			}
-
 			By("creating LeaderWorkerSet without queue name in labeled namespace")
-			lwsWithoutQueue := builderWithLabel.NewLeaderWorkerSet()
-			createdLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithLabel).Create(ctx, lwsWithoutQueue, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create LeaderWorkerSet")
-			defer func() {
-				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithLabel).Delete(ctx, createdLWS.GetName(), metav1.DeleteOptions{})
-			}()
+			lwsWithoutQueue := builderWithLabel.NewLeaderWorkerSet("", "", 0)
+			Expect(genericClient.Create(ctx, lwsWithoutQueue)).To(Succeed(), "Failed to create LeaderWorkerSet")
+			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
 
 			By("verifying workload is created for LeaderWorkerSet without queue name")
 			Eventually(func() error {
@@ -823,7 +814,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 				for _, wl := range workloads.Items {
 					for _, ownerRef := range wl.OwnerReferences {
-						if ownerRef.UID == createdLWS.GetUID() {
+						if ownerRef.UID == lwsWithoutQueue.GetUID() {
 							return nil
 						}
 					}
@@ -835,7 +826,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			var lwsPods []corev1.Pod
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithLabel).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", lwsWithoutQueue.Name),
 				})
 				if err != nil {
 					return err
@@ -877,19 +868,10 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
-			lwsGVR := schema.GroupVersionResource{
-				Group:    "leaderworkerset.x-k8s.io",
-				Version:  "v1",
-				Resource: "leaderworkersets",
-			}
-
 			By("creating LeaderWorkerSet without queue name in unlabeled namespace")
-			lwsWithoutQueue := builderWithoutLabel.NewLeaderWorkerSet()
-			createdLWS, err := clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithoutLabel).Create(ctx, lwsWithoutQueue, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create LeaderWorkerSet")
-			defer func() {
-				_ = clients.DynamicClient.Resource(lwsGVR).Namespace(testNamespaceWithoutLabel).Delete(ctx, createdLWS.GetName(), metav1.DeleteOptions{})
-			}()
+			lwsWithoutQueue := builderWithoutLabel.NewLeaderWorkerSet("", "", 0)
+			Expect(genericClient.Create(ctx, lwsWithoutQueue)).To(Succeed(), "Failed to create LeaderWorkerSet")
+			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
 
 			By("verifying no workload is created for LeaderWorkerSet in unlabeled namespace")
 			Consistently(func() error {
@@ -900,7 +882,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 				for _, wl := range allWorkloads.Items {
 					for _, ownerRef := range wl.OwnerReferences {
-						if ownerRef.UID == createdLWS.GetUID() {
+						if ownerRef.UID == lwsWithoutQueue.GetUID() {
 							return fmt.Errorf("unexpected workload found in unlabeled namespace")
 						}
 					}
@@ -912,7 +894,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			By("verifying LeaderWorkerSet pods are running in unlabeled namespace")
 			Eventually(func() error {
 				pods, err := kubeClient.CoreV1().Pods(testNamespaceWithoutLabel).List(ctx, metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", createdLWS.GetName()),
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", lwsWithoutQueue.Name),
 				})
 				if err != nil {
 					return err
