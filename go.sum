@@ -427,6 +427,8 @@ sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 h
 sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96/go.mod h1:EOBQyBowOUsd7U4CJnMHNE0ri+zCXyouGdLwC/jZU+I=
 sigs.k8s.io/kueue v0.15.0 h1:9Khzc2ne6/eWuZx5o+R4KlVBzh3kZkTIMzpPC2e8Spg=
 sigs.k8s.io/kueue v0.15.0/go.mod h1:e4vf5Nve0M1NkYKs6ysUWtQg7iE4UlG1wTR8dn7Dm+I=
+sigs.k8s.io/lws v0.7.0 h1:qWfzX8+UBak+Hq0+m/PuE3uO0mp/3dmm5q/h/7z31A8=
+sigs.k8s.io/lws v0.7.0/go.mod h1:WLg0CkyJTRQWMUOUam6qi9qRmcj3LAIWQUT81d4BGr4=
 sigs.k8s.io/randfill v1.0.0 h1:JfjMILfT8A6RbawdsK2JXGBR5AQVfd+9TbzrlneTyrU=
 sigs.k8s.io/randfill v1.0.0/go.mod h1:XeLlZ/jmk4i1HRopwe7/aU3H5n1zNUcX6TM94b3QxOY=
 sigs.k8s.io/structured-merge-diff/v6 v6.3.1 h1:JrhdFMqOd/+3ByqlP2I45kTOZmTRLBUm5pvRjeheg7E=
