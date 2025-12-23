@@ -140,15 +140,15 @@ spec:
                             resource:
                               description: |-
                                 resource is the Resource type of the external framework.
-                                Resource types are lowercase and plural (e.g. pods, deployments).
-                                Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
+                                Resource types are lowercase and plural (e.g. pods, deployments) or Kind (e.g. Job, Pod).
+                                Must be a valid DNS 1123 label consisting of an alphanumeric string
                                 and hyphens of at most 63 characters in length.
                                 The value must start and end with an alphanumeric character.
                               maxLength: 63
                               minLength: 1
                               type: string
                               x-kubernetes-validations:
-                              - rule: self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+                              - rule: self.matches(r'^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$')
                             version:
                               description: |-
                                 version is the version of the api (e.g. v1alpha1, v1beta1, v1).
