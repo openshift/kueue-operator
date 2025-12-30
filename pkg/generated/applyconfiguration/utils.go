@@ -49,6 +49,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.KueueStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("LabelKeys"):
 		return &kueueoperatorv1.LabelKeysApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("MultiKueue"):
+		return &kueueoperatorv1.MultiKueueApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Preemption"):
 		return &kueueoperatorv1.PreemptionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkloadManagement"):
