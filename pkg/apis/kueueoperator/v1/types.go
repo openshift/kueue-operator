@@ -129,14 +129,14 @@ type ExternalFramework struct {
 	// +required
 	Group string `json:"group"`
 	// resource is the Resource type of the external framework.
-	// Resource types are lowercase and plural (e.g. pods, deployments).
-	// Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
+	// Resource types are lowercase and plural (e.g. pods, deployments) or Kind (e.g. Job, Pod).
+	// Must be a valid DNS 1123 label consisting of an alphanumeric string
 	// and hyphens of at most 63 characters in length.
 	// The value must start and end with an alphanumeric character.
 	// +resource uses matches and not cel functions to allow for use on 4.17.
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$')"
 	// +required
 	Resource string `json:"resource"`
 	// version is the version of the api (e.g. v1alpha1, v1beta1, v1).
