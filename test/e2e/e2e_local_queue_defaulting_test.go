@@ -94,7 +94,11 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 
 		It("should label and admit LeaderWorkerSet", func(ctx context.Context) {
 			By("creating LeaderWorkerSet without queue name")
-			lwsWithoutQueue := builder.NewLeaderWorkerSet("", "", 0)
+			lwsWithoutQueue := builder.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         "",
+				PriorityClassName: "",
+				Size:              0,
+			})
 			Expect(genericClient.Create(ctx, lwsWithoutQueue)).To(Succeed(), "Failed to create LeaderWorkerSet")
 			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
 

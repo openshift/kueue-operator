@@ -801,7 +801,11 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			By("creating LeaderWorkerSet without queue name in labeled namespace")
-			lwsWithoutQueue := builderWithLabel.NewLeaderWorkerSet("", "", 0)
+			lwsWithoutQueue := builderWithLabel.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         "",
+				PriorityClassName: "",
+				Size:              0,
+			})
 			Expect(genericClient.Create(ctx, lwsWithoutQueue)).To(Succeed(), "Failed to create LeaderWorkerSet")
 			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
 
@@ -869,7 +873,11 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			By("creating LeaderWorkerSet without queue name in unlabeled namespace")
-			lwsWithoutQueue := builderWithoutLabel.NewLeaderWorkerSet("", "", 0)
+			lwsWithoutQueue := builderWithoutLabel.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         "",
+				PriorityClassName: "",
+				Size:              0,
+			})
 			Expect(genericClient.Create(ctx, lwsWithoutQueue)).To(Succeed(), "Failed to create LeaderWorkerSet")
 			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
 

@@ -781,7 +781,11 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 			By("Creating blocker LWS in namespace A")
 			builderA := testutils.NewTestResourceBuilder(namespaceA.Name, localQueueA.Name)
-			blockerLWS := builderA.NewLeaderWorkerSet(localQueueA.Name, highPriorityClass.Name, 3)
+			blockerLWS := builderA.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueA.Name,
+				PriorityClassName: highPriorityClass.Name,
+				Size:              3,
+			})
 			blockerLWS.Name = "lws-blocker-a"
 			Expect(genericClient.Create(ctx, blockerLWS)).To(Succeed(), "Failed to create blocker LWS")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(blockerLWS.GetUID()))
@@ -802,18 +806,30 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 			By("Creating pending LWS workloads after blocker pods are ready")
 			builderB := testutils.NewTestResourceBuilder(namespaceB.Name, localQueueB.Name)
-			highLWS := builderB.NewLeaderWorkerSet(localQueueB.Name, highPriorityClass.Name, 2)
+			highLWS := builderB.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueB.Name,
+				PriorityClassName: highPriorityClass.Name,
+				Size:              2,
+			})
 			highLWS.Name = "lws-high-b"
 			Expect(genericClient.Create(ctx, highLWS)).To(Succeed(), "Failed to create high priority LWS")
 			DeferCleanup(func() {
 				_ = genericClient.Delete(ctx, highLWS)
 			})
 
-			mediumLWS := builderA.NewLeaderWorkerSet(localQueueA.Name, midPriorityClass.Name, 2)
+			mediumLWS := builderA.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueA.Name,
+				PriorityClassName: midPriorityClass.Name,
+				Size:              2,
+			})
 			mediumLWS.Name = "lws-medium-a"
 			Expect(genericClient.Create(ctx, mediumLWS)).To(Succeed(), "Failed to create medium priority LWS")
 
-			lowLWS := builderA.NewLeaderWorkerSet(localQueueA.Name, lowPriorityClass.Name, 2)
+			lowLWS := builderA.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueA.Name,
+				PriorityClassName: lowPriorityClass.Name,
+				Size:              2,
+			})
 			lowLWS.Name = "lws-low-a"
 			Expect(genericClient.Create(ctx, lowLWS)).To(Succeed(), "Failed to create low priority LWS")
 			DeferCleanup(func() {

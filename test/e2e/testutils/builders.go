@@ -215,11 +215,18 @@ func (b *TestResourceBuilder) NewStatefulSetWithoutQueue() *appsv1.StatefulSet {
 	return ss
 }
 
+type LeaderWorkerSetOptions struct {
+	// QueueName: if non-empty, adds the kueue.x-k8s.io/queue-name label
+	QueueName string
+	// PriorityClassName: if non-empty, sets the priorityClassName in the leader template spec
+	PriorityClassName string
+	// Size: defaults to 2 if <= 0
+	Size int
+}
+
 // NewLeaderWorkerSet creates a LeaderWorkerSet with optional queue name, priority class, and size.
-// queueName: if non-empty, adds the kueue.x-k8s.io/queue-name label
-// priorityClassName: if non-empty, sets the priorityClassName in the leader template spec
-// size: defaults to 2 if <= 0
-func (b *TestResourceBuilder) NewLeaderWorkerSet(queueName, priorityClassName string, size int) *lwsapi.LeaderWorkerSet {
+func (b *TestResourceBuilder) NewLeaderWorkerSet(opts LeaderWorkerSetOptions) *lwsapi.LeaderWorkerSet {
+	size := opts.Size
 	if size <= 0 {
 		size = 2
 	}
@@ -289,17 +296,17 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet(queueName, priorityClassName st
 	}
 
 	// Add queue label if provided
-	if queueName != "" {
+	if opts.QueueName != "" {
 		if lws.Labels == nil {
 			lws.Labels = make(map[string]string)
 		}
-		lws.Labels["kueue.x-k8s.io/queue-name"] = queueName
+		lws.Labels["kueue.x-k8s.io/queue-name"] = opts.QueueName
 	}
 
 	// Add priority class if provided
-	if priorityClassName != "" {
+	if opts.PriorityClassName != "" {
 		if lws.Spec.LeaderWorkerTemplate.LeaderTemplate != nil {
-			lws.Spec.LeaderWorkerTemplate.LeaderTemplate.Spec.PriorityClassName = priorityClassName
+			lws.Spec.LeaderWorkerTemplate.LeaderTemplate.Spec.PriorityClassName = opts.PriorityClassName
 		}
 	}
 
