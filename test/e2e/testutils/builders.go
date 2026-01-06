@@ -22,8 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 )
 
 type TestResourceBuilder struct {
@@ -215,65 +215,76 @@ func (b *TestResourceBuilder) NewStatefulSetWithoutQueue() *appsv1.StatefulSet {
 	return ss
 }
 
-// NewLeaderWorkerSet creates a LeaderWorkerSet without any queue labels.
-func (b *TestResourceBuilder) NewLeaderWorkerSet() *unstructured.Unstructured {
-	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "leaderworkerset.x-k8s.io/v1",
-			"kind":       "LeaderWorkerSet",
-			"metadata": map[string]interface{}{
-				"generateName": "test-lws-",
-				"namespace":    b.namespace,
-			},
-			"spec": map[string]interface{}{
-				"replicas": 1,
-				"leaderWorkerTemplate": map[string]interface{}{
-					"size": 2,
-					"leaderTemplate": map[string]interface{}{
-						"spec": map[string]interface{}{
-							"containers": []map[string]interface{}{
-								{
-									"name":  "leader",
-									"image": b.containerImage,
-									"command": []string{
-										"sh", "-c", "sleep 3600",
+type LeaderWorkerSetOptions struct {
+	// QueueName: if non-empty, adds the kueue.x-k8s.io/queue-name label
+	QueueName string
+	// PriorityClassName: if non-empty, sets the priorityClassName in the leader template spec
+	PriorityClassName string
+	// Size: defaults to 2 if <= 0
+	Size int
+}
+
+// NewLeaderWorkerSet creates a LeaderWorkerSet with optional queue name, priority class, and size.
+func (b *TestResourceBuilder) NewLeaderWorkerSet(opts LeaderWorkerSetOptions) *lwsapi.LeaderWorkerSet {
+	size := opts.Size
+	if size <= 0 {
+		size = 2
+	}
+
+	lws := &lwsapi.LeaderWorkerSet{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-lws-",
+			Namespace:    b.namespace,
+		},
+		Spec: lwsapi.LeaderWorkerSetSpec{
+			Replicas:      ptr.To(int32(1)),
+			StartupPolicy: lwsapi.LeaderCreatedStartupPolicy,
+			LeaderWorkerTemplate: lwsapi.LeaderWorkerTemplate{
+				Size: ptr.To(int32(size)),
+				LeaderTemplate: &corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "leader",
+								Image: b.containerImage,
+								Command: []string{
+									"sh", "-c", "sleep 3600",
+								},
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("100m"),
+										corev1.ResourceMemory: resource.MustParse("128Mi"),
 									},
-									"resources": map[string]interface{}{
-										"requests": map[string]interface{}{
-											"cpu":    "100m",
-											"memory": "128Mi",
-										},
-									},
-									"securityContext": map[string]interface{}{
-										"allowPrivilegeEscalation": false,
-										"capabilities": map[string]interface{}{
-											"drop": []string{"ALL"},
-										},
+								},
+								SecurityContext: &corev1.SecurityContext{
+									AllowPrivilegeEscalation: ptr.To(false),
+									Capabilities: &corev1.Capabilities{
+										Drop: []corev1.Capability{"ALL"},
 									},
 								},
 							},
 						},
 					},
-					"workerTemplate": map[string]interface{}{
-						"spec": map[string]interface{}{
-							"containers": []map[string]interface{}{
-								{
-									"name":  "worker",
-									"image": b.containerImage,
-									"command": []string{
-										"sh", "-c", "sleep 3600",
+				},
+				WorkerTemplate: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "worker",
+								Image: b.containerImage,
+								Command: []string{
+									"sh", "-c", "sleep 3600",
+								},
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("100m"),
+										corev1.ResourceMemory: resource.MustParse("128Mi"),
 									},
-									"resources": map[string]interface{}{
-										"requests": map[string]interface{}{
-											"cpu":    "100m",
-											"memory": "128Mi",
-										},
-									},
-									"securityContext": map[string]interface{}{
-										"allowPrivilegeEscalation": false,
-										"capabilities": map[string]interface{}{
-											"drop": []string{"ALL"},
-										},
+								},
+								SecurityContext: &corev1.SecurityContext{
+									AllowPrivilegeEscalation: ptr.To(false),
+									Capabilities: &corev1.Capabilities{
+										Drop: []corev1.Capability{"ALL"},
 									},
 								},
 							},
@@ -283,15 +294,21 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet() *unstructured.Unstructured {
 			},
 		},
 	}
-}
 
-// AddQueueLabelToLWS adds the queue name label to an existing LeaderWorkerSet.
-func AddQueueLabelToLWS(lws *unstructured.Unstructured, queueName string) *unstructured.Unstructured {
-	labels, found, err := unstructured.NestedStringMap(lws.Object, "metadata", "labels")
-	if err != nil || !found {
-		labels = make(map[string]string)
+	// Add queue label if provided
+	if opts.QueueName != "" {
+		if lws.Labels == nil {
+			lws.Labels = make(map[string]string)
+		}
+		lws.Labels["kueue.x-k8s.io/queue-name"] = opts.QueueName
 	}
-	labels["kueue.x-k8s.io/queue-name"] = queueName
-	_ = unstructured.SetNestedStringMap(lws.Object, labels, "metadata", "labels")
+
+	// Add priority class if provided
+	if opts.PriorityClassName != "" {
+		if lws.Spec.LeaderWorkerTemplate.LeaderTemplate != nil {
+			lws.Spec.LeaderWorkerTemplate.LeaderTemplate.Spec.PriorityClassName = opts.PriorityClassName
+		}
+	}
+
 	return lws
 }

@@ -37,6 +37,8 @@ import (
 	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 	visibilityv1beta1 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta1"
+	visibilityv1beta2 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta2"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 )
 
 type TestClients struct {
@@ -106,6 +108,9 @@ func getGenericClient(config *rest.Config) client.Client {
 	if err := jobsetapi.AddToScheme(customScheme); err != nil {
 		klog.Fatalf("Unable to add jobset scheme: %v", err)
 	}
+	if err := lwsapi.AddToScheme(customScheme); err != nil {
+		klog.Fatalf("Unable to add leaderworkerset scheme: %v", err)
+	}
 
 	client, err := client.New(config, client.Options{Scheme: customScheme})
 	if err != nil {
@@ -134,6 +139,20 @@ func GetVisibilityClient(user string) (visibilityv1beta1.VisibilityV1beta1Interf
 
 	kueueClient := getUpstreamKueueClient(cfg)
 	return kueueClient.VisibilityV1beta1(), nil
+}
+
+func GetVisibilityClientV1beta2(user string) (visibilityv1beta2.VisibilityV1beta2Interface, error) {
+	cfg, err := config.GetConfigWithContext("")
+	if err != nil {
+		return nil, fmt.Errorf("unable to get kubeconfig: %w", err)
+	}
+
+	if user != "" {
+		cfg.Impersonate.UserName = user
+	}
+
+	kueueClient := getUpstreamKueueClient(cfg)
+	return kueueClient.VisibilityV1beta2(), nil
 }
 
 func getDynamicClient(config *rest.Config) dynamic.Interface {

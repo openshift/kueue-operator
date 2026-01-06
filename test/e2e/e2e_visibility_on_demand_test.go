@@ -31,11 +31,15 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	flowcontrolclientv1 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	visibilityv1beta1 "sigs.k8s.io/kueue/apis/visibility/v1beta1"
+	visibilityv1beta2 "sigs.k8s.io/kueue/apis/visibility/v1beta2"
+	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 )
 
 const (
@@ -422,14 +426,14 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			kueueTestSAA, err := createServiceAccount(ctx, namespaceA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
-			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAA.Name, "kueue-batch-user-role")
+			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAA.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingA)
 
 			kueueTestSAB, err := createServiceAccount(ctx, namespaceB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
 
-			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAB.Name, "kueue-batch-user-role")
+			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAB.Name)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
 			DeferCleanup(cleanupRoleBindingB)
 
@@ -671,7 +675,347 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 				"X-Kubernetes-Pf-Flowschema-Uid header does not match \"visibility\" FlowSchema UID for LocalQueue")
 
 		})
+	})
 
+	When("PendingWorkloads list should be checked for LWS workloads", func() {
+		var (
+			labelKey   = testutils.OpenShiftManagedLabel
+			labelValue = trueLabelValue
+		)
+
+		It("Should show pending LWS workloads ordered by priority and admit them sequentially based on resource availability", func(ctx context.Context) {
+			var (
+				clusterPendingWorkloads *visibilityv1beta2.PendingWorkloadsSummary
+				localPendingWorkloadsA  *visibilityv1beta2.PendingWorkloadsSummary
+				err                     error
+			)
+
+			By("Creating Cluster Resources")
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
+			DeferCleanup(cleanupResourceFlavor)
+			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("400m").WithMemory("512Mi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
+			DeferCleanup(cleanupClusterQueue)
+
+			By("Creating Namespaces and LocalQueues")
+			namespaceA, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "namespace-a-",
+					Labels: map[string]string{
+						labelKey: labelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespaceA)
+			})
+
+			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
+			DeferCleanup(cleanupLocalQueueA)
+
+			namespaceB, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "namespace-b-",
+					Labels: map[string]string{
+						labelKey: labelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespaceB)
+			})
+
+			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
+			DeferCleanup(cleanupLocalQueueB)
+
+			By("Creating Priority Classes")
+			highPriorityClass, cleanupHighPriorityClass, err := createPriorityClass(ctx, 100, "High priority class")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority class")
+			DeferCleanup(cleanupHighPriorityClass)
+			midPriorityClass, cleanupMidPriorityClass, err := createPriorityClass(ctx, 75, "Medium priority class")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create medium priority class")
+			DeferCleanup(cleanupMidPriorityClass)
+			lowPriorityClass, cleanupLowPriorityClass, err := createPriorityClass(ctx, 50, "Low priority class")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority class")
+			DeferCleanup(cleanupLowPriorityClass)
+
+			By("Creating RBAC kueue-batch-admin-role for Visibility API")
+			kueueTestSA, err := createServiceAccount(ctx, namespaceA.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
+			cleanupClusterRoleBinding, err := createClusterRoleBinding(ctx, kueueTestSA.Name, namespaceA.Name, "kueue-batch-admin-role")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster role binding")
+			DeferCleanup(cleanupClusterRoleBinding)
+
+			By("Creating RBAC kueue-batch-user-role for Visibility API")
+			kueueTestSAUserA, err := createServiceAccount(ctx, namespaceA.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
+			cleanupRoleBindingA, err := createRoleBinding(ctx, namespaceA.Name, kueueTestSAUserA.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
+			DeferCleanup(cleanupRoleBindingA)
+
+			kueueTestSAUserB, err := createServiceAccount(ctx, namespaceB.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
+			cleanupRoleBindingB, err := createRoleBinding(ctx, namespaceB.Name, kueueTestSAUserB.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
+			DeferCleanup(cleanupRoleBindingB)
+
+			By("Creating custom visibility client for ClusterQueue access")
+			testUserVisibilityClient, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name)
+
+			By("Creating custom visibility client for LocalQueue A access")
+			userVisibilityClientA, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAUserA.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for LocalQueue A access")
+
+			By("Creating custom visibility client for LocalQueue B access")
+			userVisibilityClientB, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAUserB.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for LocalQueue B access")
+
+			By("Creating blocker LWS in namespace A")
+			builderA := testutils.NewTestResourceBuilder(namespaceA.Name, localQueueA.Name)
+			blockerLWS := builderA.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueA.Name,
+				PriorityClassName: highPriorityClass.Name,
+				Size:              3,
+			})
+			blockerLWS.Name = "lws-blocker-a"
+			Expect(genericClient.Create(ctx, blockerLWS)).To(Succeed(), "Failed to create blocker LWS")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(blockerLWS.GetUID()))
+
+			By("Waiting for blocker LWS pods to be created")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", blockerLWS.Name),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) < 3 {
+					return fmt.Errorf("blocker LWS pods not created yet, found %d pods (expected 3)", len(pods.Items))
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Blocker LWS pods were not created")
+
+			By("Creating pending LWS workloads after blocker pods are ready")
+			builderB := testutils.NewTestResourceBuilder(namespaceB.Name, localQueueB.Name)
+			highLWS := builderB.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueB.Name,
+				PriorityClassName: highPriorityClass.Name,
+				Size:              2,
+			})
+			highLWS.Name = "lws-high-b"
+			Expect(genericClient.Create(ctx, highLWS)).To(Succeed(), "Failed to create high priority LWS")
+			DeferCleanup(func() {
+				_ = genericClient.Delete(ctx, highLWS)
+			})
+
+			mediumLWS := builderA.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueA.Name,
+				PriorityClassName: midPriorityClass.Name,
+				Size:              2,
+			})
+			mediumLWS.Name = "lws-medium-a"
+			Expect(genericClient.Create(ctx, mediumLWS)).To(Succeed(), "Failed to create medium priority LWS")
+
+			lowLWS := builderA.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueA.Name,
+				PriorityClassName: lowPriorityClass.Name,
+				Size:              2,
+			})
+			lowLWS.Name = "lws-low-a"
+			Expect(genericClient.Create(ctx, lowLWS)).To(Succeed(), "Failed to create low priority LWS")
+			DeferCleanup(func() {
+				_ = genericClient.Delete(ctx, lowLWS)
+			})
+
+			By("Verifying all pending workloads are created")
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceB.Name, highLWS.GetUID())
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceA.Name, mediumLWS.GetUID())
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespaceA.Name, lowLWS.GetUID())
+
+			Byf("Checking the pending workloads for cluster queue %s", clusterQueue.Name)
+
+			Eventually(func() error {
+				clusterPendingWorkloads, err = testUserVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for ClusterQueue %s", clusterQueue.Name)
+
+			By("Verifying number of pending workloads and their priority ordering for ClusterQueue")
+			Expect(clusterPendingWorkloads.Items).To(HaveLen(3), fmt.Sprintf("Expected 3 pending workloads on ClusterQueue %s", clusterQueue.Name))
+			Expect(clusterPendingWorkloads.Items[0].Priority).To(Equal(int32(100)), "First workload should have high priority (100)")
+			Expect(clusterPendingWorkloads.Items[1].Priority).To(Equal(int32(75)), "Second workload should have medium priority (75)")
+			Expect(clusterPendingWorkloads.Items[2].Priority).To(Equal(int32(50)), "Third workload should have low priority (50)")
+
+			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueueA.Name, namespaceA.Name)
+			Eventually(func() error {
+				localPendingWorkloadsA, err = userVisibilityClientA.LocalQueues(namespaceA.Name).GetPendingWorkloadsSummary(ctx, localQueueA.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueueA.Name)
+
+			By("Verifying pending workloads for LocalQueue A")
+			Expect(localPendingWorkloadsA.Items).To(HaveLen(2), fmt.Sprintf("Expected 2 pending workloads on LocalQueue %s", localQueueA.Name))
+			Expect(localPendingWorkloadsA.Items[0].Priority).To(Equal(int32(75)), "First workload should have medium priority (75)")
+			Expect(localPendingWorkloadsA.Items[1].Priority).To(Equal(int32(50)), "Second workload should have low priority (50)")
+
+			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueueB.Name, namespaceB.Name)
+			var localPendingWorkloadsB *visibilityv1beta2.PendingWorkloadsSummary
+			Eventually(func() error {
+				localPendingWorkloadsB, err = userVisibilityClientB.LocalQueues(namespaceB.Name).GetPendingWorkloadsSummary(ctx, localQueueB.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueueB.Name)
+
+			By("Verifying pending workloads for LocalQueue B")
+			Expect(localPendingWorkloadsB.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workload on LocalQueue %s", localQueueB.Name))
+			Expect(localPendingWorkloadsB.Items[0].Priority).To(Equal(int32(100)), "Pending workload should have high priority (100)")
+
+			By("Deleting blocker LWS to free resources")
+			Expect(genericClient.Delete(ctx, blockerLWS)).To(Succeed(), "Failed to delete blocker LWS")
+
+			By("Waiting for blocker LWS deletion and resource release")
+			Eventually(func() error {
+				err := genericClient.Get(ctx, types.NamespacedName{Name: blockerLWS.Name, Namespace: namespaceA.Name}, &lwsapi.LeaderWorkerSet{})
+				if apierrors.IsNotFound(err) {
+					return nil
+				}
+				return fmt.Errorf("blocker LWS still exists")
+			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Blocker LWS was not deleted")
+
+			By("Waiting for blocker LWS pods to be deleted")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", blockerLWS.Name),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) > 0 {
+					return fmt.Errorf("blocker LWS pods still exist, found %d pods", len(pods.Items))
+				}
+				return nil
+			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Blocker LWS pods were not deleted")
+
+			By("Verifying high priority workload is admitted")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(highLWS.GetUID()))
+
+			By("Verifying high priority LWS pods are running after admission")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceB.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", highLWS.Name),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) < 2 {
+					return fmt.Errorf("high priority LWS pods not found, found %d pods", len(pods.Items))
+				}
+				for _, pod := range pods.Items {
+					if pod.Status.Phase != corev1.PodRunning {
+						return fmt.Errorf("pod %s is not in Running state, current phase: %s", pod.Name, pod.Status.Phase)
+					}
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "High priority LWS pods should be running after admission")
+
+			By("Verifying medium priority workload is admitted")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(mediumLWS.GetUID()))
+
+			By("Verifying medium priority LWS pods are running after admission")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", mediumLWS.Name),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) < 2 {
+					return fmt.Errorf("medium priority LWS pods not found, found %d pods", len(pods.Items))
+				}
+				for _, pod := range pods.Items {
+					if pod.Status.Phase != corev1.PodRunning {
+						return fmt.Errorf("pod %s is not in Running state, current phase: %s", pod.Name, pod.Status.Phase)
+					}
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Medium priority LWS pods should be running after admission")
+
+			By("Verifying low priority LWS is still pending")
+			Eventually(func() error {
+				clusterPendingWorkloads, err = testUserVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueue.Name, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				if len(clusterPendingWorkloads.Items) != 1 {
+					return fmt.Errorf("expected 1 pending workload, found %d", len(clusterPendingWorkloads.Items))
+				}
+				if clusterPendingWorkloads.Items[0].Priority != 50 {
+					return fmt.Errorf("expected low priority workload, found priority %d", clusterPendingWorkloads.Items[0].Priority)
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Low priority LWS should still be pending")
+
+			By("Deleting medium priority LWS to free resources for low priority")
+			Expect(genericClient.Delete(ctx, mediumLWS)).To(Succeed(), "Failed to delete medium priority LWS")
+
+			By("Waiting for medium priority LWS deletion")
+			Eventually(func() error {
+				err := genericClient.Get(ctx, types.NamespacedName{Name: mediumLWS.Name, Namespace: namespaceA.Name}, &lwsapi.LeaderWorkerSet{})
+				if apierrors.IsNotFound(err) {
+					return nil
+				}
+				return fmt.Errorf("medium priority LWS still exists")
+			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Medium priority LWS was not deleted")
+
+			By("Waiting for medium priority LWS pods to be deleted")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", mediumLWS.Name),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) > 0 {
+					return fmt.Errorf("medium priority LWS pods still exist, found %d pods", len(pods.Items))
+				}
+				return nil
+			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Medium priority LWS pods were not deleted")
+
+			By("Verifying low priority workload is admitted")
+			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(lowLWS.GetUID()))
+
+			By("Verifying low priority LWS pods are running after admission")
+			Eventually(func() error {
+				pods, err := kubeClient.CoreV1().Pods(namespaceA.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", lowLWS.Name),
+				})
+				if err != nil {
+					return err
+				}
+				if len(pods.Items) < 2 {
+					return fmt.Errorf("low priority LWS pods not found, found %d pods", len(pods.Items))
+				}
+				for _, pod := range pods.Items {
+					if pod.Status.Phase != corev1.PodRunning {
+						return fmt.Errorf("pod %s is not in Running state, current phase: %s", pod.Name, pod.Status.Phase)
+					}
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Low priority LWS pods should be running after admission")
+
+			By("Verifying pending workloads list is empty")
+			Eventually(func() error {
+				clusterPendingWorkloads, err = testUserVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get final pending workloads")
+			Expect(clusterPendingWorkloads.Items).To(BeEmpty(), "Pending workloads list should be empty after all workloads were admitted")
+		})
 	})
 })
 
@@ -790,9 +1134,9 @@ func createClusterRoleBinding(ctx context.Context, serviceAccountName, serviceAc
 	return cleanup, nil
 }
 
-// createRoleBinding creates a RoleBinding in the specified namespace for the given ServiceAccount and ClusterRole
-// and returns a cleanup function
-func createRoleBinding(ctx context.Context, namespace, serviceAccountName, clusterRoleName string) (func(), error) {
+// createRoleBinding creates a RoleBinding in the specified namespace for the given ServiceAccount
+// with kueue-batch-user-role ClusterRole and returns a cleanup function
+func createRoleBinding(ctx context.Context, namespace, serviceAccountName string) (func(), error) {
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "kueue-role-binding-",
@@ -808,7 +1152,7 @@ func createRoleBinding(ctx context.Context, namespace, serviceAccountName, clust
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: rbacv1.GroupName,
 			Kind:     "ClusterRole",
-			Name:     clusterRoleName,
+			Name:     "kueue-batch-user-role",
 		},
 	}
 	createdRoleBinding, err := kubeClient.RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
@@ -928,4 +1272,26 @@ func (rt *headerCaptureRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 // Byf is a helper function that wraps By(fmt.Sprintf(...)) to reduce verbosity
 func Byf(format string, args ...interface{}) {
 	By(fmt.Sprintf(format, args...))
+}
+
+// verifyWorkloadCreatedNotAdmitted verifies that a workload is created for a LeaderWorkerSet
+// by checking owner references, but does not verify admission status.
+func verifyWorkloadCreatedNotAdmitted(kueueClient *upstreamkueueclient.Clientset, namespace string, uid types.UID) {
+	ctx := context.TODO()
+	By(fmt.Sprintf("verifying workload is created for LeaderWorkerSet in namespace %s", namespace))
+	Eventually(func() error {
+		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+
+		for _, wl := range workloads.Items {
+			for _, ownerRef := range wl.OwnerReferences {
+				if ownerRef.UID == uid {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("no workload found for LeaderWorkerSet")
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload should be created for LeaderWorkerSet")
 }
