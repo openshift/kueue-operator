@@ -177,8 +177,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 		It("Should allow admin to access ClusterQueues, deny user access, and order pending workloads by priority", func(ctx context.Context) {
 			var (
-				clusterPendingWorkloadsA *visibilityv1beta1.PendingWorkloadsSummary
-				clusterPendingWorkloadsB *visibilityv1beta1.PendingWorkloadsSummary
+				clusterPendingWorkloadsA *visibilityv1beta2.PendingWorkloadsSummary
+				clusterPendingWorkloadsB *visibilityv1beta2.PendingWorkloadsSummary
 				err                      error
 			)
 
@@ -255,7 +255,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			DeferCleanup(cleanupClusterRoleBindingUser)
 
 			By("Creating custom visibility client for ClusterQueue user")
-			testUserVisibilityClient, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name))
+			testUserVisibilityClient, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSA.Name)
 
 			By("Creating testing data")
@@ -352,7 +352,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(clusterPendingWorkloadsB.Items).To(BeEmpty(), "Pending workloads list should be empty after workloads were executed")
 
 			By("Verifying a unauthorized user cannot access the pending workloads")
-			notAuthorizedVisibilityClient, err := testutils.GetVisibilityClient(
+			notAuthorizedVisibilityClient, err := testutils.GetVisibilityClientV1beta2(
 				fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, "not-authorized-user"),
 			)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for not authorized user")
@@ -361,7 +361,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "Expected a Forbidden error when not authorized user tries to access the pending workloads")
 
 			By("Verifying user with kueue-batch-user-role cannot access ClusterQueue pending workloads")
-			userVisibilityClient, err := testutils.GetVisibilityClient(
+			userVisibilityClient, err := testutils.GetVisibilityClientV1beta2(
 				fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAUser.Name),
 			)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for user with kueue-batch-user-role")
@@ -373,8 +373,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 		It("Should allow access to LocalQueues in bound namespaces and deny access to unbound namespaces", func(ctx context.Context) {
 			var (
-				localPendingWorkloadsA *visibilityv1beta1.PendingWorkloadsSummary
-				localPendingWorkloadsB *visibilityv1beta1.PendingWorkloadsSummary
+				localPendingWorkloadsA *visibilityv1beta2.PendingWorkloadsSummary
+				localPendingWorkloadsB *visibilityv1beta2.PendingWorkloadsSummary
 				err                    error
 			)
 
@@ -438,9 +438,9 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			DeferCleanup(cleanupRoleBindingB)
 
 			By("Creating custom visibility client for ClusterQueue user")
-			testUserVisibilityClientA, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAA.Name))
+			testUserVisibilityClientA, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAA.Name))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceA.Name, kueueTestSAA.Name)
-			testUserVisibilityClientB, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAB.Name))
+			testUserVisibilityClientB, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAB.Name))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespaceB.Name, kueueTestSAB.Name)
 
 			By("Creating Priority Classes")
@@ -617,7 +617,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			DeferCleanup(cleanupClusterRoleBinding)
 
 			By("Creating custom visibility client for ClusterQueue user")
-			testUserVisibilityClient, err := testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:%s", namespace.Name, "default"))
+			testUserVisibilityClient, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespace.Name, "default"))
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespace.Name, "default")
 
 			By("Getting the PriorityLevelConfiguration and FlowSchema")
