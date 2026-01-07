@@ -36,7 +36,6 @@ import (
 	flowcontrolclientv1 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
-	visibilityv1beta1 "sigs.k8s.io/kueue/apis/visibility/v1beta1"
 	visibilityv1beta2 "sigs.k8s.io/kueue/apis/visibility/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
