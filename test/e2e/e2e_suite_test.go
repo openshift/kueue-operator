@@ -24,7 +24,7 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	visibilityv1beta1 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta1"
+	visibilityv1beta2 "sigs.k8s.io/kueue/client-go/clientset/versioned/typed/visibility/v1beta2"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
@@ -37,7 +37,7 @@ var (
 	kubeClient       *kubernetes.Clientset
 	genericClient    client.Client
 	clients          *testutils.TestClients
-	visibilityClient visibilityv1beta1.VisibilityV1beta1Interface
+	visibilityClient visibilityv1beta2.VisibilityV1beta2Interface
 	err              error
 )
 
@@ -71,7 +71,7 @@ var _ = BeforeSuite(func() {
 	kubeClient = clients.KubeClient
 	genericClient = clients.GenericClient
 
-	visibilityClient, err = testutils.GetVisibilityClient(fmt.Sprintf("system:serviceaccount:%s:default", testutils.OperatorNamespace))
+	visibilityClient, err = testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:default", testutils.OperatorNamespace))
 	Expect(err).NotTo(HaveOccurred())
 
 	// Deploy the Kueue operand once for all tests
