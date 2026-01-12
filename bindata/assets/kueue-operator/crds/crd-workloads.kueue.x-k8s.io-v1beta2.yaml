@@ -26,7 +26,9 @@ spec:
     listKind: WorkloadList
     plural: workloads
     shortNames:
-    - wl
+    - kwl
+    - kueueworkload
+    - kueueworkloads
     singular: workload
   scope: Namespaced
   versions:
