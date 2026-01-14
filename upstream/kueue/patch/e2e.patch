@@ -1,8 +1,8 @@
 diff --git a/test/e2e/singlecluster/suite_test.go b/test/e2e/singlecluster/suite_test.go
-index 3154cdd1d..9e735bf79 100644
+index 2ef3bcd7c..669c64a27 100644
 --- a/test/e2e/singlecluster/suite_test.go
 +++ b/test/e2e/singlecluster/suite_test.go
-@@ -72,10 +72,10 @@ var _ = ginkgo.BeforeSuite(func() {
+@@ -72,11 +72,11 @@ var _ = ginkgo.BeforeSuite(func() {
  
  	waitForAvailableStart := time.Now()
  	util.WaitForKueueAvailability(ctx, k8sClient)
@@ -10,18 +10,20 @@ index 3154cdd1d..9e735bf79 100644
 -	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
 -	util.WaitForAppWrapperAvailability(ctx, k8sClient)
 -	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
+-	util.WaitForKubeRayOperatorAvailability(ctx, k8sClient)
 +	//	util.WaitForJobSetAvailability(ctx, k8sClient)
 +	//	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
 +	//	util.WaitForAppWrapperAvailability(ctx, k8sClient)
 +	//	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
++	//	util.WaitForKubeRayOperatorAvailability(ctx, k8sClient)
  	ginkgo.GinkgoLogr.Info(
  		"Kueue and all required operators are available in the cluster",
  		"waitingTime", time.Since(waitForAvailableStart),
 diff --git a/test/util/e2e.go b/test/util/e2e.go
-index cc7d1f901..a68b8b9f4 100644
+index 27c80bfe7..b768dd897 100644
 --- a/test/util/e2e.go
 +++ b/test/util/e2e.go
-@@ -473,8 +473,14 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
+@@ -543,8 +543,14 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
  }
  
  func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
