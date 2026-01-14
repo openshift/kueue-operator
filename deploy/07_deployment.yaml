@@ -31,8 +31,11 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: "/tmp"
+            - name: metrics-tls
+              mountPath: "/var/run/secrets/serving-cert"
+              readOnly: true
           ports:
-            - containerPort: 60000
+            - containerPort: 8443
               name: metrics
           command:
             - kueue-operator
@@ -54,3 +57,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: metrics-tls
+          secret:
+            secretName: openshift-kueue-operator-metrics-tls
+            optional: true

@@ -1,0 +1,15 @@
+# default deny-all policy for kueue operand pod
+# Applies to kueue deployment pods only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kueue-deny-all
+  namespace: openshift-kueue-operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kueue
+      control-plane: controller-manager
+  policyTypes:
+  - Ingress
+  - Egress
