@@ -1,22 +1,53 @@
 diff --git a/test/e2e/singlecluster/suite_test.go b/test/e2e/singlecluster/suite_test.go
-index 3154cdd1d..9e735bf79 100644
+index 261c0bf41..bb8faf798 100644
 --- a/test/e2e/singlecluster/suite_test.go
 +++ b/test/e2e/singlecluster/suite_test.go
-@@ -72,10 +72,10 @@ var _ = ginkgo.BeforeSuite(func() {
+@@ -71,25 +71,25 @@ var _ = ginkgo.BeforeSuite(func() {
  
  	waitForAvailableStart := time.Now()
  	util.WaitForKueueAvailability(ctx, k8sClient)
--	util.WaitForJobSetAvailability(ctx, k8sClient)
--	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
--	util.WaitForAppWrapperAvailability(ctx, k8sClient)
--	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
-+	//	util.WaitForJobSetAvailability(ctx, k8sClient)
-+	//	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
-+	//	util.WaitForAppWrapperAvailability(ctx, k8sClient)
-+	//	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
+-	labelFilter := ginkgo.GinkgoLabelFilter()
+-	if ginkgo.Label("feature:jobset", "feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
+-		util.WaitForJobSetAvailability(ctx, k8sClient)
+-	}
+-	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
+-		util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
+-	}
+-	if ginkgo.Label("feature:appwrapper").MatchesLabelFilter(labelFilter) {
+-		util.WaitForAppWrapperAvailability(ctx, k8sClient)
+-	}
+-	if ginkgo.Label("feature:jaxjob", "feature:pytorchjob").MatchesLabelFilter(labelFilter) {
+-		util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
+-	}
+-	if ginkgo.Label("feature:kuberay").MatchesLabelFilter(labelFilter) {
+-		util.WaitForKubeRayOperatorAvailability(ctx, k8sClient)
+-	}
+-	if ginkgo.Label("feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
+-		util.WaitForKubeFlowTrainnerControllerManagerAvailability(ctx, k8sClient)
+-	}
++	// labelFilter := ginkgo.GinkgoLabelFilter()
++	// if ginkgo.Label("feature:jobset", "feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForJobSetAvailability(ctx, k8sClient)
++	// }
++	// if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
++	// }
++	// if ginkgo.Label("feature:appwrapper").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForAppWrapperAvailability(ctx, k8sClient)
++	// }
++	// if ginkgo.Label("feature:jaxjob", "feature:pytorchjob").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForKubeFlowTrainingOperatorAvailability(ctx, k8sClient)
++	// }
++	// if ginkgo.Label("feature:kuberay").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForKubeRayOperatorAvailability(ctx, k8sClient)
++	// }
++	// if ginkgo.Label("feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForKubeFlowTrainnerControllerManagerAvailability(ctx, k8sClient)
++	// }
  	ginkgo.GinkgoLogr.Info(
  		"Kueue and all required operators are available in the cluster",
  		"waitingTime", time.Since(waitForAvailableStart),
+
 diff --git a/test/util/e2e.go b/test/util/e2e.go
 index cc7d1f901..a68b8b9f4 100644
 --- a/test/util/e2e.go
