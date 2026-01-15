@@ -31,8 +31,8 @@ import (
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration) (*corev1.ConfigMap, error) {
-	config := defaultKueueConfigurationTemplate(namespace, kueueCfg)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) (*corev1.ConfigMap, error) {
+	config := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind)
 	cfg, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, err
@@ -100,6 +100,29 @@ func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
 	return ret
 }
 
+func mapOperatorMultiKueueToKueue(multiKueue *kueue.MultiKueue, gvrToKind map[string]string) *configapi.MultiKueue {
+	if multiKueue == nil {
+		return nil
+	}
+	return &configapi.MultiKueue{
+		ExternalFrameworks: buildMultiKueueExternalFrameworkList(multiKueue.ExternalFrameworks, gvrToKind),
+	}
+}
+
+func buildMultiKueueExternalFrameworkList(kueuelist []kueue.ExternalFramework, gvrToKind map[string]string) []configapi.MultiKueueExternalFramework {
+	ret := []configapi.MultiKueueExternalFramework{}
+	for _, val := range kueuelist {
+		kind := val.Resource
+		if k, ok := gvrToKind[fmt.Sprintf("%s/%s/%s", val.Group, val.Version, val.Resource)]; ok {
+			kind = k
+		}
+		ret = append(ret, configapi.MultiKueueExternalFramework{
+			Name: fmt.Sprintf("%s.%s.%s", kind, val.Version, val.Group),
+		})
+	}
+	return ret
+}
+
 func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagement) bool {
 	return workloadManagement.LabelPolicy == kueue.LabelPolicyNone
 }
@@ -137,7 +160,7 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration) *configapi.Configuration {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -187,6 +210,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
+		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 	}
 }
 

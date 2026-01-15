@@ -70,6 +70,12 @@ type KueueConfiguration struct {
 	// This default could change over time.
 	// +optional
 	Preemption Preemption `json:"preemption"`
+	// multiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+	// MultiKueue enables multi-cluster workload distribution.
+	// This field is optional.
+	// If multiKueue is not specified, MultiKueue is disabled.
+	// +optional
+	MultiKueue *MultiKueue `json:"multiKueue,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -319,4 +325,20 @@ type Preemption struct {
 	// The current default is Classical.
 	// +required
 	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy"`
+}
+
+// MultiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+type MultiKueue struct {
+	// externalFrameworks are a list of GroupVersionKinds that should be supported
+	// by the generic MultiKueue adapter. Each entry defines how to handle a specific
+	// GroupVersionKind (GVK) for MultiKueue operations.
+	// externalFrameworks are optional and should only be used if you have external frameworks
+	// that need MultiKueue support.
+	// externalFrameworks, if specified, must have at least one item and no more than 32 items.
+	// +listType=map
+	// +listMapKey=group
+	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:MinItems=1
+	// +optional
+	ExternalFrameworks []ExternalFramework `json:"externalFrameworks,omitempty"`
 }
