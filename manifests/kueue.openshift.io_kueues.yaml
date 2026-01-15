@@ -273,6 +273,50 @@ spec:
                     required:
                     - preemptionPolicy
                     type: object
+                  resources:
+                    description: |-
+                      resources configures Dynamic Resource Allocation (DRA) support in Kueue.
+                      When resources.deviceClassMappings is configured, Kueue can track and
+                      enforce quotas for DRA devices in ClusterQueues.
+                      resources is optional.
+                    properties:
+                      deviceClassMappings:
+                        description: |-
+                          deviceClassMappings defines mappings from Kubernetes DeviceClass names
+                          to Kueue resource names for DRA quota tracking in ClusterQueues.
+                          Each DeviceClass name can only appear in one mapping.
+                          deviceClassMappings is limited to a maximum of 4 items.
+                        items:
+                          description: DeviceClassMapping maps Kubernetes DeviceClass
+                            names to a Kueue resource name.
+                          properties:
+                            deviceClassNames:
+                              description: |-
+                                deviceClassNames is the list of Kubernetes DeviceClass names
+                                (e.g., "gpu.nvidia.com") that map to the resource name above.
+                              items:
+                                type: string
+                              maxItems: 4
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: set
+                            name:
+                              description: |-
+                                name is the Kueue resource name used in ClusterQueue quotas
+                                (e.g., "nvidia.com/gpu").
+                              maxLength: 63
+                              minLength: 1
+                              type: string
+                          required:
+                          - deviceClassNames
+                          - name
+                          type: object
+                        maxItems: 4
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                    type: object
                   workloadManagement:
                     description: |-
                       workloadManagement controls how Kueue manages workloads.
