@@ -29,6 +29,7 @@ import (
 func TestBuildConfigMap(t *testing.T) {
 	testCases := map[string]struct {
 		configuration kueue.KueueConfiguration
+		gvrToKind     map[string]string
 		wantCfgMap    *corev1.ConfigMap
 		wantErr       error
 	}{
@@ -408,11 +409,86 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"multikueue with external frameworks and gvr mapping": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				MultiKueue: &kueue.MultiKueue{
+					ExternalFrameworks: []kueue.ExternalFramework{
+						{
+							Group:    "example.com",
+							Version:  "v1",
+							Resource: "customjobs",
+						},
+						{
+							Group:    "test.io",
+							Version:  "v1alpha1",
+							Resource: "myworkloads",
+						}},
+				},
+			},
+			gvrToKind: map[string]string{
+				"example.com/v1/customjobs": "CustomJob",
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+fairSharing:
+  enable: false
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+multiKueue:
+  externalFrameworks:
+  - name: CustomJob.v1.example.com
+  - name: myworkloads.v1alpha1.test.io
+  gcInterval: null
+namespace: test
+waitForPodsReady: {}
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 	}
 
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
-			got, err := BuildConfigMap("test", tc.configuration)
+			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind)
 			if diff := cmp.Diff(got.Data["controller_manager_config.yaml"], tc.wantCfgMap.Data["controller_manager_config.yaml"]); len(diff) != 0 {
 				t.Errorf("Unexpected buckets (-want,+got):\n%s", diff)
 			}

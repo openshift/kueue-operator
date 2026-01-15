@@ -1093,17 +1093,43 @@ func (c *TargetConfigReconciler) cleanUpClusterRoleBindings(ctx context.Context)
 func (c *TargetConfigReconciler) manageConfigMap(ctx context.Context, kueue *kueuev1.Kueue) (*v1.ConfigMap, bool, error) {
 	required, err := c.kubeClient.CoreV1().ConfigMaps(c.operatorNamespace).Get(ctx, KueueConfigMap, metav1.GetOptions{})
 
+	var gvrToKind map[string]string
+	if kueue.Spec.Config.MultiKueue != nil {
+		gvrToKind = c.resolveGVRsToKinds(kueue.Spec.Config.MultiKueue.ExternalFrameworks)
+	}
+
 	if errors.IsNotFound(err) {
-		return c.buildAndApplyConfigMap(ctx, nil, kueue.Spec.Config)
+		return c.buildAndApplyConfigMap(ctx, nil, kueue.Spec.Config, gvrToKind)
 	} else if err != nil {
 		klog.Errorf("Cannot load ConfigMap %s/kueue-manager-config for the kueue operator", c.operatorNamespace)
 		return nil, false, err
 	}
-	return c.buildAndApplyConfigMap(ctx, required, kueue.Spec.Config)
+	return c.buildAndApplyConfigMap(ctx, required, kueue.Spec.Config, gvrToKind)
 }
 
-func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg)
+func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.ExternalFramework) map[string]string {
+	mapping := make(map[string]string)
+	for _, fw := range frameworks {
+		key := fmt.Sprintf("%s/%s/%s", fw.Group, fw.Version, fw.Resource)
+
+		resources, err := c.discoveryClient.ServerResourcesForGroupVersion(fw.Group + "/" + fw.Version)
+		if err != nil {
+			klog.V(4).Infof("failed to discover resources for %s/%s: %v", fw.Group, fw.Version, err)
+			continue
+		}
+
+		for _, r := range resources.APIResources {
+			if r.Name == fw.Resource {
+				mapping[key] = r.Kind
+				break
+			}
+		}
+	}
+	return mapping
+}
+
+func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string) (*v1.ConfigMap, bool, error) {
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr
