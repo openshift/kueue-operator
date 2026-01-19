@@ -225,7 +225,6 @@ e2e-ci-test-disruptive: ginkgo
 e2e-upstream-test: ginkgo
 	@echo "Running upstream e2e tests..."
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
-	./hack/wait-for-kueue-leader-election.sh
 	@echo "Running e2e tests on OpenShift cluster ($(shell oc whoami --show-server))"
 	mkdir -p "$(ARTIFACT_DIR)"
 	IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS)" \
