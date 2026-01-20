@@ -358,6 +358,33 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "network policy has not been setup")
 		})
+
+		It("verify kueue-config-map is updated with operators configuration", func() {
+			ctx := context.TODO()
+			By("check if JobSet is present")
+			Eventually(func() error {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to get kueue-manager-config ConfigMap")
+
+				configData, ok := configMap.Data["controller_manager_config.yaml"]
+				Expect(ok).To(BeTrue(), "controller_manager_config.yaml key not found in ConfigMap")
+				Expect(configData).To(ContainSubstring("jobset.x-k8s.io/jobset"), "jobset.x-k8s.io/jobset not found in integrations.frameworks")
+
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-manager-config does not have JobSet integration")
+
+			By("check if LeaderWorkerSet is present")
+			Eventually(func() error {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to get kueue-manager-config ConfigMap")
+
+				configData, ok := configMap.Data["controller_manager_config.yaml"]
+				Expect(ok).To(BeTrue(), "controller_manager_config.yaml key not found in ConfigMap")
+				Expect(configData).To(ContainSubstring("leaderworkerset.x-k8s.io/leaderworkerset"), "leaderworkerset.x-k8s.io/leaderworkerset not found in integrations.frameworks")
+
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-manager-config does not have LeaderWorkerSet integration")
+		})
 	})
 
 	When("enable webhook via opt-in namespaces", func() {
@@ -543,6 +570,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return &job.Status
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not started in unlabeled namespace")
 		})
+
 		It("should manage pods only in labeled namespaces", func() {
 			// Verify webhook configuration
 			Eventually(func() error {
@@ -708,40 +736,9 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
-			jobsetInUnlabeledNamespace := &jobsetapi.JobSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-jobset-unmanaged",
-					Namespace: testNamespaceWithoutLabel,
-				},
-				Spec: jobsetapi.JobSetSpec{
-					Suspend: ptr.To(false),
-					ReplicatedJobs: []jobsetapi.ReplicatedJob{
-						{
-							Name:     "test-jobset",
-							Replicas: 1,
-							Template: batchv1.JobTemplateSpec{
-								Spec: batchv1.JobSpec{
-									Template: corev1.PodTemplateSpec{
-										Spec: corev1.PodSpec{
-											Containers: []corev1.Container{
-												{
-													Name:  "test-jobset",
-													Image: "busybox",
-													Args:  []string{"sleep", "10s"},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
+			jobsetInUnlabeledNamespace := newJobSet("test-jobset-unmanaged", testNamespaceWithoutLabel, "test-jobset", 1)
 
-			jobsetInLabeledNamespace := jobsetInUnlabeledNamespace.DeepCopy()
-			jobsetInLabeledNamespace.Name = "test-jobset-managed"
-			jobsetInLabeledNamespace.Namespace = testNamespaceWithLabel
+			jobsetInLabeledNamespace := newJobSet("test-jobset-managed", testNamespaceWithLabel, "test-jobset", 1)
 
 			By("creating jobset in unlabeled namespace")
 			Expect(genericClient.Create(ctx, jobsetInUnlabeledNamespace)).Should(Succeed())
@@ -980,9 +977,13 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 	})
 	When("cleaning up Kueue resources", Label("disruptive"), func() {
 		var (
-			kueueName      = "cluster"
-			kueueClientset *kueueclient.Clientset
-			dynamicClient  dynamic.Interface
+			kueueName       = "cluster"
+			kueueClientset  *kueueclient.Clientset
+			dynamicClient   dynamic.Interface
+			labelKey        = "kueue.openshift.io/managed"
+			labelValue      = "true"
+			labelLocalQueue = "kueue.x-k8s.io/queue-name"
+			localQueueName  = "test-localqueue"
 		)
 
 		JustAfterEach(func(ctx context.Context) {
@@ -1014,9 +1015,9 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			// Create a test namespace for LocalQueue
 			testNamespace := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "kueue-test-namespace",
+					GenerateName: "kueue-namespace-",
 					Labels: map[string]string{
-						"kueue.x-k8s.io/managed": "true",
+						labelKey: labelValue,
 					},
 				},
 			}
@@ -1024,7 +1025,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
 
 			By("create a LocalQueue in the test namespace")
-			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, "test-localqueue")
+			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, localQueueName)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create LocalQueue")
 			defer cleanupLocalQueueFn()
 
@@ -1033,7 +1034,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					Name:      "test-job",
 					Namespace: testNamespace.Name,
 					Labels: map[string]string{
-						"kueue.x-k8s.io/queue-name": "test-localqueue",
+						labelLocalQueue: localQueueName,
 					},
 				},
 				Spec: batchv1.JobSpec{
@@ -1055,7 +1056,8 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test job")
 			defer jobCleanupFn()
 
-			By("wait for workload to be created")
+			var jobWorkloadName string
+			By("wait for workload to be created for job")
 			Eventually(func() error {
 				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
 				if err != nil {
@@ -1064,8 +1066,67 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				if len(workloads.Items) == 0 {
 					return fmt.Errorf("No workloads found for job")
 				}
+				jobWorkloadName = workloads.Items[0].Name
+				klog.Infof("Found workload %s for job %s", jobWorkloadName, job.Name)
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for job")
+
+			By("create a LeaderWorkerSet in the test namespace")
+			builder := testutils.NewTestResourceBuilder(testNamespace.Name, localQueueName)
+			lws := builder.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+				QueueName:         localQueueName,
+				PriorityClassName: "",
+				Size:              1,
+			})
+			Expect(genericClient.Create(ctx, lws)).To(Succeed(), "Failed to create LeaderWorkerSet")
+			defer testutils.CleanUpObject(ctx, genericClient, lws)
+
+			var lwsWorkloadName string
+			By("wait for workload to be created for LeaderWorkerSet")
+			Eventually(func() error {
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list workloads: %v", err)
+				}
+				for _, wl := range workloads.Items {
+					for _, ownerRef := range wl.OwnerReferences {
+						if ownerRef.UID == lws.GetUID() {
+							lwsWorkloadName = wl.Name
+							klog.Infof("Found workload %s for LeaderWorkerSet %s", lwsWorkloadName, lws.Name)
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("No workload found for LeaderWorkerSet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for LeaderWorkerSet")
+
+			By("create a JobSet in the test namespace")
+			jobset := newJobSet("", testNamespace.Name, "test-jobset", 1)
+			jobset.GenerateName = "test-jobset-"
+			jobset.Labels = map[string]string{
+				labelLocalQueue: localQueueName,
+			}
+			Expect(genericClient.Create(ctx, jobset)).To(Succeed(), "Failed to create JobSet")
+			defer testutils.CleanUpObject(ctx, genericClient, jobset)
+
+			var jobsetWorkloadName string
+			By("wait for workload to be created for JobSet")
+			Eventually(func() error {
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("Failed to list workloads: %v", err)
+				}
+				for _, wl := range workloads.Items {
+					for _, ownerRef := range wl.OwnerReferences {
+						if ownerRef.UID == jobset.GetUID() {
+							jobsetWorkloadName = wl.Name
+							klog.Infof("Found workload %s for JobSet %s", jobsetWorkloadName, jobset.Name)
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("No workload found for JobSet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for JobSet")
 
 			By("verify the Kueue instance exists and delete it")
 			_, err = kueueClientset.KueueV1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
@@ -1118,6 +1179,24 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}
 				klog.Infof("Found %d Workloads still existing after Kueue CR deletion", len(workloads.Items))
 
+				_, err = clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).Get(ctx, jobWorkloadName, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("Expected Workload %s to still exist after Kueue CR deletion: %v", jobWorkloadName, err)
+				}
+				klog.Infof("Workload %s for job still exists after Kueue CR deletion", jobWorkloadName)
+
+				_, err = clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).Get(ctx, lwsWorkloadName, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("Expected Workload %s to still exist after Kueue CR deletion: %v", lwsWorkloadName, err)
+				}
+				klog.Infof("Workload %s for LeaderWorkerSet still exists after Kueue CR deletion", lwsWorkloadName)
+
+				_, err = clients.UpstreamKueueClient.KueueV1beta2().Workloads(testNamespace.Name).Get(ctx, jobsetWorkloadName, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("Expected Workload %s to still exist after Kueue CR deletion: %v", jobsetWorkloadName, err)
+				}
+				klog.Infof("Workload %s for JobSet still exists after Kueue CR deletion", jobsetWorkloadName)
+
 				clusterRoles, err := kubeClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failure on fetching cluster roles: %v", err)
@@ -1168,15 +1247,15 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 						Resource: resource,
 					}
 
-					klog.Infof("Verifying removal of %s instances", resource)
+					klog.Infof("Verifying removal of %s instances in namespace %s", resource, testutils.OperatorNamespace)
 
-					crList, err := dynamicClient.Resource(gvr).Namespace("").List(ctx, metav1.ListOptions{})
+					crList, err := dynamicClient.Resource(gvr).Namespace(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
 					if err != nil {
 						return fmt.Errorf("Failed to list instances of %s: %v", resource, err)
 					}
 
 					if len(crList.Items) > 0 {
-						return fmt.Errorf("%s instances still exist", resource)
+						return fmt.Errorf("%s instances still exist in namespace %s", resource, testutils.OperatorNamespace)
 					}
 				}
 
@@ -1277,6 +1356,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return fmt.Errorf("pod is not ready")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue pod failed to be ready")
 		})
+
 	})
 })
 
@@ -1697,4 +1777,36 @@ func Kexecute(ctx context.Context, restConfig *rest.Config, kubeClient kubernete
 	}
 
 	return out.Bytes(), outErr.Bytes(), nil
+}
+func newJobSet(name, namespace, replicatedJobName string, replicas int32) *jobsetapi.JobSet {
+	return &jobsetapi.JobSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: jobsetapi.JobSetSpec{
+			Suspend: ptr.To(false),
+			ReplicatedJobs: []jobsetapi.ReplicatedJob{
+				{
+					Name:     replicatedJobName,
+					Replicas: replicas,
+					Template: batchv1.JobTemplateSpec{
+						Spec: batchv1.JobSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  replicatedJobName,
+											Image: "busybox",
+											Args:  []string{"sleep", "10s"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
