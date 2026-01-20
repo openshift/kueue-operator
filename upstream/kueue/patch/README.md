@@ -3,7 +3,5 @@
 ## e2e.patch
 
 This patch sets up our e2e tests to skip operators and set up our namespaces.
+This also adds a wait for leader election.
 
-## golang-1.24.patch
-
-This patch can be dropped once there is a golang 1.25 builder image.
