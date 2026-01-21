@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 )
 
@@ -203,6 +204,49 @@ func (b *TestResourceBuilder) NewJobWithoutQueue() *batchv1.Job {
 	return job
 }
 
+func (b *TestResourceBuilder) NewJobSetWithoutQueue() *jobsetapi.JobSet {
+	jobSet := b.NewJobSet()
+	if jobSet.Labels != nil {
+		delete(jobSet.Labels, "kueue.x-k8s.io/queue-name")
+	}
+	return jobSet
+}
+func (b *TestResourceBuilder) NewJobSet() *jobsetapi.JobSet {
+	jobSet := &jobsetapi.JobSet{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-jobset-",
+			Namespace:    b.namespace,
+			Labels: map[string]string{
+				"kueue.x-k8s.io/queue-name": b.queueName,
+			},
+		},
+		Spec: jobsetapi.JobSetSpec{
+			Suspend: ptr.To(false),
+			ReplicatedJobs: []jobsetapi.ReplicatedJob{
+				{
+					Name:     "test-jobset",
+					Replicas: 1,
+					Template: batchv1.JobTemplateSpec{
+						Spec: batchv1.JobSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "test-jobset",
+											Image: "busybox",
+											Args:  []string{"sleep", "10s"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return jobSet
+}
 func (b *TestResourceBuilder) NewDeploymentWithoutQueue() *appsv1.Deployment {
 	deploy := b.NewDeployment()
 	delete(deploy.Labels, "kueue.x-k8s.io/queue-name")

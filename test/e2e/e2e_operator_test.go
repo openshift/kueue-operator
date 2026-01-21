@@ -35,7 +35,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -736,9 +735,8 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
-			jobsetInUnlabeledNamespace := newJobSet("test-jobset-unmanaged", testNamespaceWithoutLabel, "test-jobset", 1)
-
-			jobsetInLabeledNamespace := newJobSet("test-jobset-managed", testNamespaceWithLabel, "test-jobset", 1)
+			jobsetInUnlabeledNamespace := builderWithoutLabel.NewJobSetWithoutQueue()
+			jobsetInLabeledNamespace := builderWithLabel.NewJobSetWithoutQueue()
 
 			By("creating jobset in unlabeled namespace")
 			Expect(genericClient.Create(ctx, jobsetInUnlabeledNamespace)).Should(Succeed())
@@ -746,16 +744,12 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 			By("verifying jobset did start in unlabeled namespace")
 			Eventually(func() error {
-				jobset := &jobsetapi.JobSet{}
-				err := genericClient.Get(ctx, client.ObjectKeyFromObject(jobsetInUnlabeledNamespace), jobset)
+				isJobSetRunning, err := testutils.IsJobSetRunning(ctx, genericClient, jobsetInUnlabeledNamespace)
 				if err != nil {
 					return err
 				}
-				if len(jobset.Status.ReplicatedJobsStatus) == 0 {
-					return fmt.Errorf("no replicated jobs status found")
-				}
-				if jobset.Status.ReplicatedJobsStatus[0].Suspended == 1 {
-					return fmt.Errorf("jobset is suspended")
+				if !isJobSetRunning {
+					return fmt.Errorf("jobset is not running")
 				}
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Incorrect jobset status in unlabeled namespace")
@@ -1101,11 +1095,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for LeaderWorkerSet")
 
 			By("create a JobSet in the test namespace")
-			jobset := newJobSet("", testNamespace.Name, "test-jobset", 1)
-			jobset.GenerateName = "test-jobset-"
-			jobset.Labels = map[string]string{
-				labelLocalQueue: localQueueName,
-			}
+			jobset := builder.NewJobSet()
 			Expect(genericClient.Create(ctx, jobset)).To(Succeed(), "Failed to create JobSet")
 			defer testutils.CleanUpObject(ctx, genericClient, jobset)
 
@@ -1777,36 +1767,4 @@ func Kexecute(ctx context.Context, restConfig *rest.Config, kubeClient kubernete
 	}
 
 	return out.Bytes(), outErr.Bytes(), nil
-}
-func newJobSet(name, namespace, replicatedJobName string, replicas int32) *jobsetapi.JobSet {
-	return &jobsetapi.JobSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: jobsetapi.JobSetSpec{
-			Suspend: ptr.To(false),
-			ReplicatedJobs: []jobsetapi.ReplicatedJob{
-				{
-					Name:     replicatedJobName,
-					Replicas: replicas,
-					Template: batchv1.JobTemplateSpec{
-						Spec: batchv1.JobSpec{
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{
-										{
-											Name:  replicatedJobName,
-											Image: "busybox",
-											Args:  []string{"sleep", "10s"},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
 }
