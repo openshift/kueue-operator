@@ -975,7 +975,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
-	When("cleaning up Kueue resources", Label("disruptive"), func() {
+	When("cleaning up Kueue resources", func() {
 		var (
 			kueueName       = "cluster"
 			kueueClientset  *kueueclient.Clientset
