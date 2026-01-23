@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
@@ -781,6 +782,21 @@ func IsJobSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, names
 		}
 	}
 	return false
+}
+
+func IsJobSetRunning(ctx context.Context, genericClient client.Client, jobSet *jobsetapi.JobSet) (bool, error) {
+	newJobSet := &jobsetapi.JobSet{}
+	err := genericClient.Get(ctx, client.ObjectKeyFromObject(jobSet), newJobSet)
+	if err != nil {
+		return false, fmt.Errorf("error getting jobset: %w", err)
+	}
+	if len(newJobSet.Status.ReplicatedJobsStatus) == 0 {
+		return false, fmt.Errorf("no replicated jobs status found")
+	}
+	if newJobSet.Status.ReplicatedJobsStatus[0].Suspended == 1 {
+		return false, fmt.Errorf("jobset is suspended")
+	}
+	return true, nil
 }
 
 func AddLabelAndPatch(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, resourceName, resourceType string) error {

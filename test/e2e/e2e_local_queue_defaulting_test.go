@@ -257,6 +257,25 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 			Expect(createdJobWithoutQueue.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
 			verifyWorkloadCreated(kueueClient, ns.Name, string(createdJobWithoutQueue.UID))
 		})
+		It("should label and admit JobSet", func(ctx context.Context) {
+			By("Creating JobSet without queue name")
+			jobSetWithoutQueue := builder.NewJobSetWithoutQueue()
+			Expect(genericClient.Create(ctx, jobSetWithoutQueue)).Should(Succeed())
+			defer testutils.CleanUpObject(ctx, genericClient, jobSetWithoutQueue)
+			Expect(jobSetWithoutQueue.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
+			By("verifying jobset did start in labeled namespace")
+			Eventually(func() error {
+				isJobSetRunning, err := testutils.IsJobSetRunning(ctx, genericClient, jobSetWithoutQueue)
+				if err != nil {
+					return err
+				}
+				if !isJobSetRunning {
+					return fmt.Errorf("jobset is not running")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Incorrect jobset status in labeled namespace")
+			verifyWorkloadCreated(kueueClient, ns.Name, string(jobSetWithoutQueue.UID))
+		})
 	})
 
 	When("labelPolicy is not defined and default LocalQueue is in an unmanaged namespace", func() {
