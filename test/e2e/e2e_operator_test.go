@@ -1071,6 +1071,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				klog.Infof("Found workload %s for job %s", jobWorkloadName, job.Name)
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for job")
+			defer testutils.CleanUpWorkload(ctx, clients.UpstreamKueueClient, testNamespace.Name, jobWorkloadName)
 
 			By("create a LeaderWorkerSet in the test namespace")
 			builder := testutils.NewTestResourceBuilder(testNamespace.Name, localQueueName)
@@ -1093,13 +1094,13 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					for _, ownerRef := range wl.OwnerReferences {
 						if ownerRef.UID == lws.GetUID() {
 							lwsWorkloadName = wl.Name
-							klog.Infof("Found workload %s for LeaderWorkerSet %s", lwsWorkloadName, lws.Name)
 							return nil
 						}
 					}
 				}
 				return fmt.Errorf("No workload found for LeaderWorkerSet")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for LeaderWorkerSet")
+			defer testutils.CleanUpWorkload(ctx, clients.UpstreamKueueClient, testNamespace.Name, lwsWorkloadName)
 
 			By("create a JobSet in the test namespace")
 			jobset := newJobSet("", testNamespace.Name, "test-jobset", 1)
@@ -1121,13 +1122,13 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					for _, ownerRef := range wl.OwnerReferences {
 						if ownerRef.UID == jobset.GetUID() {
 							jobsetWorkloadName = wl.Name
-							klog.Infof("Found workload %s for JobSet %s", jobsetWorkloadName, jobset.Name)
 							return nil
 						}
 					}
 				}
 				return fmt.Errorf("No workload found for JobSet")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload was not created for JobSet")
+			defer testutils.CleanUpWorkload(ctx, clients.UpstreamKueueClient, testNamespace.Name, jobsetWorkloadName)
 
 			By("verify the Kueue instance exists and delete it")
 			_, err = kueueClientset.KueueV1().Kueues().Get(ctx, kueueName, metav1.GetOptions{})
