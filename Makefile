@@ -280,3 +280,11 @@ clean-must:
 .PHONY: create_operator_namespace
 create_operator_namespace:
 	oc apply -f deploy/01_namespace.yaml
+
+.PHONY: submodule-update
+submodule-update:
+	git submodule update --remote
+
+# This workflow just updates the submodule and generates the new manifests
+.PHONY: submodule-workflow
+submodule-workflow: submodule-update sync-manifests-from-submodule

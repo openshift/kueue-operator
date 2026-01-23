@@ -115,6 +115,66 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
+      path: /validate-kueue-x-k8s-io-v1beta2-clusterqueue
+  failurePolicy: Fail
+  name: vclusterqueue.kb.io
+  rules:
+  - apiGroups:
+    - kueue.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusterqueues
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
+      path: /validate-kueue-x-k8s-io-v1beta2-cohort
+  failurePolicy: Fail
+  name: vcohort.kb.io
+  rules:
+  - apiGroups:
+    - kueue.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - cohorts
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
+      path: /validate-kubeflow-org-v1-jaxjob
+  failurePolicy: Fail
+  name: vjaxjob.kb.io
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - jaxjobs
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
       path: /validate-batch-v1-job
   failurePolicy: Fail
   name: vjob.kb.io
@@ -148,106 +208,6 @@ webhooks:
     - UPDATE
     resources:
     - jobsets
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kubeflow-org-v1-jaxjob
-  failurePolicy: Fail
-  name: vjaxjob.kb.io
-  rules:
-  - apiGroups:
-    - kubeflow.org
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - jaxjobs
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kubeflow-org-v1-paddlejob
-  failurePolicy: Fail
-  name: vpaddlejob.kb.io
-  rules:
-  - apiGroups:
-    - kubeflow.org
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - paddlejobs
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kubeflow-org-v1-pytorchjob
-  failurePolicy: Fail
-  name: vpytorchjob.kb.io
-  rules:
-  - apiGroups:
-    - kubeflow.org
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - pytorchjobs
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kubeflow-org-v1-tfjob
-  failurePolicy: Fail
-  name: vtfjob.kb.io
-  rules:
-  - apiGroups:
-    - kubeflow.org
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - tfjobs
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kubeflow-org-v1-xgboostjob
-  failurePolicy: Fail
-  name: vxgboostjob.kb.io
-  rules:
-  - apiGroups:
-    - kubeflow.org
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - xgboostjobs
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -295,6 +255,46 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
+      path: /validate-kubeflow-org-v1-paddlejob
+  failurePolicy: Fail
+  name: vpaddlejob.kb.io
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - paddlejobs
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
+      path: /validate-kubeflow-org-v1-pytorchjob
+  failurePolicy: Fail
+  name: vpytorchjob.kb.io
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - pytorchjobs
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
       path: /validate-ray-io-v1-raycluster
   failurePolicy: Fail
   name: vraycluster.kb.io
@@ -335,66 +335,6 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
-      path: /validate-trainer-kubeflow-org-v1alpha1-trainjob
-  failurePolicy: Fail
-  name: vtrainjob.kb.io
-  rules:
-  - apiGroups:
-    - trainer.kubeflow.org
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - trainjobs
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kueue-x-k8s-io-v1beta2-clusterqueue
-  failurePolicy: Fail
-  name: vclusterqueue.kb.io
-  rules:
-  - apiGroups:
-    - kueue.x-k8s.io
-    apiVersions:
-    - v1beta2
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - clusterqueues
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
-      path: /validate-kueue-x-k8s-io-v1beta2-cohort
-  failurePolicy: Fail
-  name: vcohort.kb.io
-  rules:
-  - apiGroups:
-    - kueue.x-k8s.io
-    apiVersions:
-    - v1beta2
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - cohorts
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kueue-webhook-service
-      namespace: openshift-kueue-operator
       path: /validate-kueue-x-k8s-io-v1beta2-resourceflavor
   failurePolicy: Fail
   name: vresourceflavor.kb.io
@@ -408,6 +348,46 @@ webhooks:
     - UPDATE
     resources:
     - resourceflavors
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
+      path: /validate-kubeflow-org-v1-tfjob
+  failurePolicy: Fail
+  name: vtfjob.kb.io
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - tfjobs
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
+      path: /validate-trainer-kubeflow-org-v1alpha1-trainjob
+  failurePolicy: Fail
+  name: vtrainjob.kb.io
+  rules:
+  - apiGroups:
+    - trainer.kubeflow.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - trainjobs
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -429,4 +409,24 @@ webhooks:
     resources:
     - workloads
     - workloads/status
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
+      path: /validate-kubeflow-org-v1-xgboostjob
+  failurePolicy: Fail
+  name: vxgboostjob.kb.io
+  rules:
+  - apiGroups:
+    - kubeflow.org
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - xgboostjobs
   sideEffects: None
