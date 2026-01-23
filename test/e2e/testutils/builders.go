@@ -235,6 +235,10 @@ func (b *TestResourceBuilder) NewJobSet() *jobsetapi.JobSet {
 											Name:  "test-jobset",
 											Image: "busybox",
 											Args:  []string{"sleep", "10s"},
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU: resource.MustParse("50m")},
+											},
 										},
 									},
 								},

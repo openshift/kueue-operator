@@ -1016,6 +1016,89 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(clusterPendingWorkloads.Items).To(BeEmpty(), "Pending workloads list should be empty after all workloads were admitted")
 		})
 	})
+	When("JobSet is suspended", func() {
+		It("Should show on pending workloads list for local queue and cluster queue", func(ctx context.Context) {
+			var clusterPendingWorkloads *visibilityv1beta2.PendingWorkloadsSummary
+			var localPendingWorkloads *visibilityv1beta2.PendingWorkloadsSummary
+			By("Creating Cluster Resources")
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
+			DeferCleanup(cleanupResourceFlavor)
+			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("40m").WithMemory("512Mi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
+			DeferCleanup(cleanupClusterQueue)
+
+			By("Creating Namespaces and LocalQueues")
+			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-namespace-",
+					Labels: map[string]string{
+						testutils.OpenShiftManagedLabel: trueLabelValue,
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, namespace)
+			})
+
+			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
+			DeferCleanup(cleanupLocalQueue)
+
+			By("Creating RBAC kueue-batch-admin-role for Visibility API")
+			serviceAccountAdmin, err := createServiceAccount(ctx, namespace.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
+			cleanupClusterRoleBinding, err := createClusterRoleBinding(ctx, serviceAccountAdmin.Name, namespace.Name, "kueue-batch-admin-role")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster role binding")
+			DeferCleanup(cleanupClusterRoleBinding)
+
+			By("Creating RBAC kueue-batch-user-role for Visibility API")
+			serviceAccountUser, err := createServiceAccount(ctx, namespace.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create service account")
+
+			cleanupRoleBindingA, err := createRoleBinding(ctx, namespace.Name, serviceAccountUser.Name)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create role binding")
+			DeferCleanup(cleanupRoleBindingA)
+
+			By("Creating custom visibility client for ClusterQueue access")
+			adminVisibilityClient, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespace.Name, serviceAccountAdmin.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespace.Name, serviceAccountAdmin.Name)
+
+			By("Creating custom visibility client for LocalQueue access")
+			userVisibilityClient, err := testutils.GetVisibilityClientV1beta2(fmt.Sprintf("system:serviceaccount:%s:%s", namespace.Name, serviceAccountUser.Name))
+			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespace.Name, serviceAccountUser.Name)
+
+			By("Creating custom jobset")
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			jobset := builder.NewJobSet()
+			Expect(genericClient.Create(ctx, jobset)).To(Succeed(), "Failed to create jobset")
+			defer testutils.CleanUpObject(ctx, genericClient, jobset)
+
+			By("Verifying all pending workloads are created")
+			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespace.Name, jobset.GetUID())
+
+			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueue.Name, namespace.Name)
+			Eventually(func() error {
+				localPendingWorkloads, err = userVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, localQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueue.Name)
+
+			By("Verifying pending workloads for LocalQueue")
+			Expect(localPendingWorkloads.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workloads on LocalQueue %s", localQueue.Name))
+
+			Byf("Checking the pending workloads for cluster queue %s", clusterQueue.Name)
+			Eventually(func() error {
+				clusterPendingWorkloads, err = adminVisibilityClient.ClusterQueues().GetPendingWorkloadsSummary(ctx, clusterQueue.Name, metav1.GetOptions{})
+				return err
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for ClusterQueue %s", clusterQueue.Name)
+
+			By("Verifying pending workloads for ClusterQueue")
+			Expect(clusterPendingWorkloads.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workloads on ClusterQueue %s", clusterQueue.Name))
+		})
+
+	})
 })
 
 // updateNominalConcurrencyShares updates the nominal concurrency shares of the priority level configuration
@@ -1277,7 +1360,7 @@ func Byf(format string, args ...interface{}) {
 // by checking owner references, but does not verify admission status.
 func verifyWorkloadCreatedNotAdmitted(kueueClient *upstreamkueueclient.Clientset, namespace string, uid types.UID) {
 	ctx := context.TODO()
-	By(fmt.Sprintf("verifying workload is created for LeaderWorkerSet in namespace %s", namespace))
+	By(fmt.Sprintf("verifying workload is created in namespace %s", namespace))
 	Eventually(func() error {
 		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -1291,6 +1374,6 @@ func verifyWorkloadCreatedNotAdmitted(kueueClient *upstreamkueueclient.Clientset
 				}
 			}
 		}
-		return fmt.Errorf("no workload found for LeaderWorkerSet")
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload should be created for LeaderWorkerSet")
+		return fmt.Errorf("no workload found")
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Workload should be created")
 }
