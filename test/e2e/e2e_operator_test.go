@@ -975,7 +975,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "expected HTTP 200 OK from metrics endpoint")
 		})
 	})
-	When("cleaning up Kueue resources", func() {
+	When("cleaning up Kueue resources", Label("disruptive"), func() {
 		var (
 			kueueName       = "cluster"
 			kueueClientset  *kueueclient.Clientset
@@ -1021,8 +1021,9 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					},
 				},
 			}
-			_, err = testutils.CreateNamespace(kubeClient, testNamespace)
+			cleanupNamespaceFn, err := testutils.CreateNamespace(kubeClient, testNamespace)
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
+			defer cleanupNamespaceFn()
 
 			By("create a LocalQueue in the test namespace")
 			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, localQueueName)
