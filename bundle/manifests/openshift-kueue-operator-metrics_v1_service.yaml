@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.openshift.io/component: operator
+    app.openshift.io/name: kueue
+  name: openshift-kueue-operator-metrics
+spec:
+  ports:
+  - name: metrics
+    port: 60000
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    name: openshift-kueue-operator
+  type: ClusterIP
+status:
+  loadBalancer: {}

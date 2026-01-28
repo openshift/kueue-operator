@@ -236,6 +236,18 @@ spec:
           - get
           - create
           - update
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
         serviceAccountName: openshift-kueue-operator
       deployments:
       - name: openshift-kueue-operator
@@ -272,7 +284,7 @@ spec:
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
                 ports:
-                - containerPort: 60000
+                - containerPort: 8443
                   name: metrics
                 resources: {}
                 securityContext:
@@ -284,6 +296,9 @@ spec:
                 volumeMounts:
                 - mountPath: /tmp
                   name: tmp
+                - mountPath: /var/run/secrets/serving-cert
+                  name: metrics-tls
+                  readOnly: true
               priorityClassName: system-cluster-critical
               securityContext:
                 runAsNonRoot: true
@@ -293,6 +308,10 @@ spec:
               volumes:
               - emptyDir: {}
                 name: tmp
+              - name: metrics-tls
+                secret:
+                  optional: true
+                  secretName: openshift-kueue-operator-metrics-tls
       permissions:
       - rules:
         - apiGroups:
