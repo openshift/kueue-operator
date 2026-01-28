@@ -24,11 +24,11 @@ type Kueue struct {
 
 	// spec holds user settable values for configuration
 	// +required
-	Spec KueueOperandSpec `json:"spec"`
+	Spec KueueOperandSpec `json:"spec,omitzero"`
 	// status holds observed values from the cluster.
 	// They may not be overridden.
 	// +optional
-	Status KueueStatus `json:"status,omitempty"`
+	Status KueueStatus `json:"status,omitzero,omitempty"`
 }
 
 type KueueOperandSpec struct {
@@ -36,7 +36,7 @@ type KueueOperandSpec struct {
 	// config is the desired configuration
 	// for the Kueue operator.
 	// +required
-	Config KueueConfiguration `json:"config"`
+	Config KueueConfiguration `json:"config,omitzero"`
 }
 
 type KueueConfiguration struct {
@@ -45,7 +45,7 @@ type KueueConfiguration struct {
 	// known as external frameworks.
 	// Kueue will only manage workloads that correspond to the specified integrations.
 	// +required
-	Integrations Integrations `json:"integrations"`
+	Integrations Integrations `json:"integrations,omitzero"`
 	// workloadManagement controls how Kueue manages workloads.
 	// By default Kueue will manage workloads that have a queue-name label.
 	// Workloads that are missing the queue-name will be ignored by Kueue.
@@ -133,7 +133,7 @@ type ExternalFramework struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$')"
 	// +required
-	Group string `json:"group"`
+	Group string `json:"group,omitempty"`
 	// resource is the Resource type of the external framework.
 	// Resource types are lowercase and plural (e.g. pods, deployments).
 	// Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
@@ -144,7 +144,7 @@ type ExternalFramework struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
 	// +required
-	Resource string `json:"resource"`
+	Resource string `json:"resource,omitempty"`
 	// version is the version of the api (e.g. v1alpha1, v1beta1, v1).
 	// Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
 	// and hyphens of at most 63 characters in length.
@@ -154,7 +154,7 @@ type ExternalFramework struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
 	// +required
-	Version string `json:"version"`
+	Version string `json:"version,omitempty"`
 }
 
 // This is the integrations for Kueue.
@@ -171,7 +171,7 @@ type Integrations struct {
 	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, x == y))",message="each item in frameworks must be unique"
 	// +listType=set
 	// +required
-	Frameworks []KueueIntegration `json:"frameworks"`
+	Frameworks []KueueIntegration `json:"frameworks,omitempty"`
 	// externalFrameworks are a list of GroupVersionResources
 	// that are managed for Kueue by external controllers.
 	// externalFrameworks are optional and should only be used if you have an external controller
@@ -181,7 +181,7 @@ type Integrations struct {
 	// +listMapKey=group
 	// +kubebuilder:validation:MaxItems=32
 	// +optional
-	ExternalFrameworks []ExternalFramework `json:"externalFrameworks"`
+	ExternalFrameworks []ExternalFramework `json:"externalFrameworks,omitempty"`
 	// labelKeysToCopy are a list of label keys that are copied once a workload is created.
 	// These keys are persisted to the internal Kueue workload object.
 	// If not specified, only the Kueue labels will be copied.
@@ -190,7 +190,7 @@ type Integrations struct {
 	// +listType=map
 	// +listMapKey=key
 	// +optional
-	LabelKeysToCopy []LabelKeys `json:"labelKeysToCopy"`
+	LabelKeysToCopy []LabelKeys `json:"labelKeysToCopy,omitempty"`
 }
 
 type LabelKeys struct {
@@ -208,7 +208,7 @@ type LabelKeys struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$')"
 	// +required
-	Key string `json:"key"`
+	Key string `json:"key,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=ByWorkload;None;""
