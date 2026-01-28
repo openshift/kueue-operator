@@ -133,12 +133,13 @@ clean:
 .PHONY: clean
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter 
+lint: check-sync-manifests golangci-lint ## Run golangci-lint linter 
 	$(GOLANGCI_LINT) run --timeout 30m
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix --timeout 30m
+
 
 ## Tool Versions
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
@@ -186,7 +187,45 @@ sync-manifests:
 # Use this target like make sync-manifests-from-submodule
 .PHONY: sync-manifests-from-submodule
 sync-manifests-from-submodule:
-	hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
+	@echo "Syncing manifests in bindata/assets/kueue-operator using a container"
+	@podman run --rm \
+                -v $(PWD):/workspace:Z \
+                -w /workspace \
+                python:3.11-slim \
+                sh -c " \
+			echo 'Installing dependencies...'; \
+			apt-get update -qq > /dev/null 2>&1; \
+			apt-get install -y -qq git curl jq make > /dev/null 2>&1; \
+			echo 'Fetching latest kustomize version...'; \
+			KUSTOMIZE_TAG=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name'); \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_TAG#kustomize/}; \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_VERSION#v}; \
+			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin; \
+                        echo 'Checking for Python dependencies...'; \
+                        pip install pyyaml requests > /dev/null; \
+                        echo 'Running sync_manifests.py...'; \
+                        python3 hack/sync_manifests.py $(VERSION) --src-dir upstream/kueue/src/config/default/ \
+		"
+
+.PHONY: check-sync-manifests
+check-sync-manifests:
+	@podman run --rm \
+		-v $(PWD):/workspace:Z \
+		-w /workspace \
+		python:3.11-slim \
+		sh -c " \
+			echo 'Installing dependencies...'; \
+			apt-get update -qq > /dev/null 2>&1; \
+			apt-get install -y -qq git curl jq > /dev/null 2>&1; \
+			echo 'Fetching latest kustomize version...'; \
+			KUSTOMIZE_TAG=\$$(curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name'); \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_TAG#kustomize/}; \
+			KUSTOMIZE_VERSION=\$${KUSTOMIZE_VERSION#v}; \
+			curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v\$${KUSTOMIZE_VERSION}/kustomize_v\$${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar xz -C /usr/local/bin; \
+			pip install pyyaml requests > /dev/null 2>&1; \
+			echo 'Running check_bindata_conflicts.py...'; \
+			python3 hack/check_bindata_conflicts.py \
+		"
 
 GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
