@@ -41,8 +41,6 @@ function allow_privileged_access {
 }
 
 skips=(
-  # This job is having difficult scheduling in OCP.
-  "Should unsuspend a job and set nodeSelectors"
   "StatefulSet created with WorkloadPriorityClass"
   "LeaderWorkerSet created with WorkloadPriorityClass"
 )
