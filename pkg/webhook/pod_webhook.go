@@ -68,13 +68,8 @@ func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentW
 	newWebhook := currentWebhook.DeepCopy()
 	newWebhook.Webhooks = []admissionregistrationv1.ValidatingWebhook{}
 
-	enabledFrameworks := make(map[string]bool)
+	enabledFrameworks := buildEnabledFrameworks(kueueCfg)
 	podSelector := defaultLabelSelector()
-
-	for _, fw := range kueueCfg.Integrations.Frameworks {
-		enabledFrameworks[string(fw)] = true
-	}
-
 	timeoutSeconds := int32(webhookTimeoutSeconds)
 
 	for _, wh := range currentWebhook.Webhooks {
@@ -93,13 +88,8 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 	newWebhook := currentWebhook.DeepCopy()
 	newWebhook.Webhooks = []admissionregistrationv1.MutatingWebhook{}
 
-	enabledFrameworks := make(map[string]bool)
+	enabledFrameworks := buildEnabledFrameworks(kueueCfg)
 	podSelector := defaultLabelSelector()
-
-	for _, fw := range kueueCfg.Integrations.Frameworks {
-		enabledFrameworks[string(fw)] = true
-	}
-
 	timeoutSeconds := int32(webhookTimeoutSeconds)
 
 	for _, wh := range currentWebhook.Webhooks {
@@ -250,4 +240,24 @@ func defaultLabelSelector() *metav1.LabelSelector {
 			},
 		},
 	}
+}
+
+// buildEnabledFrameworks creates a map of enabled frameworks from the kueue configuration,
+// and implicitly enables the Pod integration when LeaderWorkerSet, StatefulSet, or Deployment
+// are enabled (since they require pod scheduling gates).
+func buildEnabledFrameworks(kueueCfg kueue.KueueConfiguration) map[string]bool {
+	enabledFrameworks := make(map[string]bool)
+	for _, fw := range kueueCfg.Integrations.Frameworks {
+		enabledFrameworks[string(fw)] = true
+	}
+
+	// Pod webhook is required for LeaderWorkerSet, StatefulSet, and Deployment
+	// to properly add scheduling gates to pods
+	if enabledFrameworks[string(kueue.KueueIntegrationLeaderWorkerSet)] ||
+		enabledFrameworks[string(kueue.KueueIntegrationStatefulSet)] ||
+		enabledFrameworks[string(kueue.KueueIntegrationDeployment)] {
+		enabledFrameworks[string(kueue.KueueIntegrationPod)] = true
+	}
+
+	return enabledFrameworks
 }
