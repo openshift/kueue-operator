@@ -14,6 +14,7 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	applyoperatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
+	openshiftoperatorv1 "github.com/openshift/jobset-operator/pkg/generated/clientset/versioned/typed/openshiftoperator/v1"
 	"github.com/openshift/kueue-operator/bindata"
 	kueuev1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/pkg/cert"
@@ -31,6 +32,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	leaderworkersetoperatorv1 "github.com/openshift/lws-operator/pkg/generated/clientset/versioned/typed/leaderworkersetoperator/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -76,6 +78,8 @@ const (
 type TargetConfigReconciler struct {
 	operatorClient             kueueconfigclient.KueueV1Interface
 	kueueClient                *operatorclient.KueueClient
+	lwsOperatorConfigClient    leaderworkersetoperatorv1.LeaderWorkerSetOperatorInterface
+	jobsetOperatorConfigClient openshiftoperatorv1.JobSetOperatorInterface
 	kubeClient                 kubernetes.Interface
 	osrClient                  openshiftrouteclientset.Interface
 	dynamicClient              dynamic.Interface
@@ -109,6 +113,8 @@ func computeSpecHash(obj interface{}) (string, error) {
 func NewTargetConfigReconciler(
 	ctx context.Context,
 	operatorConfigClient kueueconfigclient.KueueV1Interface,
+	lwsOperatorConfigClient leaderworkersetoperatorv1.LeaderWorkerSetOperatorInterface,
+	jobsetOperatorConfigClient openshiftoperatorv1.JobSetOperatorInterface,
 	operatorClientInformer operatorclientinformers.KueueInformer,
 	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	kueueClient *operatorclient.KueueClient,
@@ -126,6 +132,8 @@ func NewTargetConfigReconciler(
 ) (factory.Controller, error) {
 	c := &TargetConfigReconciler{
 		operatorClient:             operatorConfigClient,
+		lwsOperatorConfigClient:    lwsOperatorConfigClient,
+		jobsetOperatorConfigClient: jobsetOperatorConfigClient,
 		kueueClient:                kueueClient,
 		kubeClient:                 kubeClient,
 		osrClient:                  osrClient,
@@ -254,6 +262,42 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Errorf("failed to update status: %v", err)
 		}
 		return nil
+	}
+
+	var dependencyCondition *applyoperatorv1.OperatorConditionApplyConfiguration
+	missingDependencies := []string{}
+	for _, framework := range kueue.Spec.Config.Integrations.Frameworks {
+		if framework == kueuev1.KueueIntegrationJobSet {
+			available, err := c.isOperatorAvailability(ctx, "JobSetOperator", func(ctx context.Context, name string, opts metav1.GetOptions) (interface{}, error) {
+				return c.jobsetOperatorConfigClient.Get(ctx, name, opts)
+			})
+			if err != nil {
+				klog.Errorf("unable to check JobSetOperator is installed: %v", err)
+			}
+			if !available {
+				klog.Errorf("please make sure that JobSetOperator is installed")
+				missingDependencies = append(missingDependencies, string(kueuev1.KueueIntegrationJobSet))
+			}
+		}
+		if framework == kueuev1.KueueIntegrationLeaderWorkerSet {
+			available, err := c.isOperatorAvailability(ctx, "LeaderWorkerSetOperator", func(ctx context.Context, name string, opts metav1.GetOptions) (interface{}, error) {
+				return c.lwsOperatorConfigClient.Get(ctx, name, opts)
+			})
+			if err != nil {
+				klog.Errorf("unable to check LeaderWorkerSetOperator is installed: %v", err)
+			}
+			if !available {
+				klog.Errorf("please make sure that LeaderWorkerSetOperator is installed")
+				missingDependencies = append(missingDependencies, string(kueuev1.KueueIntegrationLeaderWorkerSet))
+			}
+		}
+	}
+	if len(missingDependencies) > 0 {
+		dependencyCondition = applyoperatorv1.OperatorCondition().
+			WithType("Degraded").
+			WithStatus(operatorv1.ConditionTrue).
+			WithReason("MissingDependencies").
+			WithMessage(fmt.Sprintf("Please install the following on your cluster: %s", strings.Join(missingDependencies, ", ")))
 	}
 
 	ownerReference := metav1.OwnerReference{
@@ -668,11 +712,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return err
 	}
 
-	conditions := c.buildOperatorConditions(deployment)
+	conditions := c.buildOperatorConditions(deployment, dependencyCondition)
 	return c.updateKueueStatus(ctx, kueue, conditions, &deployment.Status.ReadyReplicas)
 }
 
-func (c *TargetConfigReconciler) buildOperatorConditions(deployment *appsv1.Deployment) []*applyoperatorv1.OperatorConditionApplyConfiguration {
+func (c *TargetConfigReconciler) buildOperatorConditions(deployment *appsv1.Deployment, dependencyCondition *applyoperatorv1.OperatorConditionApplyConfiguration) []*applyoperatorv1.OperatorConditionApplyConfiguration {
 	desired := int32(1)
 	if deployment.Spec.Replicas != nil {
 		desired = *deployment.Spec.Replicas
@@ -720,6 +764,9 @@ func (c *TargetConfigReconciler) buildOperatorConditions(deployment *appsv1.Depl
 		degradedCond = degradedCond.WithStatus(operatorv1.ConditionTrue).
 			WithReason("NoReplicasReady").
 			WithMessage(fmt.Sprintf("No replicas ready (desired: %d)", desired))
+	}
+	if dependencyCondition != nil {
+		degradedCond = dependencyCondition
 	}
 
 	// cert-manager is installed and available.
@@ -2162,6 +2209,33 @@ func (c *TargetConfigReconciler) detectOpenShift() bool {
 		}.String(),
 	)
 	return err == nil
+}
+
+// isOperatorAvailability checks if a given operator is installed and configured.
+// It verifies both the CRD registration and the presence of a cluster-scoped configuration.
+// Returns true if the operator is available, false otherwise.
+func (c *TargetConfigReconciler) isOperatorAvailability(ctx context.Context, operatorName string, getConfig func(context.Context, string, metav1.GetOptions) (interface{}, error)) (bool, error) {
+	gvk := schema.GroupVersionKind{
+		Group:   "operator.openshift.io",
+		Version: "v1",
+		Kind:    operatorName,
+	}
+	found, err := c.isResourceRegisteredCached(gvk)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+
+	_, err = getConfig(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // applyDeploymentWithCache wraps ApplyDeployment with caching support to reduce API server calls
