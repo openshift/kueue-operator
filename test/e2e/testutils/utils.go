@@ -535,10 +535,12 @@ func CreateWorkload(client *upstreamkueueclient.Clientset, namespace, queueName,
 func CreateNamespace(kubeClient *kubernetes.Clientset, namespace *corev1.Namespace) (func(), error) {
 	ctx := context.TODO()
 	By(fmt.Sprintf("Creating namespace %s", namespace.Name))
-	_, err := kubeClient.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
+	created, err := kubeClient.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
+	// Update the namespace object with the generated name so callers can use it
+	namespace.Name = created.Name
 
 	cleanup := func() {
 		By(fmt.Sprintf("Destroying Namespace %s", namespace.Name))
