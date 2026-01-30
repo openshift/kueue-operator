@@ -1092,7 +1092,6 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					for _, ownerRef := range wl.OwnerReferences {
 						if ownerRef.UID == lws.GetUID() {
 							lwsWorkloadName = wl.Name
-							klog.Infof("Found workload %s for LeaderWorkerSet %s", lwsWorkloadName, lws.Name)
 							return nil
 						}
 					}
@@ -1120,7 +1119,6 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					for _, ownerRef := range wl.OwnerReferences {
 						if ownerRef.UID == jobset.GetUID() {
 							jobsetWorkloadName = wl.Name
-							klog.Infof("Found workload %s for JobSet %s", jobsetWorkloadName, jobset.Name)
 							return nil
 						}
 					}
