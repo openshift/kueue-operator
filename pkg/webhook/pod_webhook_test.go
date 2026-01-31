@@ -140,6 +140,156 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 				},
 			},
 		},
+		"leaderworkerset enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationBatchJob,
+						kueue.KueueIntegrationLeaderWorkerSet,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vjob.kb.io"},
+					{Name: "vpod.kb.io"},
+					{Name: "vleaderworkerset.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{
+						Name: "vjob.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "vpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "vleaderworkerset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+				},
+			},
+		},
+		"deployment enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationDeployment,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vpod.kb.io"},
+					{Name: "vdeployment.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{
+						Name: "vpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "vdeployment.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+				},
+			},
+		},
+		"statefulset enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationStatefulSet,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vpod.kb.io"},
+					{Name: "vstatefulset.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{
+						Name: "vpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "vstatefulset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+				},
+			},
+		},
 	}
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
@@ -241,6 +391,156 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 					},
 					{
 						Name: "mrayjob.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+				},
+			},
+		},
+		"leaderworkerset enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationBatchJob,
+						kueue.KueueIntegrationLeaderWorkerSet,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mjob.kb.io"},
+					{Name: "mpod.kb.io"},
+					{Name: "mleaderworkerset.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name: "mjob.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "mpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "mleaderworkerset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+				},
+			},
+		},
+		"deployment enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationDeployment,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mpod.kb.io"},
+					{Name: "mdeployment.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name: "mpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "mdeployment.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+				},
+			},
+		},
+		"statefulset enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationStatefulSet,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mpod.kb.io"},
+					{Name: "mstatefulset.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name: "mpod.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+						TimeoutSeconds: ptr.To[int32](23),
+					},
+					{
+						Name: "mstatefulset.kb.io",
 						NamespaceSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
