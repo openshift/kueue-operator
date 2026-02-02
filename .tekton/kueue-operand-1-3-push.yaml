@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "release-1.3" && ( "upstream/kueue/***".pathChanged() || ".tekton/kueue-operand-1-3-push.yaml".pathChanged()
-      || "Dockerfile".pathChanged() )
+      || "Dockerfile.kueue".pathChanged() )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: kueue-operator-1-3
@@ -29,9 +29,7 @@ spec:
     value:
     - linux/x86_64
   - name: dockerfile
-    value: Dockerfile
-  - name: path-context
-    value: upstream/kueue
+    value: Dockerfile.kueue
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.
