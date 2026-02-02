@@ -11,8 +11,10 @@ require (
 	github.com/openshift/api v0.0.0-20251124165233-999c45c0835a
 	github.com/openshift/build-machinery-go v0.0.0-20251023084048-5d77c1a5e5af
 	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
+	github.com/openshift/jobset-operator v0.0.0-20260119121041-4eba0a5413f6
 	github.com/openshift/library-go v0.0.0-20251120164824-14a789e09884
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.74.0
+	github.com/openshift/lws-operator v0.0.0-20260117095057-194a9dea5308
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.86.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.1
 	k8s.io/api v0.34.2
@@ -25,9 +27,10 @@ require (
 	k8s.io/kube-aggregator v0.34.1
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.22.4
-	sigs.k8s.io/controller-tools v0.4.1
+	sigs.k8s.io/controller-tools v0.19.0
 	sigs.k8s.io/jobset v0.10.1
 	sigs.k8s.io/kueue v0.15.0
+	sigs.k8s.io/lws v0.7.0
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.1
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -144,6 +147,5 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.33.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
-	sigs.k8s.io/lws v0.7.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 )
