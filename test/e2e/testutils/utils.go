@@ -129,6 +129,48 @@ func (cqw *ClusterQueueWrapper) WithFlavorName(flavorName string) *ClusterQueueW
 	return cqw
 }
 
+// WithPreemption sets the preemption policy for the ClusterQueue.
+// withinClusterQueue controls preemption within the same ClusterQueue (e.g., "LowerPriority", "Never").
+func (cqw *ClusterQueueWrapper) WithPreemption(withinClusterQueue kueuev1beta2.PreemptionPolicy) *ClusterQueueWrapper {
+	if cqw.Spec.Preemption == nil {
+		cqw.Spec.Preemption = &kueuev1beta2.ClusterQueuePreemption{}
+	}
+	cqw.Spec.Preemption.WithinClusterQueue = withinClusterQueue
+	return cqw
+}
+
+// WithCohort sets the cohort name for the ClusterQueue.
+func (cqw *ClusterQueueWrapper) WithCohort(cohort string) *ClusterQueueWrapper {
+	cqw.Spec.CohortName = kueuev1beta2.CohortReference(cohort)
+	return cqw
+}
+
+// WithReclaimWithinCohort sets the reclaimWithinCohort preemption policy.
+// This controls whether a pending workload can preempt workloads from other ClusterQueues in the cohort.
+func (cqw *ClusterQueueWrapper) WithReclaimWithinCohort(policy kueuev1beta2.PreemptionPolicy) *ClusterQueueWrapper {
+	if cqw.Spec.Preemption == nil {
+		cqw.Spec.Preemption = &kueuev1beta2.ClusterQueuePreemption{}
+	}
+	cqw.Spec.Preemption.ReclaimWithinCohort = policy
+	return cqw
+}
+
+// WithBorrowingLimit sets the borrowing limit for a specific resource.
+// resourceName is the name of the resource (e.g., "cpu", "memory").
+// limit is the maximum amount that can be borrowed from the cohort.
+func (cqw *ClusterQueueWrapper) WithBorrowingLimit(resourceName corev1.ResourceName, limit string) *ClusterQueueWrapper {
+	if len(cqw.Spec.ResourceGroups) > 0 && len(cqw.Spec.ResourceGroups[0].Flavors) > 0 {
+		for i, r := range cqw.Spec.ResourceGroups[0].Flavors[0].Resources {
+			if r.Name == resourceName {
+				borrowingLimit := resource.MustParse(limit)
+				cqw.Spec.ResourceGroups[0].Flavors[0].Resources[i].BorrowingLimit = &borrowingLimit
+				break
+			}
+		}
+	}
+	return cqw
+}
+
 // Create creates the ClusterQueue in the cluster and returns cleanup function.
 func (cqw *ClusterQueueWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
 	_, cleanup, err := cqw.CreateWithObject(ctx, client)
