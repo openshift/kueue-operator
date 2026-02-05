@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2025-12-10T23:02:04Z"
+    createdAt: "2026-02-05T20:46:17Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -75,6 +75,13 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - apiGroups:
+          - operator.openshift.io
+          resources:
+          - jobsetoperators
+          - leaderworkersetoperators
+          verbs:
+          - get
         - apiGroups:
           - kueue.openshift.io
           resources:

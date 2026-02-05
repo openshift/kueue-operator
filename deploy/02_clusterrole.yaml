@@ -4,6 +4,13 @@ metadata:
   name: openshift-kueue-operator
 rules:
   - apiGroups:
+      - operator.openshift.io
+    resources:
+      - jobsetoperators
+      - leaderworkersetoperators
+    verbs:
+      - get
+  - apiGroups:
       - kueue.openshift.io
     resources:
       - kueues
