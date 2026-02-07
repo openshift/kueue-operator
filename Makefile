@@ -224,6 +224,17 @@ e2e-ci-test-disruptive: ginkgo
 .PHONY: e2e-upstream-test
 e2e-upstream-test: ginkgo
 	@echo "Running upstream e2e tests..."
+	@echo "Removing OLM-installed LWS (if present) and installing v0.8.0 from GitHub..."
+	-oc delete leaderworkersetoperator cluster --ignore-not-found=true
+	-oc delete subscription leader-worker-set -n openshift-lws-operator --ignore-not-found=true
+	-oc delete csv -n openshift-lws-operator -l operators.coreos.com/leader-worker-set.openshift-lws-operator --ignore-not-found=true
+	-oc delete namespace openshift-lws-operator --ignore-not-found=true
+	@sleep 10
+	@echo "Installing Leader Worker Set v0.8.0 from GitHub releases"
+	oc apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/download/v0.8.0/manifests.yaml
+	@echo "Waiting for LWS controller to be ready"
+	@timeout 300s bash -c 'until oc get deployment lws-controller-manager -n lws-system -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting for LWS controller..."; done'
+	@echo "Leader Worker Set v0.8.0 installed successfully"
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	@echo "Running e2e tests on OpenShift cluster ($(shell oc whoami --show-server))"
 	mkdir -p "$(ARTIFACT_DIR)"
