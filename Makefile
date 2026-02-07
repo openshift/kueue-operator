@@ -247,16 +247,11 @@ install-jobset-operator:
 
 .PHONY: install-lws-operator
 install-lws-operator:
-	@echo "Installing Leader Worker Set Operator"
-	oc create -f hack/manifests/lws-operator.yaml
-	@echo "Waiting for Leader Worker Set Operator CSV to be succeeded"
-	@timeout 300s bash -c 'until oc get deployment openshift-lws-operator -n openshift-lws-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
-	@echo "Leader Worker Set Operator installed"
-	@echo "Creating Leader Worker Set Instance"
-	oc create -f hack/manifests/lws-operand.yaml
-	@echo "Waiting for Leader Worker Set Operand to be installed"
-	@timeout 300s bash -c 'until oc get deployment lws-controller-manager -n openshift-lws-operator -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting..."; done'
-	@echo "Leader Worker Set Operand installed"
+	@echo "Installing Leader Worker Set v0.8.0 from GitHub releases"
+	oc apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/download/v0.8.0/manifests.yaml
+	@echo "Waiting for LWS controller to be ready"
+	@timeout 300s bash -c 'until oc get deployment lws-controller-manager -n lws-system -o jsonpath="{.status.conditions[?(@.type==\"Available\")].status}" | grep -q "True"; do sleep 10; echo "Still waiting for LWS controller..."; done'
+	@echo "Leader Worker Set v0.8.0 installed successfully"
 
 .PHONY: build-must
 build-must:
