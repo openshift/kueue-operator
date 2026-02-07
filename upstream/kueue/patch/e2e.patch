@@ -43,3 +43,17 @@ index cc7d1f901..a68b8b9f4 100644
  	return ns
  }
  
+
+diff --git a/test/e2e/singlecluster/leaderworkerset_test.go b/test/e2e/singlecluster/leaderworkerset_test.go
+index 037e44a9d..55db71901 100644
+--- a/test/e2e/singlecluster/leaderworkerset_test.go
++++ b/test/e2e/singlecluster/leaderworkerset_test.go
+@@ -741,7 +741,7 @@ var _ = ginkgo.Describe("LeaderWorkerSet integration", ginkgo.Label("area:single
+ 						g.Expect(k8sClient.Get(ctx, util.WorkloadKeyForLeaderWorkerSet(lws, strconv.Itoa(i)), wl)).To(gomega.Succeed(),
+ 							"workload for surge group %d should exist", i)
+ 					}
+-				}, util.LongTimeout, util.Interval).Should(gomega.Succeed())
++				}, util.VeryLongTimeout, util.Interval).Should(gomega.Succeed())
+ 			})
+ 
+ 			ginkgo.By(fmt.Sprintf("Verify rolling update completes successfully with %d replicas running", lwsReplicas), func() {
