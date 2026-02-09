@@ -1,4 +1,4 @@
-# allow outbound traffic to kube-apiserver
+# allow outbound traffic to kube-apiserver from kueue operand pod
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -7,11 +7,11 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.openshift.io/name: kueue # applies to both the operator and kueue pod
+      app.kubernetes.io/name: kueue
+      control-plane: controller-manager
   egress:
   - ports:
     - protocol: TCP
       port: 6443  # we can not use a name because it is not on the pod network
   policyTypes:
   - Egress
-

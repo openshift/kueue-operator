@@ -306,19 +306,8 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook configurations are not ready")
 		})
 
-		It("verify that deny-all network policy is present", func() {
-			// Skip this test if not running on OpenShift
-			_, err := kubeClient.Discovery().ServerResourcesForGroupVersion("route.openshift.io/v1")
-			if err != nil {
-				Skip("Skipping deny-all network policy test - not running on OpenShift")
-			}
-
+		It("verify that deny-all network policy is present for operand", Label("network-policy"), func() {
 			Eventually(func() error {
-				const (
-					denyLabelKey   = "app.openshift.io/name"
-					denyLabelValue = "kueue"
-				)
-
 				deny, err := kubeClient.NetworkingV1().NetworkPolicies(testutils.OperatorNamespace).Get(
 					context.Background(),
 					"kueue-deny-all",
@@ -330,8 +319,11 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 				// deny-all policy should prohibit all traffic
 				// (ingress and egress) for pods that has the
-				// label 'app.openshift.io/name: kueue'
-				Expect(deny.Spec.PodSelector.MatchLabels).To(Equal(map[string]string{denyLabelKey: denyLabelValue}))
+				// label 'control-plane: controller-manager' (operand pods)
+				Expect(deny.Spec.PodSelector.MatchLabels).To(Equal(map[string]string{
+					"app.kubernetes.io/name": "kueue",
+					"control-plane":          "controller-manager",
+				}))
 				Expect(deny.Spec.Ingress).To(BeEmpty())
 				Expect(deny.Spec.Egress).To(BeEmpty())
 				Expect(deny.Spec.PolicyTypes).To(Equal([]networkingv1.PolicyType{
@@ -339,23 +331,123 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					networkingv1.PolicyTypeEgress,
 				}))
 
-				// make sure that both our operator pod and the
-				// operand pod have the right label
+				// make sure that operand pods have the right label
 				pods, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(context.Background(), metav1.ListOptions{})
 				if err != nil {
 					return err // retry
 				}
 
-				operatorPods := findOperatorPods(testutils.OperatorNamespace, pods)
-				Expect(len(operatorPods)).To(BeNumerically(">=", 1), "no operator pod seen")
 				kueuePods := findKueuePods(pods)
 				Expect(len(kueuePods)).To(BeNumerically(">=", 1), "no kueue pod seen")
 
-				for _, pod := range append(operatorPods, kueuePods...) {
-					Expect(pod.Labels).To(HaveKeyWithValue(denyLabelKey, denyLabelValue))
+				for _, pod := range kueuePods {
+					Expect(pod.Labels).To(HaveKeyWithValue("control-plane", "controller-manager"))
 				}
 				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "network policy has not been setup")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "operand network policy has not been setup")
+		})
+
+		It("verify operator NetworkPolicies are created on startup", Label("network-policy"), func() {
+			ctx := context.Background()
+			operatorNetPols := []string{
+				"kueue-operator-allow-egress-kube-apiserver",
+				"kueue-operator-allow-egress-cluster-dns",
+				"kueue-operator-allow-ingress-metrics",
+				"kueue-operator-deny-all",
+			}
+
+			for _, name := range operatorNetPols {
+				netpol, err := kubeClient.NetworkingV1().NetworkPolicies(testutils.OperatorNamespace).Get(
+					ctx,
+					name,
+					metav1.GetOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred(), "Operator NetworkPolicy %s should exist", name)
+
+				// Verify pod selector targets operator pods
+				Expect(netpol.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.openshift.io/component", "operator"))
+				Expect(netpol.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.openshift.io/name", "kueue"))
+
+				// Verify labels for tracking
+				Expect(netpol.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "kueue-operator"))
+				Expect(netpol.Labels).To(HaveKeyWithValue("app.kubernetes.io/component", "operator-network-policy"))
+			}
+		})
+
+		It("verify operator NetworkPolicies target correct pods", Label("network-policy"), func() {
+			ctx := context.Background()
+			pods, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			operatorPods := findOperatorPods(testutils.OperatorNamespace, pods)
+			Expect(len(operatorPods)).To(BeNumerically(">=", 1), "no operator pod seen")
+
+			// Verify operator pods have the correct label for NetworkPolicy selection
+			for _, pod := range operatorPods {
+				Expect(pod.Labels).To(HaveKeyWithValue("name", testutils.OperatorNamespace))
+			}
+		})
+
+		It("verify operand NetworkPolicies have correct pod selectors", Label("network-policy"), func() {
+			ctx := context.Background()
+			operandNetPols := []string{
+				"kueue-allow-egress-kube-apiserver",
+				"kueue-allow-egress-cluster-dns",
+				"kueue-allow-ingress-webhook",
+				"kueue-allow-ingress-visibility",
+				"kueue-allow-ingress-metrics",
+				"kueue-deny-all",
+			}
+
+			for _, name := range operandNetPols {
+				netpol, err := kubeClient.NetworkingV1().NetworkPolicies(testutils.OperatorNamespace).Get(
+					ctx,
+					name,
+					metav1.GetOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred(), "Operand NetworkPolicy %s should exist", name)
+
+				// Verify pod selector targets operand pods
+				Expect(netpol.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.kubernetes.io/name", "kueue"))
+				Expect(netpol.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("control-plane", "controller-manager"))
+			}
+		})
+
+		It("verify separation between operator and operand NetworkPolicies", Label("network-policy"), func() {
+			ctx := context.Background()
+
+			// Get all NetworkPolicies
+			netpolList, err := kubeClient.NetworkingV1().NetworkPolicies(testutils.OperatorNamespace).List(
+				ctx,
+				metav1.ListOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Count operator vs operand policies
+			operatorPolicies := 0
+			operandPolicies := 0
+
+			for _, netpol := range netpolList.Items {
+				if netpol.Labels != nil {
+					if component, ok := netpol.Labels["app.kubernetes.io/component"]; ok && component == "operator-network-policy" {
+						operatorPolicies++
+						// Verify operator policies target operator pods
+						Expect(netpol.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.openshift.io/component", "operator"))
+						Expect(netpol.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.openshift.io/name", "kueue"))
+					}
+				}
+
+				// Operand policies target control-plane pods
+				if selector := netpol.Spec.PodSelector.MatchLabels; selector != nil {
+					if _, ok := selector["control-plane"]; ok {
+						operandPolicies++
+					}
+				}
+			}
+
+			// We expect 4 operator policies and 6 operand policies
+			Expect(operatorPolicies).To(Equal(4), "Expected 4 operator NetworkPolicies")
+			Expect(operandPolicies).To(Equal(6), "Expected 6 operand NetworkPolicies")
 		})
 
 		It("verify kueue-config-map is updated with operators configuration", func() {
@@ -1268,17 +1360,39 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					return fmt.Errorf("ServiceAccount kueue-controller-manager still exists")
 				}
 
-				klog.Infof("Verifying removal of all NetworkPolicies in namespace: %s", testutils.OperatorNamespace)
+				klog.Infof("Verifying removal of operand NetworkPolicies (operator NetworkPolicies should persist)")
 				networkPolicyList, err := kubeClient.NetworkingV1().NetworkPolicies(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return fmt.Errorf("Failed to list NetworkPolicies: %v", err)
 				}
-				if len(networkPolicyList.Items) > 0 {
-					var networkPolicyNames []string
-					for _, netpl := range networkPolicyList.Items {
-						networkPolicyNames = append(networkPolicyNames, netpl.Name)
+
+				// Separate operator policies from operand policies
+				var operandPolicies []string
+				var operatorPolicies []string
+				for _, netpol := range networkPolicyList.Items {
+					isOperatorPolicy := false
+					if netpol.Labels != nil {
+						if component, ok := netpol.Labels["app.kubernetes.io/component"]; ok && component == "operator-network-policy" {
+							isOperatorPolicy = true
+							operatorPolicies = append(operatorPolicies, netpol.Name)
+						}
 					}
-					return fmt.Errorf("NetworkPolicies still exist in namespace %s: %v", testutils.OperatorNamespace, networkPolicyNames)
+					if !isOperatorPolicy {
+						operandPolicies = append(operandPolicies, netpol.Name)
+					}
+				}
+
+				// Operand NetworkPolicies should be deleted (they have owner references)
+				if len(operandPolicies) > 0 {
+					return fmt.Errorf("Operand NetworkPolicies still exist in namespace %s: %v", testutils.OperatorNamespace, operandPolicies)
+				}
+
+				// Operator NetworkPolicies should persist (no owner references)
+				klog.Infof("Operator NetworkPolicies correctly persisted: %v", operatorPolicies)
+				expectedOperatorPolicies := 4
+				if len(operatorPolicies) != expectedOperatorPolicies {
+					return fmt.Errorf("Expected %d operator NetworkPolicies to persist, found %d: %v",
+						expectedOperatorPolicies, len(operatorPolicies), operatorPolicies)
 				}
 
 				klog.Infof("Verifying removal of all Services in namespace: %s", testutils.OperatorNamespace)

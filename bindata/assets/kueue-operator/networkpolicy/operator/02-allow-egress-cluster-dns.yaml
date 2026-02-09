@@ -1,13 +1,17 @@
-# allow traffic to cluster DNS service
+# allow traffic to cluster DNS service from operator pod
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: kueue-allow-egress-cluster-dns
+  name: kueue-operator-allow-egress-cluster-dns
   namespace: openshift-kueue-operator
+  labels:
+    app.kubernetes.io/managed-by: kueue-operator
+    app.kubernetes.io/component: operator-network-policy
 spec:
   podSelector:
     matchLabels:
-      app.openshift.io/name: kueue # applies to both the operator and kueue pod
+      app.openshift.io/component: operator
+      app.openshift.io/name: kueue
   egress:
   - to:
     - namespaceSelector:
