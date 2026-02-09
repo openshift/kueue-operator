@@ -66,13 +66,13 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 			cohortName := "fair-sharing-cohort"
 			clusterQueueA, cleanupClusterQueueA, err := testutils.NewClusterQueue().
 				WithGenerateName().
-				WithCPU("1").
-				WithMemory("1Gi").
+				WithCPU("250m").
+				WithMemory("256Mi").
 				WithFlavorName(resourceFlavor.Name).
 				WithCohort(cohortName).
 				WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
 				WithReclaimWithinCohort(kueuev1beta2.PreemptionPolicyLowerPriority).
-				WithBorrowingLimit(corev1.ResourceCPU, "1").
+				WithBorrowingLimit(corev1.ResourceCPU, "250m").
 				CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue A")
 			DeferCleanup(cleanupClusterQueueA)
@@ -96,8 +96,8 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 			By("Creating ClusterQueue, Namespace and LocalQueue for B")
 			clusterQueueB, cleanupClusterQueueB, err := testutils.NewClusterQueue().
 				WithGenerateName().
-				WithCPU("1").
-				WithMemory("1Gi").
+				WithCPU("250m").
+				WithMemory("256Mi").
 				WithFlavorName(resourceFlavor.Name).
 				WithCohort(cohortName).
 				WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
@@ -123,14 +123,14 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 			DeferCleanup(cleanupLocalQueueB)
 
 			By("Creating a job on A that borrows resources from the cohort")
-			cleanupBorrowingJob, borrowingJob, err := createCustomJob(ctx, "borrowing-job", namespaceA.Name, localQueueA.Name, "", "2", "512Mi")
+			cleanupBorrowingJob, borrowingJob, err := createCustomJob(ctx, "borrowing-job", namespaceA.Name, localQueueA.Name, "", "500m", "128Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create borrowing job")
 			DeferCleanup(cleanupBorrowingJob)
 
 			By("Verifying borrowing job workload is admitted")
 			checkWorkloadCondition(ctx, namespaceA.Name, string(borrowingJob.UID), kueuev1beta2.WorkloadAdmitted, "borrowing")
 
-			By("Verifying clusterQueueA borrowed 1 CPU")
+			By("Verifying clusterQueueA borrowed 250m CPU")
 			Eventually(func() error {
 				cq, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, clusterQueueA.Name, metav1.GetOptions{})
 				if err != nil {
@@ -139,19 +139,19 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 				for _, flavorUsage := range cq.Status.FlavorsUsage {
 					for _, resourceUsage := range flavorUsage.Resources {
 						if resourceUsage.Name == corev1.ResourceCPU {
-							expectedBorrowed := resource.MustParse("1")
+							expectedBorrowed := resource.MustParse("250m")
 							if resourceUsage.Borrowed.Cmp(expectedBorrowed) == 0 {
 								return nil
 							}
-							return fmt.Errorf("expected borrowed CPU to be 1, got %s", resourceUsage.Borrowed.String())
+							return fmt.Errorf("expected borrowed CPU to be 250m, got %s", resourceUsage.Borrowed.String())
 						}
 					}
 				}
 				return fmt.Errorf("CPU resource not found in clusterQueue status")
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "clusterQueueA should have borrowed 1 CPU")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "clusterQueueA should have borrowed 250m CPU")
 
 			By("Creating a job on B that will reclaim quota from A")
-			cleanupReclaimJob, reclaimJob, err := createCustomJob(ctx, "reclaim-job", namespaceB.Name, localQueueB.Name, "", "1", "512Mi")
+			cleanupReclaimJob, reclaimJob, err := createCustomJob(ctx, "reclaim-job", namespaceB.Name, localQueueB.Name, "", "250m", "128Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create reclaim job")
 			DeferCleanup(cleanupReclaimJob)
 
