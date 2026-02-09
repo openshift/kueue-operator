@@ -163,6 +163,17 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 			By("Creating a new job without localQueue")
 			err := kueueClient.KueueV1beta2().LocalQueues(ns.Name).Delete(ctx, testutils.DefaultLocalQueueName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				_, err := kueueClient.KueueV1beta1().LocalQueues(ns.Namespace).Get(ctx, testutils.DefaultLocalQueueName, metav1.GetOptions{})
+				if apierrors.IsNotFound(err) {
+					return nil
+				}
+				return fmt.Errorf("localqueue %s/%s still exists: %w", ns.Name, testutils.DefaultLocalQueueName, err)
+			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), fmt.Sprintf("LocalQueue %s/%s was not cleaned up", ns.Name, testutils.DefaultLocalQueueName))
+
+			By("Creating a new job without localQueue")
+
+			Expect(err).NotTo(HaveOccurred())
 			jobWithoutQueue := builder.NewJobWithoutQueue()
 			createdJobWithoutQueue, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobWithoutQueue, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
