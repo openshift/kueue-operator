@@ -226,9 +226,8 @@ e2e-upstream-test: ginkgo
 	@echo "Running upstream e2e tests..."
 	oc apply -f test/e2e/bindata/assets/08_kueue_default.yaml
 	@echo "Running e2e tests on OpenShift cluster ($(shell oc whoami --show-server))"
-	mkdir -p "$(ARTIFACT_DIR)"
-	IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS)" \
-	ARTIFACT_DIR=$(ARTIFACT_DIR) E2E_TARGET_FOLDER="singlecluster" \
+	ARTIFACTS="$(LOCALBIN)/$@" IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS) --no-color" \
+	E2E_TARGET_FOLDER="singlecluster" \
 	SKIP_DEPLOY=true \
 	./upstream/kueue/e2e-test-ocp.sh
 
