@@ -7,12 +7,14 @@ import (
 	"time"
 
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
+	jobsetoperatorconfigclient "github.com/openshift/jobset-operator/pkg/generated/clientset/versioned"
 	operatorconfigclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	lwsoperatorconfigclient "github.com/openshift/lws-operator/pkg/generated/clientset/versioned"
 	apiextclientsetv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	apiextinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
@@ -82,6 +84,14 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	if err != nil {
 		return err
 	}
+	lwsOperatorConfigClient, err := lwsoperatorconfigclient.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+	jobsetOperatorConfigClient, err := jobsetoperatorconfigclient.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
 	operatorConfigInformers := operatorclientinformers.NewSharedInformerFactory(operatorConfigClient, 10*time.Minute)
 	kueueClient := &operatorclient.KueueClient{
 		Ctx:            ctx,
@@ -130,6 +140,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	targetConfigReconciler, err := NewTargetConfigReconciler(
 		ctx,
 		operatorConfigClient.KueueV1(),
+		lwsOperatorConfigClient.OpenShiftOperatorV1().LeaderWorkerSetOperators(),
+		jobsetOperatorConfigClient.OpenShiftOperatorV1().JobSetOperators(),
 		operatorConfigInformers.Kueue().V1().Kueues(),
 		kubeInformersForNamespaces,
 		kueueClient,
