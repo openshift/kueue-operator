@@ -19,7 +19,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -136,8 +135,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 					}
 				}
 				return true
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Gang job should stay NOT admitted while first job consumes quota")
-			// }, 5*time.Second, 1*time.Second).Should(BeTrue(), "Gang job should stay NOT admitted while first job consumes quota")
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue(), "Gang job should stay NOT admitted while first job consumes quota")
 
 			By("Waiting for first job to complete and free up quota")
 			Eventually(func() error {
@@ -218,7 +216,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 					}
 				}
 				return true
-			}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Second gang job should stay NOT admitted during sequential admission while first job pods are not ready")
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue(), "Second gang job should stay NOT admitted during sequential admission while first job pods are not ready")
 
 			By("Waiting for first gang job pods to complete")
 			Eventually(func() bool {
