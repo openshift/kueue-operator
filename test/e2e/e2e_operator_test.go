@@ -1019,8 +1019,12 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to create test namespace")
 
 			By("create a LocalQueue in the test namespace")
-			cleanupLocalQueueFn, err := testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, localQueueName)
-			Expect(err).ToNot(HaveOccurred(), "Failed to create LocalQueue")
+			var cleanupLocalQueueFn func()
+			Eventually(func() error {
+				var createErr error
+				cleanupLocalQueueFn, createErr = testutils.CreateLocalQueue(ctx, clients.UpstreamKueueClient, testNamespace.Name, localQueueName)
+				return createErr
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to create LocalQueue")
 			defer cleanupLocalQueueFn()
 
 			job := &batchv1.Job{
