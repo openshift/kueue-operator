@@ -19,6 +19,7 @@ LABEL io.openshift.tags="openshift,kueue-operator"
 LABEL description="kueue-operator-container"
 LABEL distribution-scope="public"
 LABEL name="kueue-operator-rhel9-operator"
+LABEL cpe="cpe:/a:redhat:kueue_operator:1.3::el9"
 LABEL vendor="Red Hat, Inc."
 LABEL version=1.3.0
 LABEL release=1.3.0
