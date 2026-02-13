@@ -20,5 +20,7 @@ Bumps the kueue-operator version in all the necessary files.
 
 8. **Update the kueue version in the README.md  with the branch defined in the .gitmodules file**
 
-9. **Run the command make bundle-generate**
+9. **Update the cpe LABEL with the new kueue-operator version**
+
+10. **Run the command make bundle-generate**
 
