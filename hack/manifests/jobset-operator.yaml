@@ -21,7 +21,7 @@ metadata:
   labels:
     operators.coreos.com/job-set.openshift-jobset-operator: ''
 spec:
-  channel: tech-preview-v0.1
+  channel: stable-v1.0
   name: job-set
   source: redhat-operators
   sourceNamespace: openshift-marketplace
