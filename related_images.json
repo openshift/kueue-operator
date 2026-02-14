@@ -5,7 +5,7 @@
   },
   {
     "name": "must-gather",
-    "image": "registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:f3ea377859cbf01a8592b1de1e14339795cf07e50f3177a5c082a44c7f7486f1"
+    "image": "registry.redhat.io/kueue/kueue-must-gather-rhel9@sha256:f552cb1386b1e615e26d96a99a4b6b8426a5ca6b1bb926d02041cde3ecd9530d"
   },
   {
     "name": "operand",
