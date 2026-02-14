@@ -27,4 +27,6 @@ const (
 	DefaultLocalQueueName = "default"
 	DeletionTime          = 3 * time.Minute
 	DeletionPoll          = 5 * time.Second
+	ConsistentlyTimeout   = 5 * time.Second
+	ConsistentlyPoll      = 1 * time.Second
 )
