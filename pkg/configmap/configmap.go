@@ -130,7 +130,7 @@ func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagemen
 func buildWaitForPodsReady(gangSchedulingPolicy kueue.GangScheduling) *configapi.WaitForPodsReady {
 	switch gangSchedulingPolicy.Policy {
 	case kueue.GangSchedulingPolicyByWorkload:
-		return &configapi.WaitForPodsReady{BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload)}
+		return &configapi.WaitForPodsReady{Timeout: v1.Duration{Duration: 5 * time.Minute}, BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload)}
 	default:
 		return nil
 	}

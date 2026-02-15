@@ -139,7 +139,7 @@ metrics:
 namespace: test
 waitForPodsReady:
   blockAdmission: false
-  timeout: 0s
+  timeout: 5m0s
 webhook:
   port: 9443
 `,
@@ -317,7 +317,7 @@ metrics:
 namespace: test
 waitForPodsReady:
   blockAdmission: true
-  timeout: 0s
+  timeout: 5m0s
 webhook:
   port: 9443
 `,
