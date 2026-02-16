@@ -41,7 +41,7 @@ func TestBuildConfigMap(t *testing.T) {
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -53,8 +53,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-fairSharing:
-  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -79,7 +77,6 @@ metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
 namespace: test
-waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -102,7 +99,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -114,8 +111,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-fairSharing:
-  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -144,7 +139,7 @@ metrics:
 namespace: test
 waitForPodsReady:
   blockAdmission: false
-  enable: true
+  timeout: 5m0s
 webhook:
   port: 9443
 `,
@@ -163,7 +158,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -176,7 +171,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 fairSharing:
-  enable: true
   preemptionStrategies:
   - LessThanOrEqualToFinalShare
   - LessThanInitialShare
@@ -204,7 +198,6 @@ metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
 namespace: test
-waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -221,7 +214,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -233,8 +226,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-fairSharing:
-  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -263,7 +254,6 @@ metrics:
   bindAddress: :8443
   enableClusterQueueResources: true
 namespace: test
-waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -285,7 +275,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -297,8 +287,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-fairSharing:
-  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -329,7 +317,7 @@ metrics:
 namespace: test
 waitForPodsReady:
   blockAdmission: true
-  enable: true
+  timeout: 5m0s
 webhook:
   port: 9443
 `,
@@ -358,7 +346,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -370,8 +358,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-fairSharing:
-  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -401,7 +387,6 @@ multiKueue:
   - name: myworkloads.v1alpha1.test.io
   gcInterval: null
 namespace: test
-waitForPodsReady: {}
 webhook:
   port: 9443
 `,
@@ -433,7 +418,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta1
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -445,8 +430,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-fairSharing:
-  enable: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -476,7 +459,6 @@ multiKueue:
   - name: myworkloads.v1alpha1.test.io
   gcInterval: null
 namespace: test
-waitForPodsReady: {}
 webhook:
   port: 9443
 `,
