@@ -26,7 +26,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
-	configapi "sigs.k8s.io/kueue/apis/config/v1beta1"
+	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
@@ -129,12 +129,10 @@ func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagemen
 
 func buildWaitForPodsReady(gangSchedulingPolicy kueue.GangScheduling) *configapi.WaitForPodsReady {
 	switch gangSchedulingPolicy.Policy {
-	case kueue.GangSchedulingPolicyNone:
-		return &configapi.WaitForPodsReady{Enable: false}
 	case kueue.GangSchedulingPolicyByWorkload:
-		return &configapi.WaitForPodsReady{Enable: true, BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload)}
+		return &configapi.WaitForPodsReady{Timeout: v1.Duration{Duration: 5 * time.Minute}, BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload)}
 	default:
-		return &configapi.WaitForPodsReady{Enable: false}
+		return nil
 	}
 }
 
@@ -151,12 +149,10 @@ func blockAdmission(admission *kueue.ByWorkload) *bool {
 
 func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	switch preemption.PreemptionPolicy {
-	case kueue.PreemptionStrategyClassical:
-		return &configapi.FairSharing{Enable: false}
 	case kueue.PreemptionStrategyFairsharing:
-		return &configapi.FairSharing{Enable: true, PreemptionStrategies: []configapi.PreemptionStrategy{configapi.LessThanOrEqualToFinalShare, configapi.LessThanInitialShare}}
+		return &configapi.FairSharing{PreemptionStrategies: []configapi.PreemptionStrategy{configapi.LessThanOrEqualToFinalShare, configapi.LessThanInitialShare}}
 	default:
-		return &configapi.FairSharing{Enable: false}
+		return nil
 	}
 }
 
@@ -164,7 +160,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
-			APIVersion: "config.kueue.x-k8s.io/v1beta1",
+			APIVersion: "config.kueue.x-k8s.io/v1beta2",
 		},
 		Namespace: ptr.To(namespace),
 		ControllerManager: configapi.ControllerManager{
