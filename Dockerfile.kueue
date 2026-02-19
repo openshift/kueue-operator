@@ -7,6 +7,9 @@ ARG TARGETPLATFORM
 WORKDIR /workspace
 COPY . .
 WORKDIR /workspace/upstream/kueue
+ARG SOURCE_GIT_COMMIT=unspecified
+ENV SOURCE_GIT_COMMIT=$SOURCE_GIT_COMMIT
+ENV SOURCE_GIT_URL "https://github.com/cpmeadors/kueue-operator"
 RUN ./build.sh
 
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:759f5f42d9d6ce2a705e290b7fc549e2d2cd39312c4fa345f93c02e4abb8da95
