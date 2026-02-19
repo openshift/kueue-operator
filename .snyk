@@ -14,6 +14,8 @@ exclude:
     - upstream/kueue/src/site/**
     - upstream/kueue/src/vendor/**
     - upstream/kueue/src/"**/*_test.go"
+    # Disable tools
+    - upstream/kueue/src/hack/tools/**
     # sha1 hash not used for cryptographic purposes
     - upstream/kueue/src/pkg/controller/admissionchecks/provisioning/controller.go
     - upstream/kueue/src/pkg/controller/jobframework/workload_names.go
