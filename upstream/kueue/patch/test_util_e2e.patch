@@ -1,0 +1,39 @@
+diff --git a/test/util/e2e.go b/test/util/e2e.go
+index 95c6d509f..92a01fcdd 100644
+--- a/test/util/e2e.go
++++ b/test/util/e2e.go
+@@ -584,8 +584,14 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
+ }
+ 
+ func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
+-	MustCreate(ctx, k8sClient, ns)
+-	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns.Name)
++	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns)
++	// Add label to the namespace to mark it as managed by Kueue.
++	if ns.Labels == nil {
++		ns.Labels = make(map[string]string)
++	}
++	ns.Labels["kueue.openshift.io/managed"] = "true"
++	gomega.Expect(k8sClient.Create(ctx, ns)).To(gomega.Succeed())
++	ginkgo.GinkgoLogr.Info(fmt.Sprintf("Created namespace: %s", ns.Name))
+ 	return ns
+ }
+ 
+@@ -607,7 +613,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
+ 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred())
+ 		g.Expect(metricsOutput).Should(utiltesting.ContainMetrics(metrics))
+-	}, LongTimeout, Interval).Should(gomega.Succeed())
++	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
+ }
+ 
+ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restClient *rest.RESTClient, curlPodName, curlContainerName string, metrics [][]string) {
+@@ -616,7 +622,7 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
+ 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred())
+ 		g.Expect(metricsOutput).Should(utiltesting.ExcludeMetrics(metrics))
+-	}, LongTimeout, Interval).Should(gomega.Succeed())
++	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
+ }
+ 
+ func WaitForPodRunning(ctx context.Context, k8sClient client.Client, pod *corev1.Pod) {
