@@ -42,4 +42,33 @@ index cc7d1f901..a68b8b9f4 100644
 +	ginkgo.GinkgoLogr.Info(fmt.Sprintf("Created namespace: %s", ns.Name))
  	return ns
  }
+
+diff --git a/test/e2e/certmanager/certmanager_test.go b/test/e2e/certmanager/certmanager_test.go
+index b175863ca..ddefdb139 100644
+--- a/test/e2e/certmanager/certmanager_test.go
++++ b/test/e2e/certmanager/certmanager_test.go
+@@ -40,7 +40,10 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
+ 
+        ginkgo.BeforeEach(func() {
+                ns = &corev1.Namespace{
+-                       ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-cert-manager-"},
++                       ObjectMeta: metav1.ObjectMeta{
++                               GenerateName: "e2e-cert-manager-",
++                               Labels:       map[string]string{"kueue.openshift.io/managed": "true"},
++                       },
+                }
+                util.MustCreate(ctx, k8sClient, ns)
+
+diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
+index 6ecb39d21..7c5cbe653 100644
+--- a/test/e2e/certmanager/metrics_test.go
++++ b/test/e2e/certmanager/metrics_test.go
+@@ -38,7 +38,7 @@ const (
+        serviceAccountName           = "kueue-controller-manager"
+        metricsReaderClusterRoleName = "kueue-metrics-reader"
+        metricsServiceName           = "kueue-controller-manager-metrics-service"
+-       certSecretName               = "kueue-metrics-server-cert"
++       certSecretName               = "metrics-server-cert"
+        certMountPath                = "/etc/kueue/metrics/certs"
+ )
  
