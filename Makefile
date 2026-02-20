@@ -231,6 +231,16 @@ e2e-upstream-test: ginkgo
 	ARTIFACT_DIR=$(ARTIFACT_DIR) E2E_TARGET_FOLDER="singlecluster" \
 	SKIP_DEPLOY=true \
 	./upstream/kueue/e2e-test-ocp.sh
+	@echo "Running upstream certmanager e2e tests..."
+	KUEUE_NAMESPACE=openshift-kueue-operator \
+	$(GINKGO) $(GINKGO_ARGS) \
+	  --junit-report=e2e-upstream-certmanager-junit.xml \
+	  --json-report=e2e-upstream-certmanager.json \
+	  --output-dir="$(ARTIFACT_DIR)" \
+	  --keep-going \
+	  --flake-attempts=3 \
+	  --no-color \
+	  -v ./upstream/kueue/src/test/e2e/certmanager/...
 
 .PHONY: install-jobset-operator
 install-jobset-operator:

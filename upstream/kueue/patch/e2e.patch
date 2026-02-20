@@ -42,4 +42,54 @@ index cc7d1f901..a68b8b9f4 100644
 +	ginkgo.GinkgoLogr.Info(fmt.Sprintf("Created namespace: %s", ns.Name))
  	return ns
  }
+
+diff --git a/test/e2e/certmanager/certmanager_test.go b/test/e2e/certmanager/certmanager_test.go
+index b175863ca..ddefdb139 100644
+--- a/test/e2e/certmanager/certmanager_test.go
++++ b/test/e2e/certmanager/certmanager_test.go
+@@ -40,7 +40,10 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
  
+ 	ginkgo.BeforeEach(func() {
+ 		ns = &corev1.Namespace{
+-			ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-cert-manager-"},
++			ObjectMeta: metav1.ObjectMeta{
++				GenerateName: "e2e-cert-manager-",
++				Labels:       map[string]string{"kueue.openshift.io/managed": "true"},
++			},
+ 		}
+ 		util.MustCreate(ctx, k8sClient, ns)
+ 
+diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
+index 19f27e21c..bafcde7cf 100644
+--- a/test/e2e/certmanager/metrics_test.go
++++ b/test/e2e/certmanager/metrics_test.go
+@@ -40,7 +40,7 @@ const (
+ 	serviceAccountName           = "kueue-controller-manager"
+ 	metricsReaderClusterRoleName = "kueue-metrics-reader"
+ 	metricsServiceName           = "kueue-controller-manager-metrics-service"
+-	certSecretName               = "kueue-metrics-server-cert"
++	certSecretName               = "metrics-server-cert"
+ 	certMountPath                = "/etc/kueue/metrics/certs"
+ )
+
+diff --git a/test/e2e/certmanager/suite_test.go b/test/e2e/certmanager/suite_test.go
+index d81fd7536..bbba8fb83 100644
+--- a/test/e2e/certmanager/suite_test.go
++++ b/test/e2e/certmanager/suite_test.go
+@@ -66,11 +66,11 @@ var _ = ginkgo.BeforeSuite(func() {
+ 
+ 	waitForAvailableStart := time.Now()
+ 	util.WaitForKueueAvailability(ctx, k8sClient)
+-	labelFilter := ginkgo.GinkgoLabelFilter()
+-	if ginkgo.Label("feature:prometheus").MatchesLabelFilter(labelFilter) {
+-		prometheusClient = util.CreatePrometheusClient(cfg)
+-		util.WaitForPrometheusAvailability(ctx, k8sClient)
+-	}
++	prometheusClient = util.CreatePrometheusClient(cfg)
++	//labelFilter := ginkgo.GinkgoLabelFilter()
++	// if ginkgo.Label("feature:prometheus").MatchesLabelFilter(labelFilter) {
++	// 	util.WaitForPrometheusAvailability(ctx, k8sClient)
++	// }
+ 	ginkgo.GinkgoLogr.Info(
+ 		"Kueue and all required operators are available in the cluster",
+ 		"waitingTime", time.Since(waitForAvailableStart),
