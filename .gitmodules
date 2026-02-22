@@ -1,4 +1,4 @@
 [submodule "upstream/kueue/src"]
 	path = upstream/kueue/src
-	url = https://github.com/kubernetes-sigs/kueue.git
-	branch = main
+	url = https://github.com/cpmeadors/kubernetes-sigs_kueue.git
+	branch = coverage_server

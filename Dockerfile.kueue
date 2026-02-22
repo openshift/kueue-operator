@@ -7,6 +7,9 @@ ARG TARGETPLATFORM
 WORKDIR /workspace
 COPY . .
 WORKDIR /workspace/upstream/kueue
+ARG SOURCE_GIT_COMMIT=unspecified
+ENV SOURCE_GIT_COMMIT=$SOURCE_GIT_COMMIT
+ENV SOURCE_GIT_URL "http://github.com/cpmeadors/kubernetes-sigs_kueue"
 RUN ./build.sh
 
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:c7d44146f826037f6873d99da479299b889473492d3c1ab8af86f08af04ec8a0

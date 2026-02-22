@@ -1,6 +1,9 @@
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25 as builder
 WORKDIR /go/src/github.com/openshift/kueue-operator
 COPY . .
+ARG SOURCE_GIT_COMMIT=unspecified
+ENV SOURCE_GIT_COMMIT=$SOURCE_GIT_COMMIT
+ENV SOURCE_GIT_URL "http://github.com/cpmeadors/kueue-operator"
 RUN make build --warn-undefined-variables
 
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:c7d44146f826037f6873d99da479299b889473492d3c1ab8af86f08af04ec8a0
