@@ -40,6 +40,10 @@ $(call verify-golang-versions,Dockerfile)
 
 $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1,./manifests/,./manifests/)
 
+.PHONY: coverage
+coverage: ## Run unit tests with coverage and upload to Codecov
+	hack/codecov.sh
+
 .PHONY: test-e2e
 test-e2e: ginkgo
 	${GINKGO} --keep-going --flake-attempts=3 --label-filter="!disruptive" -v ./test/e2e/...
