@@ -140,16 +140,29 @@ lint: golangci-lint ## Run golangci-lint linter
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix --timeout 30m
 
+.PHONY: lint-api
+lint-api: golangci-lint-kal
+	export HOME=/tmp; export GOCACHE=/tmp/; export GOLANGCI_LINT_CACHE=/tmp/.cache; $(GOLANGCI_LINT_KAL) run -v --config .golangci-kal.yml
+
+.PHONY: lint-api-fix
+lint-api-fix: golangci-lint-kal
+	$(GOLANGCI_LINT_KAL) run -v --config .golangci-kal.yml --fix
+
 ## Tool Versions
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.7.2
+GOLANGCI_LINT_KAL = $(shell pwd)/bin/golangci-lint-kube-api-linter
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 	set -e ;\
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION) ;\
 	}
+
+.PHONY: golangci-lint-kal
+golangci-lint-kal: golangci-lint ## Build golangci-lint-kal from custom configuration.
+	export HOME=/tmp; export GOCACHE=/tmp/; export GOLANGCI_LINT_CACHE=/tmp/.cache; cd hack/golangci-kal; $(GOLANGCI_LINT) custom; mv bin/golangci-lint-kube-api-linter ${LOCALBIN}
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
