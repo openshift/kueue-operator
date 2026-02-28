@@ -5,9 +5,9 @@ apply_patches() {
   for patch in patch/*.patch; do
     pushd src >/dev/null
     # Check if patch can be applied (not already applied)
-    if git apply --check ../"$patch" 2>/dev/null; then
+    if git apply --ignore-space-change --check ../"$patch" 2>/dev/null; then
       echo "Applying $patch"
-      git apply ../"$patch" || {
+      git apply --ignore-space-change ../"$patch" || {
         echo "Error: Failed to apply $patch"
         popd >/dev/null
         return 1
