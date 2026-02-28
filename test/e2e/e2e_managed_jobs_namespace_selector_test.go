@@ -142,10 +142,13 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying job is not suspended and runs normally")
-			Eventually(func() int32 {
-				job, _ := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Get(ctx, createdJob.Name, metav1.GetOptions{})
-				return job.Status.Active
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeNumerically(">=", 1), "Job should run without Kueue interference in unlabeled namespace")
+			Eventually(func(g Gomega) {
+				gotJob, err := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Get(ctx, createdJob.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				if gotJob.Spec.Suspend != nil {
+					g.Expect(*gotJob.Spec.Suspend).To(BeFalse(), "Job should not be suspended in unmanaged namespace")
+				}
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Job should run without Kueue interference in unlabeled namespace")
 
 			By("verifying no workload is created for the job in unmanaged namespace")
 			Consistently(func() error {
