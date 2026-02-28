@@ -133,6 +133,40 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			verifyWorkloadCreated(nsKueueClient, managedNs.Name, string(createdJob.UID))
 		})
 
+		It("should not reconcile a job with queue-name in unlabeled namespace", func(ctx context.Context) {
+			By("creating a job with queue-name label in unmanaged namespace")
+			job := unmanagedBuilder.NewJobWithoutQueue()
+			job.Labels = map[string]string{testutils.QueueLabel: testutils.DefaultLocalQueueName}
+			createdJob, err := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+
+			By("verifying job is not suspended and runs normally")
+			Eventually(func(g Gomega) {
+				gotJob, err := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Get(ctx, createdJob.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				if gotJob.Spec.Suspend != nil {
+					g.Expect(*gotJob.Spec.Suspend).To(BeFalse(), "Job should not be suspended in unmanaged namespace")
+				}
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Job should run without Kueue interference in unlabeled namespace")
+
+			By("verifying no workload is created for the job in unmanaged namespace")
+			Consistently(func() error {
+				workloads, err := nsKueueClient.KueueV1beta2().Workloads(unmanagedNs.Name).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+				for _, wl := range workloads.Items {
+					for _, ownerRef := range wl.OwnerReferences {
+						if ownerRef.UID == createdJob.UID {
+							return fmt.Errorf("unexpected workload found for job with queue-name in unmanaged namespace")
+						}
+					}
+				}
+				return nil
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "No workload should be created in unmanaged namespace")
+		})
+
 	})
 
 	When("default labelPolicy with managed namespace selector", func() {
