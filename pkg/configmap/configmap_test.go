@@ -334,7 +334,7 @@ webhook:
 					DeviceClassMappings: []kueue.DeviceClassMapping{
 						{
 							Name:             "example.com/gpus",
-							DeviceClassNames: []string{"gpu.example.com", "gpu-large.example.com"},
+							DeviceClassNames: []kueue.DeviceClassName{"gpu.example.com", "gpu-large.example.com"},
 						},
 					},
 				},

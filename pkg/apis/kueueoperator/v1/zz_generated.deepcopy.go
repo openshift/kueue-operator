@@ -45,7 +45,7 @@ func (in *DeviceClassMapping) DeepCopyInto(out *DeviceClassMapping) {
 	*out = *in
 	if in.DeviceClassNames != nil {
 		in, out := &in.DeviceClassNames, &out.DeviceClassNames
-		*out = make([]string, len(*in))
+		*out = make([]DeviceClassName, len(*in))
 		copy(*out, *in)
 	}
 	return

@@ -17,11 +17,15 @@ limitations under the License.
 
 package v1
 
+import (
+	kueueoperatorv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
+)
+
 // DeviceClassMappingApplyConfiguration represents a declarative configuration of the DeviceClassMapping type for use
 // with apply.
 type DeviceClassMappingApplyConfiguration struct {
-	Name             *string  `json:"name,omitempty"`
-	DeviceClassNames []string `json:"deviceClassNames,omitempty"`
+	Name             *string                           `json:"name,omitempty"`
+	DeviceClassNames []kueueoperatorv1.DeviceClassName `json:"deviceClassNames,omitempty"`
 }
 
 // DeviceClassMappingApplyConfiguration constructs a declarative configuration of the DeviceClassMapping type for use with
@@ -41,7 +45,7 @@ func (b *DeviceClassMappingApplyConfiguration) WithName(value string) *DeviceCla
 // WithDeviceClassNames adds the given value to the DeviceClassNames field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the DeviceClassNames field.
-func (b *DeviceClassMappingApplyConfiguration) WithDeviceClassNames(values ...string) *DeviceClassMappingApplyConfiguration {
+func (b *DeviceClassMappingApplyConfiguration) WithDeviceClassNames(values ...kueueoperatorv1.DeviceClassName) *DeviceClassMappingApplyConfiguration {
 	for i := range values {
 		b.DeviceClassNames = append(b.DeviceClassNames, values[i])
 	}

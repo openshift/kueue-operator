@@ -183,16 +183,19 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 }
 
 func buildFeatureGates(resources kueue.Resources) map[string]bool {
+	featureGates := map[string]bool{}
+
 	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
 	// when deviceClassMappings are configured. Once DRA graduates to Beta in upstream
 	// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
 	if len(resources.DeviceClassMappings) > 0 {
-		return map[string]bool{
-			"DynamicResourceAllocation": true,
-		}
+		featureGates["DynamicResourceAllocation"] = true
 	}
 
-	return nil
+	if len(featureGates) == 0 {
+		return nil
+	}
+	return featureGates
 }
 
 func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) *configapi.Configuration {
