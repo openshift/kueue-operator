@@ -46,6 +46,7 @@ var webhooksList = map[string]string{
 	string(kueue.KueueIntegrationMPIJob):          "mpijob",
 	string(kueue.KueueIntegrationRayJob):          "rayjob",
 	string(kueue.KueueIntegrationRayCluster):      "raycluster",
+	string(kueue.KueueIntegrationRayService):      "rayservice",
 	string(kueue.KueueIntegrationJobSet):          "jobset",
 	string(kueue.KueueIntegrationPaddleJob):       "paddlejob",
 	string(kueue.KueueIntegrationPyTorchJob):      "pytorchjob",

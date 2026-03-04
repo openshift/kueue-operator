@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.0
+    controller-gen.kubebuilder.io/version: v0.20.1
   labels:
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
@@ -819,7 +819,7 @@ spec:
       status: {}
   - additionalPrinterColumns:
     - description: Cohort that this ClusterQueue belongs to
-      jsonPath: .spec.cohort
+      jsonPath: .spec.cohortName
       name: Cohort
       type: string
     - description: The queueing strategy used to prioritize workloads
@@ -1228,7 +1228,7 @@ spec:
                                     ClusterQueues in the cohort have enough unused quota.
                                     If null, it means that there is no borrowing limit.
                                     If not null, it must be non-negative.
-                                    borrowingLimit must be null if spec.cohort is empty.
+                                    borrowingLimit must be null if spec.cohortName is empty.
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
                                 lendingLimit:
@@ -1243,7 +1243,7 @@ spec:
                                     If null, it means that there is no lending limit, meaning that
                                     all the nominalQuota can be borrowed by other clusterQueues in the cohort.
                                     If not null, it must be non-negative.
-                                    lendingLimit must be null if spec.cohort is empty.
+                                    lendingLimit must be null if spec.cohortName is empty.
                                     This field is in beta stage and is enabled by default.
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true

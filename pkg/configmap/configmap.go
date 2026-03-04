@@ -65,6 +65,7 @@ func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
 	conversionMap[string(kueue.KueueIntegrationMPIJob)] = "kubeflow.org/mpijob"
 	conversionMap[string(kueue.KueueIntegrationRayJob)] = "ray.io/rayjob"
 	conversionMap[string(kueue.KueueIntegrationRayCluster)] = "ray.io/raycluster"
+	conversionMap[string(kueue.KueueIntegrationRayService)] = "ray.io/rayservice"
 	conversionMap[string(kueue.KueueIntegrationJobSet)] = "jobset.x-k8s.io/jobset"
 	conversionMap[string(kueue.KueueIntegrationPaddleJob)] = "kubeflow.org/paddlejob"
 	conversionMap[string(kueue.KueueIntegrationPyTorchJob)] = "kubeflow.org/pytorchjob"
