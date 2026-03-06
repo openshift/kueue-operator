@@ -1416,6 +1416,15 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook configurations not found")
 
 	waitForWebhookReady(ctx, kClient)
+
+	// After redeployment, CRD conversion webhooks may be temporarily unreachable
+	// causing the API server to return 404 for kueue resource types. Wait until
+	// the CRDs are actually servable before returning.
+	By("Verifying kueue CRDs are servable")
+	Eventually(func() error {
+		_, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().List(ctx, metav1.ListOptions{Limit: 1})
+		return err
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue CRDs not servable after reconfiguration")
 }
 
 // waitForWebhookReady waits for the webhook to be ready by attempting to create a test job
