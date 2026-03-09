@@ -64,6 +64,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -99,6 +100,7 @@ type TargetConfigReconciler struct {
 	serviceMonitorSupport      bool
 	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
 	openshiftConfigClient      configclient.Interface
+	configInformer             dynamicinformer.DynamicSharedInformerFactory
 	isOpenShift                bool
 }
 
@@ -200,7 +202,7 @@ func NewTargetConfigReconciler(
 	// Detect platform type (OpenShift vs kind/vanilla k8s)
 	c.isOpenShift = c.detectOpenShift()
 
-	return factory.New().WithInformers(
+	informerList := []factory.Informer{
 		kueueClient.Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Apps().V1().Deployments().Informer(),
 		// RBAC informers for caching
@@ -223,7 +225,21 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Networking().V1().NetworkPolicies().Informer(),
 		kubeInformer.Flowcontrol().V1().FlowSchemas().Informer(),
 		apiregistrationInformer.Apiregistration().V1().APIServices().Informer(),
-	).ResyncEvery(5*time.Minute).
+	}
+
+	// On OpenShift, watch APIServer CR for TLS profile changes
+	if c.isOpenShift {
+		apiServerGVR := schema.GroupVersionResource{
+			Group:    "config.openshift.io",
+			Version:  "v1",
+			Resource: "apiservers",
+		}
+		c.configInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamicClient, 10*time.Minute)
+		informerList = append(informerList, c.configInformer.ForResource(apiServerGVR).Informer())
+		c.configInformer.Start(ctx.Done())
+	}
+
+	return factory.New().WithInformers(informerList...).ResyncEvery(5*time.Minute).
 		WithSync(c.sync).
 		ToController("KueueOperator", c.eventRecorder), nil
 }
