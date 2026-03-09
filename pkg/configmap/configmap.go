@@ -31,8 +31,8 @@ import (
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) (*corev1.ConfigMap, error) {
-	config := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
+	config := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, tlsOpts)
 	cfg, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func buildFeatureGates(resources kueue.Resources) map[string]bool {
 	return featureGates
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) *configapi.Configuration {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, tlsOpts *configapi.TLSOptions) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -233,6 +233,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 				RenewDeadline: v1.Duration{Duration: 107 * time.Second},
 				RetryPeriod:   v1.Duration{Duration: 26 * time.Second},
 			},
+			TLS: tlsOpts,
 		},
 		ClientConnection: &configapi.ClientConnection{
 			QPS:   float32Ptr(50),
