@@ -144,7 +144,7 @@ func TestApplyFlowSchema(t *testing.T) {
 			if current != nil {
 				exists = append(exists, current)
 			}
-			client := fake.NewSimpleClientset(exists...)
+			client := fake.NewClientset(exists...)
 			operationsObserved := make([]string, 0)
 			client.PrependReactor("*", "*", func(action ktesting.Action) (bool, runtime.Object, error) {
 				operationsObserved = append(operationsObserved, action.GetVerb())
@@ -154,6 +154,10 @@ func TestApplyFlowSchema(t *testing.T) {
 			recorder := events.NewInMemoryRecorder("test", clocktesting.NewFakePassiveClock(time.Now()))
 			currentGot, diff, err := ApplyFlowSchema(context.Background(), client.FlowcontrolV1(), recorder, desired)
 
+			if currentGot != nil {
+				currentGot.ManagedFields = nil
+				currentGot.TypeMeta = metav1.TypeMeta{}
+			}
 			if want, got := expected, currentGot; !cmp.Equal(want, got) {
 				t.Errorf("expected object to be equal, diff: %s", cmp.Diff(want, got))
 			}
@@ -310,7 +314,7 @@ func TestApplyPriorityLevelConfiguration(t *testing.T) {
 			if current != nil {
 				exists = append(exists, current)
 			}
-			client := fake.NewSimpleClientset(exists...)
+			client := fake.NewClientset(exists...)
 			ops := make([]string, 0)
 			client.PrependReactor("*", "*", func(action ktesting.Action) (bool, runtime.Object, error) {
 				ops = append(ops, action.GetVerb())
@@ -320,6 +324,10 @@ func TestApplyPriorityLevelConfiguration(t *testing.T) {
 			recorder := events.NewInMemoryRecorder("test", clocktesting.NewFakePassiveClock(time.Now()))
 			currentGot, diff, err := ApplyPriorityLevelConfiguration(context.Background(), client.FlowcontrolV1(), recorder, desired)
 
+			if currentGot != nil {
+				currentGot.ManagedFields = nil
+				currentGot.TypeMeta = metav1.TypeMeta{}
+			}
 			if want, got := expected, currentGot; !cmp.Equal(want, got) {
 				t.Errorf("expected object to be equal, diff: %s", cmp.Diff(want, got))
 			}
