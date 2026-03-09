@@ -440,8 +440,9 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage service account")
 		return err
 	}
-	// ServiceAccount doesn't have a spec field, hash the entire object
-	hash, err = computeSpecHash(sa)
+	// ServiceAccount has no spec field; hash only the name to avoid
+	// including mutable metadata (resourceVersion) that causes rollout loops.
+	hash, err = computeSpecHash(sa.Name)
 	if err != nil {
 		return fmt.Errorf("failed to hash ServiceAccount: %w", err)
 	}
@@ -463,7 +464,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to bind role leader-election")
 		return err
 	}
-	hash, err = computeSpecHash(roleBindingLeader)
+	hash, err = computeSpecHash([]interface{}{roleBindingLeader.Subjects, roleBindingLeader.RoleRef})
 	if err != nil {
 		return fmt.Errorf("failed to hash RoleBinding: %w", err)
 	}
@@ -485,7 +486,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to bind role manager-secrets")
 		return err
 	}
-	hash, err = computeSpecHash(roleBindingManagerSecrets)
+	hash, err = computeSpecHash([]interface{}{roleBindingManagerSecrets.Subjects, roleBindingManagerSecrets.RoleRef})
 	if err != nil {
 		return fmt.Errorf("failed to hash RoleBinding: %w", err)
 	}
@@ -508,7 +509,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Error("unable to bind role prometheus")
 			return err
 		}
-		hash, err = computeSpecHash(prometheusRB)
+		hash, err = computeSpecHash([]interface{}{prometheusRB.Subjects, prometheusRB.RoleRef})
 		if err != nil {
 			return fmt.Errorf("failed to hash RoleBinding: %w", err)
 		}
@@ -530,7 +531,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Error("unable to manage metrics monitoring cluster role binding")
 			return err
 		}
-		hash, err = computeSpecHash(promCRB)
+		hash, err = computeSpecHash([]interface{}{promCRB.Subjects, promCRB.RoleRef})
 		if err != nil {
 			return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
 		}
@@ -598,7 +599,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage openshift cluster roles binding")
 		return err
 	}
-	hash, err = computeSpecHash(clusterRoleBindingForKueue)
+	hash, err = computeSpecHash([]interface{}{clusterRoleBindingForKueue.Subjects, clusterRoleBindingForKueue.RoleRef})
 	if err != nil {
 		return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
 	}
@@ -609,7 +610,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage kube proxy cluster roles")
 		return err
 	}
-	hash, err = computeSpecHash(proxyRB)
+	hash, err = computeSpecHash([]interface{}{proxyRB.Subjects, proxyRB.RoleRef})
 	if err != nil {
 		return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
 	}
@@ -620,7 +621,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to manage cluster role kueue-manager")
 		return err
 	}
-	hash, err = computeSpecHash(managerRB)
+	hash, err = computeSpecHash([]interface{}{managerRB.Subjects, managerRB.RoleRef})
 	if err != nil {
 		return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
 	}
@@ -632,7 +633,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Error("unable to manage cluster role kueue-manager")
 			return err
 		}
-		hash, err = computeSpecHash(metricsRB)
+		hash, err = computeSpecHash([]interface{}{metricsRB.Subjects, metricsRB.RoleRef})
 		if err != nil {
 			return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
 		}
@@ -643,7 +644,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Error("unable to manage metrics auth cluster role binding")
 			return err
 		}
-		hash, err = computeSpecHash(metricsAuthRB)
+		hash, err = computeSpecHash([]interface{}{metricsAuthRB.Subjects, metricsAuthRB.RoleRef})
 		if err != nil {
 			return fmt.Errorf("failed to hash ClusterRoleBinding: %w", err)
 		}
@@ -655,7 +656,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		klog.Error("unable to bind role binding for visibility")
 		return err
 	}
-	hash, err = computeSpecHash(roleBindingVisibility)
+	hash, err = computeSpecHash([]interface{}{roleBindingVisibility.Subjects, roleBindingVisibility.RoleRef})
 	if err != nil {
 		return fmt.Errorf("failed to hash RoleBinding: %w", err)
 	}
