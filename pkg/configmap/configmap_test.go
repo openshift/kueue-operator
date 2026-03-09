@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
@@ -31,6 +32,7 @@ func TestBuildConfigMap(t *testing.T) {
 		configuration kueue.KueueConfiguration
 		gvrToKind     map[string]string
 		draSupported  bool
+		tlsOpts       *configapi.TLSOptions
 		wantCfgMap    *corev1.ConfigMap
 		wantErr       error
 	}{
@@ -529,6 +531,139 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"with Intermediate TLS profile (default when TLSSecurityProfile is not specified)": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+			},
+			tlsOpts: &configapi.TLSOptions{
+				MinVersion: "VersionTLS12",
+				CipherSuites: []string{
+					"TLS_AES_128_GCM_SHA256",
+					"TLS_AES_256_GCM_SHA384",
+					"TLS_CHACHA20_POLY1305_SHA256",
+					"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+					"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+					"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+					"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+					"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+					"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+tls:
+  cipherSuites:
+  - TLS_AES_128_GCM_SHA256
+  - TLS_AES_256_GCM_SHA384
+  - TLS_CHACHA20_POLY1305_SHA256
+  - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+  - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+  - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+  - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+  - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+  - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  minVersion: VersionTLS12
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"with Modern TLS profile (TLS 1.3, no cipher suites)": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+			},
+			tlsOpts: &configapi.TLSOptions{
+				MinVersion: "VersionTLS13",
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+tls:
+  minVersion: VersionTLS13
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"multikueue with external frameworks and gvr mapping": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
@@ -605,7 +740,7 @@ webhook:
 
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
-			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draSupported)
+			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draSupported, tc.tlsOpts)
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("Unexpected error: want=%v, got=%v", tc.wantErr, err)
 			}

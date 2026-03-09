@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
 	jobsetoperatorconfigclient "github.com/openshift/jobset-operator/pkg/generated/clientset/versioned"
 	operatorconfigclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
@@ -119,6 +120,11 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
+	openshiftConfigClient, err := configclient.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+
 	// Apply status strip transform to prevent status-only changes from triggering reconciliation
 	crdInformer := apiextinformer.NewSharedInformerFactoryWithOptions(
 		crdClientSet,
@@ -154,6 +160,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		crdInformer,
 		apiregistrationInformer,
 		kubeInformer,
+		openshiftConfigClient,
 		cc.EventRecorder,
 		os.Getenv("RELATED_IMAGE_OPERAND_IMAGE"),
 	)
