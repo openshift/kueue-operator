@@ -29,7 +29,7 @@ LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 LABEL io.k8s.display-name="Red Hat build of Kueue Operator bundle"
 LABEL io.k8s.description="This is a bundle for the Red Hat build of Kueue Operator"
 LABEL com.redhat.component="kueue-operator-bundle"
-LABEL com.redhat.openshift.versions="v4.18-v4.19-v4.20-v4.21"
+LABEL com.redhat.openshift.versions="v4.18-v4.19-v4.20-v4.21-v4.22"
 LABEL name="kueue-operator-rhel9-operator-bundle"
 LABEL summary="kueue-operator-bundle"
 LABEL url="https://github.com/openshift/kueue-operator"
@@ -38,9 +38,9 @@ LABEL io.openshift.expose-services=""
 LABEL io.openshift.tags="openshift,kueue-operator-bundle"
 LABEL description="kueue-operator-bundle"
 LABEL distribution-scope="public"
-LABEL cpe="cpe:/a:redhat:kueue_operator:1.3::el9"
-LABEL release=1.3.0
-LABEL version=1.3.0
+LABEL cpe="cpe:/a:redhat:kueue_operator:1.4::el9"
+LABEL release=1.4.0
+LABEL version=1.4.0
 
 LABEL maintainer="Node team, <aos-node@redhat.com>"
 
