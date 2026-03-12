@@ -70,6 +70,12 @@ type KueueConfiguration struct {
 	// This default could change over time.
 	// +optional
 	Preemption Preemption `json:"preemption"`
+	// resources provides additional configuration options for how Kueue handles resources.
+	// When resources.deviceClassMappings is configured, Kueue can track and
+	// enforce quotas for DRA devices in ClusterQueues.
+	// resources is optional.
+	// +optional
+	Resources Resources `json:"resources,omitzero"`
 	// multiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
 	// MultiKueue enables multi-cluster workload distribution.
 	// This field is optional.
@@ -327,6 +333,67 @@ type Preemption struct {
 	// +required
 	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy"`
 }
+
+// Resources provides additional configuration options for handling resources in Kueue.
+// +kubebuilder:validation:MinProperties=1
+type Resources struct {
+	// deviceClassMappings defines mappings from Kubernetes DeviceClass names
+	// to Kueue resource names for DRA quota tracking in ClusterQueues.
+	// Each DeviceClass name can only appear in one mapping.
+	// deviceClassMappings is limited to a maximum of 16 items.
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:XValidation:rule="self.all(m1, m1.deviceClassNames.all(d, self.all(m2, m2 == m1 || !m2.deviceClassNames.exists(e, e == d))))",message="each DeviceClass name can only appear in one mapping"
+	// +optional
+	DeviceClassMappings []DeviceClassMapping `json:"deviceClassMappings,omitempty"`
+}
+
+// DeviceClassMapping maps Kubernetes DeviceClass names to a Kueue resource name.
+type DeviceClassMapping struct {
+	// name is the Kueue resource name used in ClusterQueue quotas
+	// (e.g., "nvidia.com/gpu").
+	// Must consist of at most 253 characters with an optional DNS subdomain
+	// prefix and a single forward slash. The prefix must consist only of
+	// lowercase alphanumeric characters, hyphens, and dots. The name segment
+	// after the slash may contain alphanumeric characters, hyphens, underscores,
+	// and dots. Each segment must start and end with an alphanumeric character.
+	// This matches upstream kueue's use of IsQualifiedName for this field.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name consisting of alphanumeric characters, hyphens, underscores, dots, with an optional DNS subdomain prefix and forward slash (e.g., 'nvidia.com/gpu' or 'gpu')"
+	// +required
+	Name string `json:"name"`
+
+	// deviceClassNames is the list of Kubernetes DeviceClass names
+	// (e.g., "gpu.nvidia.com") that map to the resource name above.
+	// Must consist of at most 253 characters with an optional DNS subdomain
+	// prefix and a single forward slash, or just a name on its own. The prefix
+	// must consist only of lowercase alphanumeric characters, hyphens, and dots.
+	// The name segment after the slash may contain alphanumeric characters,
+	// hyphens, underscores, and dots. Each segment must start and end with
+	// an alphanumeric character.
+	// This matches upstream kueue's use of IsQualifiedName for this field.
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:MinItems=1
+	// +required
+	DeviceClassNames []DeviceClassName `json:"deviceClassNames"`
+}
+
+// DeviceClassName is a Kubernetes DeviceClass name.
+// Must consist of at most 253 characters with an optional DNS subdomain
+// prefix and a single forward slash, or just a name on its own. The prefix
+// must consist only of lowercase alphanumeric characters, hyphens, and dots.
+// The name segment after the slash may contain alphanumeric characters,
+// hyphens, underscores, and dots. Each segment must start and end with
+// an alphanumeric character.
+// This matches upstream kueue's use of IsQualifiedName for this field.
+// +kubebuilder:validation:MaxLength=253
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name consisting of alphanumeric characters, hyphens, underscores, dots, with an optional DNS subdomain prefix and forward slash (e.g., 'gpu.nvidia.com')"
+type DeviceClassName string
 
 // MultiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
 type MultiKueue struct {

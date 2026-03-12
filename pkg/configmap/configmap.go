@@ -157,6 +157,47 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
+func buildResources(resources kueue.Resources) *configapi.Resources {
+	if len(resources.DeviceClassMappings) == 0 {
+		return nil
+	}
+
+	mappings := make([]configapi.DeviceClassMapping, 0, len(resources.DeviceClassMappings))
+
+	for _, m := range resources.DeviceClassMappings {
+		deviceClassNames := make([]corev1.ResourceName, 0, len(m.DeviceClassNames))
+
+		for _, name := range m.DeviceClassNames {
+			deviceClassNames = append(deviceClassNames, corev1.ResourceName(name))
+		}
+
+		mappings = append(mappings, configapi.DeviceClassMapping{
+			Name:             corev1.ResourceName(m.Name),
+			DeviceClassNames: deviceClassNames,
+		})
+	}
+
+	return &configapi.Resources{
+		DeviceClassMappings: mappings,
+	}
+}
+
+func buildFeatureGates(resources kueue.Resources) map[string]bool {
+	featureGates := map[string]bool{}
+
+	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
+	// when deviceClassMappings are configured. Once DRA graduates to Beta in upstream
+	// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
+	if len(resources.DeviceClassMappings) > 0 {
+		featureGates["DynamicResourceAllocation"] = true
+	}
+
+	if len(featureGates) == 0 {
+		return nil
+	}
+	return featureGates
+}
+
 func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
@@ -207,6 +248,8 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
+		Resources:                  buildResources(kueueCfg.Resources),
+		FeatureGates:               buildFeatureGates(kueueCfg.Resources),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 	}
 }

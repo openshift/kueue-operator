@@ -325,6 +325,73 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"dra with device class mappings": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				Resources: kueue.Resources{
+					DeviceClassMappings: []kueue.DeviceClassMapping{
+						{
+							Name:             "example.com/gpus",
+							DeviceClassNames: []kueue.DeviceClassName{"gpu.example.com", "gpu-large.example.com"},
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  DynamicResourceAllocation: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+resources:
+  deviceClassMappings:
+  - deviceClassNames:
+    - gpu.example.com
+    - gpu-large.example.com
+    name: example.com/gpus
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"multikueue with external frameworks": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{

@@ -341,6 +341,92 @@ spec:
                     required:
                     - preemptionPolicy
                     type: object
+                  resources:
+                    description: |-
+                      resources provides additional configuration options for how Kueue handles resources.
+                      When resources.deviceClassMappings is configured, Kueue can track and
+                      enforce quotas for DRA devices in ClusterQueues.
+                      resources is optional.
+                    minProperties: 1
+                    properties:
+                      deviceClassMappings:
+                        description: |-
+                          deviceClassMappings defines mappings from Kubernetes DeviceClass names
+                          to Kueue resource names for DRA quota tracking in ClusterQueues.
+                          Each DeviceClass name can only appear in one mapping.
+                          deviceClassMappings is limited to a maximum of 16 items.
+                        items:
+                          description: DeviceClassMapping maps Kubernetes DeviceClass
+                            names to a Kueue resource name.
+                          properties:
+                            deviceClassNames:
+                              description: |-
+                                deviceClassNames is the list of Kubernetes DeviceClass names
+                                (e.g., "gpu.nvidia.com") that map to the resource name above.
+                                Must consist of at most 253 characters with an optional DNS subdomain
+                                prefix and a single forward slash, or just a name on its own. The prefix
+                                must consist only of lowercase alphanumeric characters, hyphens, and dots.
+                                The name segment after the slash may contain alphanumeric characters,
+                                hyphens, underscores, and dots. Each segment must start and end with
+                                an alphanumeric character.
+                                This matches upstream kueue's use of IsQualifiedName for this field.
+                              items:
+                                description: |-
+                                  DeviceClassName is a Kubernetes DeviceClass name.
+                                  Must consist of at most 253 characters with an optional DNS subdomain
+                                  prefix and a single forward slash, or just a name on its own. The prefix
+                                  must consist only of lowercase alphanumeric characters, hyphens, and dots.
+                                  The name segment after the slash may contain alphanumeric characters,
+                                  hyphens, underscores, and dots. Each segment must start and end with
+                                  an alphanumeric character.
+                                  This matches upstream kueue's use of IsQualifiedName for this field.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                                x-kubernetes-validations:
+                                - message: must be a qualified name consisting of
+                                    alphanumeric characters, hyphens, underscores,
+                                    dots, with an optional DNS subdomain prefix and
+                                    forward slash (e.g., 'gpu.nvidia.com')
+                                  rule: '!format.qualifiedName().validate(self).hasValue()'
+                              maxItems: 8
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: set
+                            name:
+                              description: |-
+                                name is the Kueue resource name used in ClusterQueue quotas
+                                (e.g., "nvidia.com/gpu").
+                                Must consist of at most 253 characters with an optional DNS subdomain
+                                prefix and a single forward slash. The prefix must consist only of
+                                lowercase alphanumeric characters, hyphens, and dots. The name segment
+                                after the slash may contain alphanumeric characters, hyphens, underscores,
+                                and dots. Each segment must start and end with an alphanumeric character.
+                                This matches upstream kueue's use of IsQualifiedName for this field.
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                              x-kubernetes-validations:
+                              - message: must be a qualified name consisting of alphanumeric
+                                  characters, hyphens, underscores, dots, with an
+                                  optional DNS subdomain prefix and forward slash
+                                  (e.g., 'nvidia.com/gpu' or 'gpu')
+                                rule: '!format.qualifiedName().validate(self).hasValue()'
+                          required:
+                          - deviceClassNames
+                          - name
+                          type: object
+                        maxItems: 16
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                        x-kubernetes-validations:
+                        - message: each DeviceClass name can only appear in one mapping
+                          rule: self.all(m1, m1.deviceClassNames.all(d, self.all(m2,
+                            m2 == m1 || !m2.deviceClassNames.exists(e, e == d))))
+                    type: object
                   workloadManagement:
                     description: |-
                       workloadManagement controls how Kueue manages workloads.
