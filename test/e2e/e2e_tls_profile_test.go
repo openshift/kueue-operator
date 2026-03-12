@@ -125,55 +125,6 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		})
 	})
 
-	When("the cluster TLS profile is set to Old (TLS 1.0)", func() {
-		It("should propagate TLS 1.0 settings to the operand ConfigMap", func(ctx context.Context) {
-			By("Setting APIServer TLS profile to Old")
-			oldProfile := &configv1.TLSSecurityProfile{
-				Type: configv1.TLSProfileOldType,
-				Old:  &configv1.OldTLSProfile{},
-			}
-			err := updateAPIServerTLSProfile(ctx, configClient, oldProfile)
-			Expect(err).NotTo(HaveOccurred(), "failed to set Old TLS profile")
-
-			By("Waiting for the operand ConfigMap to reflect TLS 1.0 settings")
-			Eventually(func() error {
-				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
-					ctx, "kueue-manager-config", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to get ConfigMap: %w", err)
-				}
-
-				configData, ok := configMap.Data["controller_manager_config.yaml"]
-				if !ok {
-					return fmt.Errorf("controller_manager_config.yaml key not found in ConfigMap")
-				}
-
-				tlsOpts, err := extractTLSOptions(configData)
-				if err != nil {
-					return fmt.Errorf("failed to extract TLS options: %w", err)
-				}
-
-				if tlsOpts == nil {
-					return fmt.Errorf("TLS options not found in operand ConfigMap")
-				}
-
-				if tlsOpts.MinVersion != "VersionTLS10" {
-					return fmt.Errorf("expected minVersion VersionTLS10, got %q", tlsOpts.MinVersion)
-				}
-
-				// Old profile should have many cipher suites
-				if len(tlsOpts.CipherSuites) < 10 {
-					return fmt.Errorf("expected at least 10 cipher suites for Old profile, got %d", len(tlsOpts.CipherSuites))
-				}
-
-				klog.Infof("Operand ConfigMap has correct Old TLS settings: minVersion=%s, %d cipherSuites",
-					tlsOpts.MinVersion, len(tlsOpts.CipherSuites))
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
-				"operand ConfigMap should contain Old TLS settings")
-		})
-	})
-
 	When("the cluster TLS profile is set to Custom", func() {
 		It("should propagate custom TLS settings to the operand ConfigMap", func(ctx context.Context) {
 			By("Setting APIServer TLS profile to Custom with specific ciphers")

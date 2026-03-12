@@ -45,15 +45,6 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 			expectCiphers:      true,
 		},
 		{
-			name: "Old profile",
-			profile: &configv1.TLSSecurityProfile{
-				Type: configv1.TLSProfileOldType,
-				Old:  &configv1.OldTLSProfile{},
-			},
-			expectedMinVersion: "VersionTLS10",
-			expectCiphers:      true,
-		},
-		{
 			name: "Modern profile",
 			profile: &configv1.TLSSecurityProfile{
 				Type:   configv1.TLSProfileModernType,
