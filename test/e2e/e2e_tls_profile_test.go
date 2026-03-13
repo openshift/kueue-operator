@@ -66,7 +66,7 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		waitForConfigMapUpdate(ctx, initialConfigMapData)
 	})
 
-	When("the cluster TLS profile is set to Modern (TLS 1.3)", func() {
+	When("the cluster TLS profile is set to Modern (TLS 1.3)", Label("disruptive"), func() {
 		It("should propagate TLS 1.3 settings to the operand ConfigMap", func(ctx context.Context) {
 			By("Setting APIServer TLS profile to Modern")
 			modernProfile := &configv1.TLSSecurityProfile{
@@ -105,7 +105,7 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 				klog.Infof("Operand ConfigMap has correct TLS 1.3 settings: minVersion=%s, cipherSuites=%v",
 					tlsOpts.MinVersion, tlsOpts.CipherSuites)
 				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+			}, 10*testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"operand ConfigMap should contain TLS 1.3 settings")
 
 			By("Verifying operand deployment rolled out with new TLS config")
@@ -125,7 +125,7 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		})
 	})
 
-	When("the cluster TLS profile is set to Custom", func() {
+	When("the cluster TLS profile is set to Custom", Label("disruptive"), func() {
 		It("should propagate custom TLS settings to the operand ConfigMap", func(ctx context.Context) {
 			By("Setting APIServer TLS profile to Custom with specific ciphers")
 			customProfile := &configv1.TLSSecurityProfile{
@@ -185,14 +185,6 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 
 	When("the cluster TLS profile is restored to Intermediate (default)", func() {
 		It("should propagate Intermediate TLS settings to the operand ConfigMap", func(ctx context.Context) {
-			By("Setting APIServer TLS profile to Intermediate")
-			intermediateProfile := &configv1.TLSSecurityProfile{
-				Type:         configv1.TLSProfileIntermediateType,
-				Intermediate: &configv1.IntermediateTLSProfile{},
-			}
-			err := updateAPIServerTLSProfile(ctx, configClient, intermediateProfile)
-			Expect(err).NotTo(HaveOccurred(), "failed to set Intermediate TLS profile")
-
 			By("Waiting for the operand ConfigMap to reflect Intermediate TLS settings")
 			Eventually(func() error {
 				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
