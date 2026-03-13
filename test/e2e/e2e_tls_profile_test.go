@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	configclientv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
+	"github.com/openshift/kueue-operator/pkg/tlsprofile"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -63,7 +64,26 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to restore original TLS profile")
 
 		By("Waiting for operand to reconcile with restored TLS profile")
-		waitForConfigMapUpdate(ctx, initialConfigMapData)
+		waitForConfigMapToMatch(ctx, initialConfigMapData)
+	})
+
+	When("the default Intermediate TLS profile is configured", func() {
+		It("should have Intermediate TLS settings in the initial operand ConfigMap", func(ctx context.Context) {
+			By("Verifying the initial ConfigMap captured in BeforeAll contains Intermediate TLS settings")
+			expectedTLSOpts := tlsprofile.TLSOptionsFromProfile(nil)
+
+			tlsOpts, err := extractTLSOptions(initialConfigMapData)
+			Expect(err).NotTo(HaveOccurred(), "failed to extract TLS options from initial ConfigMap")
+			Expect(tlsOpts).NotTo(BeNil(), "TLS options not found in initial operand ConfigMap")
+			Expect(tlsOpts.MinVersion).To(Equal(expectedTLSOpts.MinVersion),
+				"initial ConfigMap should have Intermediate minVersion")
+			Expect(tlsOpts.CipherSuites).To(HaveLen(len(expectedTLSOpts.CipherSuites)),
+				fmt.Sprintf("initial ConfigMap should have %d Intermediate cipher suites, got %v",
+					len(expectedTLSOpts.CipherSuites), tlsOpts.CipherSuites))
+
+			klog.Infof("Initial ConfigMap has correct Intermediate TLS settings: minVersion=%s, %d cipherSuites",
+				tlsOpts.MinVersion, len(tlsOpts.CipherSuites))
+		})
 	})
 
 	When("the cluster TLS profile is set to Modern (TLS 1.3)", Label("disruptive"), func() {
@@ -182,42 +202,6 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 				"operand ConfigMap should contain Custom TLS settings")
 		})
 	})
-
-	When("the cluster TLS profile is restored to Intermediate (default)", func() {
-		It("should propagate Intermediate TLS settings to the operand ConfigMap", func(ctx context.Context) {
-			By("Waiting for the operand ConfigMap to reflect Intermediate TLS settings")
-			Eventually(func() error {
-				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
-					ctx, "kueue-manager-config", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to get ConfigMap: %w", err)
-				}
-
-				configData, ok := configMap.Data["controller_manager_config.yaml"]
-				if !ok {
-					return fmt.Errorf("controller_manager_config.yaml key not found in ConfigMap")
-				}
-
-				tlsOpts, err := extractTLSOptions(configData)
-				if err != nil {
-					return fmt.Errorf("failed to extract TLS options: %w", err)
-				}
-
-				if tlsOpts == nil {
-					return fmt.Errorf("TLS options not found in operand ConfigMap")
-				}
-
-				if tlsOpts.MinVersion != "VersionTLS12" {
-					return fmt.Errorf("expected minVersion VersionTLS12, got %q", tlsOpts.MinVersion)
-				}
-
-				klog.Infof("Operand ConfigMap has correct Intermediate TLS settings: minVersion=%s, %d cipherSuites",
-					tlsOpts.MinVersion, len(tlsOpts.CipherSuites))
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
-				"operand ConfigMap should contain Intermediate TLS settings")
-		})
-	})
 })
 
 // updateAPIServerTLSProfile updates the TLS security profile on the cluster APIServer CR.
@@ -255,8 +239,8 @@ func extractTLSOptions(configData string) (*kueueconfigapi.TLSOptions, error) {
 	return config.TLS, nil
 }
 
-// waitForConfigMapUpdate waits until the ConfigMap data changes from the initial value.
-func waitForConfigMapUpdate(ctx context.Context, previousData string) {
+// waitForConfigMapToMatch waits until the ConfigMap data matches the expected value.
+func waitForConfigMapToMatch(ctx context.Context, expectedData string) {
 	Eventually(func() error {
 		configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
 			ctx, "kueue-manager-config", metav1.GetOptions{})
@@ -264,10 +248,10 @@ func waitForConfigMapUpdate(ctx context.Context, previousData string) {
 			return fmt.Errorf("failed to get ConfigMap: %w", err)
 		}
 		currentData := configMap.Data["controller_manager_config.yaml"]
-		if currentData == previousData {
-			return fmt.Errorf("ConfigMap has not been updated yet")
+		if currentData != expectedData {
+			return fmt.Errorf("ConfigMap has not been restored yet")
 		}
 		return nil
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
-		"ConfigMap should be updated after TLS profile change")
+		"ConfigMap should be restored after TLS profile change")
 }
