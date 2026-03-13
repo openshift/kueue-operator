@@ -63,7 +63,7 @@ label_worker_nodes
 # Disable scc rules for e2e pod tests
 allow_privileged_access
 
-export GINKGO_ARGS="$GINKGO_ARGS --label-filter=feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:statefulset,feature:visibility"
+export GINKGO_ARGS="$GINKGO_ARGS --label-filter=feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:statefulset,feature:visibility,feature:metrics"
 
 # shellcheck disable=SC2086
 $GINKGO ${GINKGO_ARGS:-} \
