@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: openshift-kueue-operator-metrics
+  namespace: openshift-kueue-operator
+  labels:
+    app.openshift.io/component: operator
+    app.openshift.io/name: kueue
+spec:
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      port: metrics
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        ca:
+          secret:
+            name: openshift-kueue-operator-metrics-tls
+            key: ca.crt
+        serverName: openshift-kueue-operator-metrics.openshift-kueue-operator.svc
+  selector:
+    matchLabels:
+      app.openshift.io/component: operator
+      app.openshift.io/name: kueue
