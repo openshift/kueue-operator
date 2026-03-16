@@ -34,9 +34,6 @@ const (
 	annotationClusterQueue   = "kueue.x-k8s.io/clusterqueue"
 	annotationResourceFlavor = "kueue.x-k8s.io/resourceflavor"
 	annotationCohort         = "kueue.x-k8s.io/cohort"
-
-	// webhookTimeoutSeconds is the timeout for webhook operations to prevent 500 errors
-	webhookTimeoutSeconds = 23
 )
 
 // webhooksList maps the webhook name to the framework/resource name.
@@ -71,12 +68,10 @@ func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentW
 
 	enabledFrameworks := buildEnabledFrameworks(kueueCfg)
 	podSelector := defaultLabelSelector()
-	timeoutSeconds := int32(webhookTimeoutSeconds)
 
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForValidatingWebhook(wh.Name)
 		if enabledFrameworks[framework] {
-			wh.TimeoutSeconds = &timeoutSeconds
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
@@ -91,12 +86,10 @@ func ModifyPodBasedMutatingWebhook(kueueCfg kueue.KueueConfiguration, currentWeb
 
 	enabledFrameworks := buildEnabledFrameworks(kueueCfg)
 	podSelector := defaultLabelSelector()
-	timeoutSeconds := int32(webhookTimeoutSeconds)
 
 	for _, wh := range currentWebhook.Webhooks {
 		framework := getFrameworkForMutatingWebhook(wh.Name)
 		if enabledFrameworks[framework] {
-			wh.TimeoutSeconds = &timeoutSeconds
 			newWebhook.Webhooks = append(newWebhook.Webhooks, wh)
 		}
 	}
