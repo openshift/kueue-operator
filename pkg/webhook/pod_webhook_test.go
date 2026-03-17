@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	"k8s.io/utils/ptr"
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,7 +71,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "vdeployment.kb.io",
@@ -85,7 +83,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "vstatefulset.kb.io",
@@ -98,7 +95,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -135,7 +131,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -169,7 +164,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "vpod.kb.io",
@@ -182,7 +176,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "vleaderworkerset.kb.io",
@@ -195,7 +188,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -227,7 +219,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "vdeployment.kb.io",
@@ -240,7 +231,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -272,7 +262,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "vstatefulset.kb.io",
@@ -285,7 +274,6 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -342,7 +330,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "mstatefulset.kb.io",
@@ -355,7 +342,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -387,7 +373,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "mrayjob.kb.io",
@@ -400,7 +385,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -434,7 +418,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "mpod.kb.io",
@@ -447,7 +430,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "mleaderworkerset.kb.io",
@@ -460,7 +442,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -492,7 +473,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "mdeployment.kb.io",
@@ -505,7 +485,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
@@ -537,7 +516,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 					{
 						Name: "mstatefulset.kb.io",
@@ -550,7 +528,6 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
-						TimeoutSeconds: ptr.To[int32](23),
 					},
 				},
 			},
