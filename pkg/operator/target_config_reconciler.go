@@ -96,6 +96,7 @@ type TargetConfigReconciler struct {
 	serviceMonitorSupport      bool
 	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
 	isOpenShift                bool
+	draSupported               bool
 }
 
 // computeSpecHash computes a SHA256 hash of the given object's spec.
@@ -292,6 +293,29 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			}
 		}
 	}
+	// Check DRA API availability if deviceClassMappings are configured.
+	// Kueue's DRA integration requires resource.k8s.io/v1 (Kubernetes 1.34+ / OCP 4.21+).
+	// The deviceClassMappings config is preserved in the configmap so it takes effect
+	// automatically after a cluster upgrade, but the DRA feature gate is only enabled
+	// when the APIs are available.
+	c.draSupported = false
+	if len(kueue.Spec.Config.Resources.DeviceClassMappings) > 0 {
+		found, err := isResourceRegistered(c.discoveryClient, schema.GroupVersionKind{
+			Group:   "resource.k8s.io",
+			Version: "v1",
+			Kind:    "DeviceClass",
+		})
+		if err != nil {
+			klog.Errorf("unable to check if DRA APIs are available: %v", err)
+		} else if found {
+			c.draSupported = true
+		} else {
+			klog.Warningf("DRA APIs (resource.k8s.io/v1) not available on this cluster. DRA requires Kubernetes 1.34+ (OCP 4.21+)")
+			c.eventRecorder.Eventf("DRAUnsupported", "DRA APIs not available, deviceClassMappings will not take effect until the cluster is upgraded")
+			missingDependencies = append(missingDependencies, "DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)")
+		}
+	}
+
 	if len(missingDependencies) > 0 {
 		dependencyCondition = applyoperatorv1.OperatorCondition().
 			WithType("Degraded").
@@ -1177,7 +1201,7 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 }
 
 func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind)
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draSupported)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr
