@@ -295,6 +295,9 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 	// Check DRA API availability if deviceClassMappings are configured.
 	// Kueue's DRA integration requires resource.k8s.io/v1 (Kubernetes 1.34+ / OCP 4.21+).
+	// The deviceClassMappings config is preserved in the configmap so it takes effect
+	// automatically after a cluster upgrade, but the DRA feature gate is only enabled
+	// when the APIs are available.
 	c.draSupported = false
 	if len(kueue.Spec.Config.Resources.DeviceClassMappings) > 0 {
 		found, err := isResourceRegistered(c.discoveryClient, schema.GroupVersionKind{
@@ -304,12 +307,11 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		})
 		if err != nil {
 			klog.Errorf("unable to check if DRA APIs are available: %v", err)
-		}
-		if found {
+		} else if found {
 			c.draSupported = true
 		} else {
-			klog.Warningf("DRA APIs (resource.k8s.io/v1) not available, deviceClassMappings will be ignored. DRA requires Kubernetes 1.34+ (OCP 4.21+)")
-			c.eventRecorder.Eventf("DRAUnsupported", "DRA APIs not available, deviceClassMappings configuration will be ignored")
+			klog.Warningf("DRA APIs (resource.k8s.io/v1) not available on this cluster. DRA requires Kubernetes 1.34+ (OCP 4.21+)")
+			c.eventRecorder.Eventf("DRAUnsupported", "DRA APIs not available, deviceClassMappings will not take effect until the cluster is upgraded")
 			missingDependencies = append(missingDependencies, "DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)")
 		}
 	}
@@ -1168,19 +1170,13 @@ func (c *TargetConfigReconciler) manageConfigMap(ctx context.Context, kueue *kue
 		gvrToKind = c.resolveGVRsToKinds(kueue.Spec.Config.MultiKueue.ExternalFrameworks)
 	}
 
-	// Copy the config so we can strip unsupported features without mutating the cached object.
-	kueueCfg := kueue.Spec.Config
-	if !c.draSupported {
-		kueueCfg.Resources = kueuev1.Resources{}
-	}
-
 	if errors.IsNotFound(err) {
-		return c.buildAndApplyConfigMap(ctx, nil, kueueCfg, gvrToKind)
+		return c.buildAndApplyConfigMap(ctx, nil, kueue.Spec.Config, gvrToKind)
 	} else if err != nil {
 		klog.Errorf("Cannot load ConfigMap %s/kueue-manager-config for the kueue operator", c.operatorNamespace)
 		return nil, false, err
 	}
-	return c.buildAndApplyConfigMap(ctx, required, kueueCfg, gvrToKind)
+	return c.buildAndApplyConfigMap(ctx, required, kueue.Spec.Config, gvrToKind)
 }
 
 func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.ExternalFramework) map[string]string {
@@ -1205,7 +1201,7 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 }
 
 func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind)
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draSupported)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr

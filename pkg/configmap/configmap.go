@@ -31,8 +31,8 @@ import (
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) (*corev1.ConfigMap, error) {
-	config := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool) (*corev1.ConfigMap, error) {
+	config := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draSupported)
 	cfg, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, err
@@ -182,13 +182,15 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(resources kueue.Resources) map[string]bool {
+func buildFeatureGates(resources kueue.Resources, draSupported bool) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
-	// when deviceClassMappings are configured. Once DRA graduates to Beta in upstream
-	// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
-	if len(resources.DeviceClassMappings) > 0 {
+	// when deviceClassMappings are configured and DRA APIs (resource.k8s.io/v1)
+	// are available on the cluster. On clusters without DRA support (OCP < 4.21),
+	// the feature gate is not enabled but the deviceClassMappings config is preserved
+	// so it takes effect automatically after a cluster upgrade.
+	if len(resources.DeviceClassMappings) > 0 && draSupported {
 		featureGates["DynamicResourceAllocation"] = true
 	}
 
@@ -198,7 +200,7 @@ func buildFeatureGates(resources kueue.Resources) map[string]bool {
 	return featureGates
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) *configapi.Configuration {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -249,7 +251,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Resources),
+		FeatureGates:               buildFeatureGates(kueueCfg.Resources, draSupported),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 	}
 }
