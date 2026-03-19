@@ -386,6 +386,97 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 		})
 	})
 
+	When("DRA deviceClassMappings are configured", func() {
+		var draSupported bool
+		var initialKueueInstance *ssv1.Kueue
+
+		BeforeAll(func(ctx context.Context) {
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance = kueueInstance.DeepCopy()
+
+			kueueInstance.Spec.Config.Resources = ssv1.Resources{
+				DeviceClassMappings: []ssv1.DeviceClassMapping{
+					{
+						Name:             "nvidia.com/gpu",
+						DeviceClassNames: []ssv1.DeviceClassName{"gpu.nvidia.com"},
+					},
+				},
+			}
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
+			if err == nil {
+				for _, apiResource := range apiResourceLists.APIResources {
+					if apiResource.Kind == "DeviceClass" {
+						draSupported = true
+						break
+					}
+				}
+			}
+		})
+
+		AfterAll(func(ctx context.Context) {
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		})
+
+		It("verify DRA feature gate is enabled when DRA APIs are available", func() {
+			if !draSupported {
+				Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
+			}
+			ctx := context.TODO()
+			Eventually(func() error {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				configData := configMap.Data["controller_manager_config.yaml"]
+				if !strings.Contains(configData, "deviceClassMappings") {
+					return fmt.Errorf("deviceClassMappings not found in configmap")
+				}
+				if !strings.Contains(configData, "DynamicResourceAllocation: true") {
+					return fmt.Errorf("DynamicResourceAllocation feature gate not enabled")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "DRA feature gate should be enabled on supported cluster")
+		})
+
+		It("verify DRA feature gate is not enabled when DRA APIs are unavailable", func() {
+			if draSupported {
+				Skip("DRA APIs (resource.k8s.io/v1) available on this cluster")
+			}
+			ctx := context.TODO()
+			Eventually(func() error {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				configData := configMap.Data["controller_manager_config.yaml"]
+				if !strings.Contains(configData, "deviceClassMappings") {
+					return fmt.Errorf("deviceClassMappings not found in configmap - config should be preserved")
+				}
+				if strings.Contains(configData, "DynamicResourceAllocation") {
+					return fmt.Errorf("DynamicResourceAllocation feature gate should not be set on unsupported cluster")
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "DRA feature gate should not be enabled on unsupported cluster")
+
+			Eventually(func() error {
+				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				for _, condition := range kueueInstance.Status.Conditions {
+					if condition.Type == "Degraded" && condition.Status == "True" &&
+						strings.Contains(condition.Message, "DRA") {
+						return nil
+					}
+				}
+				return fmt.Errorf("expected Degraded condition with DRA message")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "DRA Degraded condition not found on unsupported cluster")
+		})
+	})
+
 	When("enable webhook via opt-in namespaces", func() {
 		var (
 			testNamespaceWithLabel    = "kueue-managed-test"
