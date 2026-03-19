@@ -12,6 +12,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	applyoperatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	openshiftrouteclientset "github.com/openshift/client-go/route/clientset/versioned"
 	openshiftoperatorv1 "github.com/openshift/jobset-operator/pkg/generated/clientset/versioned/typed/openshiftoperator/v1"
@@ -24,6 +25,7 @@ import (
 	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
+	"github.com/openshift/kueue-operator/pkg/tlsprofile"
 	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
 	"github.com/openshift/kueue-operator/pkg/webhook"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -40,6 +42,7 @@ import (
 	apiregistrationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
 	apiregistrationinformers "k8s.io/kube-aggregator/pkg/client/informers/externalversions"
 	controllerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	kueueconfigapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	"github.com/openshift/library-go/pkg/controller"
 	appsv1 "k8s.io/api/apps/v1"
@@ -61,6 +64,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -95,6 +99,8 @@ type TargetConfigReconciler struct {
 	kueueImage                 string
 	serviceMonitorSupport      bool
 	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
+	openshiftConfigClient      configclient.Interface
+	configInformer             dynamicinformer.DynamicSharedInformerFactory
 	isOpenShift                bool
 	draSupported               bool
 }
@@ -128,6 +134,7 @@ func NewTargetConfigReconciler(
 	crdInformer apiextinformer.SharedInformerFactory,
 	apiregistrationInformer apiregistrationinformers.SharedInformerFactory,
 	kubeInformer informers.SharedInformerFactory,
+	openshiftConfigClient configclient.Interface,
 	eventRecorder events.Recorder,
 	kueueImage string,
 ) (factory.Controller, error) {
@@ -151,6 +158,7 @@ func NewTargetConfigReconciler(
 		kueueImage:                 kueueImage,
 		serviceMonitorSupport:      false,
 		apiRegistrationClient:      apiRegistrationClient,
+		openshiftConfigClient:      openshiftConfigClient,
 	}
 
 	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
@@ -195,7 +203,7 @@ func NewTargetConfigReconciler(
 	// Detect platform type (OpenShift vs kind/vanilla k8s)
 	c.isOpenShift = c.detectOpenShift()
 
-	return factory.New().WithInformers(
+	informerList := []factory.Informer{
 		kueueClient.Informer(),
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Apps().V1().Deployments().Informer(),
 		// RBAC informers for caching
@@ -218,7 +226,21 @@ func NewTargetConfigReconciler(
 		kubeInformersForNamespaces.InformersFor(c.operatorNamespace).Networking().V1().NetworkPolicies().Informer(),
 		kubeInformer.Flowcontrol().V1().FlowSchemas().Informer(),
 		apiregistrationInformer.Apiregistration().V1().APIServices().Informer(),
-	).ResyncEvery(5*time.Minute).
+	}
+
+	// On OpenShift, watch APIServer CR for TLS profile changes
+	if c.isOpenShift {
+		apiServerGVR := schema.GroupVersionResource{
+			Group:    "config.openshift.io",
+			Version:  "v1",
+			Resource: "apiservers",
+		}
+		c.configInformer = dynamicinformer.NewDynamicSharedInformerFactory(c.dynamicClient, 10*time.Minute)
+		informerList = append(informerList, c.configInformer.ForResource(apiServerGVR).Informer())
+		c.configInformer.Start(ctx.Done())
+	}
+
+	return factory.New().WithInformers(informerList...).ResyncEvery(5*time.Minute).
 		WithSync(c.sync).
 		ToController("KueueOperator", c.eventRecorder), nil
 }
@@ -447,7 +469,23 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return err
 	}
 
-	cm, _, err := c.manageConfigMap(ctx, kueue)
+	// Resolve TLS security profile from APIServer cluster-wide config, falling back to Intermediate default
+	var tlsOpts *kueueconfigapi.TLSOptions
+	if c.isOpenShift {
+		clusterProfile, err := tlsprofile.FetchAPIServerTLSProfile(ctx, c.openshiftConfigClient)
+		if err != nil {
+			klog.Warningf("Failed to fetch TLS profile from APIServer CR: %v - using default Intermediate profile", err)
+		}
+		tlsOpts, err = tlsprofile.TLSOptionsFromProfile(clusterProfile)
+		if err != nil {
+			return fmt.Errorf("failed to resolve TLS profile: %w", err)
+		}
+		if tlsOpts != nil {
+			klog.Infof("TLS Options - MinVersion: %s, CipherSuites: %v", tlsOpts.MinVersion, tlsOpts.CipherSuites)
+		}
+	}
+
+	cm, _, err := c.manageConfigMap(ctx, kueue, tlsOpts)
 	if err != nil {
 		return err
 	}
@@ -1162,7 +1200,7 @@ func (c *TargetConfigReconciler) cleanUpClusterRoleBindings(ctx context.Context)
 	return nil
 }
 
-func (c *TargetConfigReconciler) manageConfigMap(ctx context.Context, kueue *kueuev1.Kueue) (*v1.ConfigMap, bool, error) {
+func (c *TargetConfigReconciler) manageConfigMap(ctx context.Context, kueue *kueuev1.Kueue, tlsOpts *kueueconfigapi.TLSOptions) (*v1.ConfigMap, bool, error) {
 	required, err := c.kubeClient.CoreV1().ConfigMaps(c.operatorNamespace).Get(ctx, KueueConfigMap, metav1.GetOptions{})
 
 	var gvrToKind map[string]string
@@ -1171,12 +1209,12 @@ func (c *TargetConfigReconciler) manageConfigMap(ctx context.Context, kueue *kue
 	}
 
 	if errors.IsNotFound(err) {
-		return c.buildAndApplyConfigMap(ctx, nil, kueue.Spec.Config, gvrToKind)
+		return c.buildAndApplyConfigMap(ctx, nil, kueue.Spec.Config, gvrToKind, tlsOpts)
 	} else if err != nil {
 		klog.Errorf("Cannot load ConfigMap %s/kueue-manager-config for the kueue operator", c.operatorNamespace)
 		return nil, false, err
 	}
-	return c.buildAndApplyConfigMap(ctx, required, kueue.Spec.Config, gvrToKind)
+	return c.buildAndApplyConfigMap(ctx, required, kueue.Spec.Config, gvrToKind, tlsOpts)
 }
 
 func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.ExternalFramework) map[string]string {
@@ -1200,8 +1238,8 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 	return mapping
 }
 
-func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draSupported)
+func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string, tlsOpts *kueueconfigapi.TLSOptions) (*v1.ConfigMap, bool, error) {
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draSupported, tlsOpts)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr
