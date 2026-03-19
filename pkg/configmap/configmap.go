@@ -77,6 +77,7 @@ func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
 	conversionMap[string(kueue.KueueIntegrationLeaderWorkerSet)] = "leaderworkerset.x-k8s.io/leaderworkerset"
 	conversionMap[string(kueue.KueueIntegrationStatefulSet)] = "statefulset"
 	conversionMap[string(kueue.KueueIntegrationTrainJob)] = "trainer.kubeflow.org/trainjob"
+	conversionMap[string(kueue.KueueIntegrationSparkApplication)] = "sparkoperator.k8s.io/sparkapplication"
 
 	ret := []string{}
 	for _, val := range kueuelist {
@@ -182,7 +183,7 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(resources kueue.Resources, draSupported bool) map[string]bool {
+func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegration, draSupported bool) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
@@ -192,6 +193,16 @@ func buildFeatureGates(resources kueue.Resources, draSupported bool) map[string]
 	// so it takes effect automatically after a cluster upgrade.
 	if len(resources.DeviceClassMappings) > 0 && draSupported {
 		featureGates["DynamicResourceAllocation"] = true
+	}
+
+	// SparkApplicationIntegration is Alpha in Kueue, so we explicitly enable it
+	// when SparkApplication is in the frameworks list. Once it graduates to Beta in upstream
+	// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
+	for _, f := range frameworks {
+		if f == kueue.KueueIntegrationSparkApplication {
+			featureGates["SparkApplicationIntegration"] = true
+			break
+		}
 	}
 
 	if len(featureGates) == 0 {
@@ -252,7 +263,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Resources, draSupported),
+		FeatureGates:               buildFeatureGates(kueueCfg.Resources, kueueCfg.Integrations.Frameworks, draSupported),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 	}
 }

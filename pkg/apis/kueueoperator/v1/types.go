@@ -104,27 +104,28 @@ type KueueList struct {
 	Items []Kueue `json:"items"`
 }
 
-// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;RayService;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet
+// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;RayService;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet;SparkApplication
 type KueueIntegration string
 
 const (
-	KueueIntegrationBatchJob        KueueIntegration = "BatchJob"
-	KueueIntegrationRayJob          KueueIntegration = "RayJob"
-	KueueIntegrationRayCluster      KueueIntegration = "RayCluster"
-	KueueIntegrationRayService      KueueIntegration = "RayService"
-	KueueIntegrationJobSet          KueueIntegration = "JobSet"
-	KueueIntegrationMPIJob          KueueIntegration = "MPIJob"
-	KueueIntegrationPaddleJob       KueueIntegration = "PaddleJob"
-	KueueIntegrationPyTorchJob      KueueIntegration = "PyTorchJob"
-	KueueIntegrationTFJob           KueueIntegration = "TFJob"
-	KueueIntegrationTrainJob        KueueIntegration = "TrainJob"
-	KueueIntegrationXGBoostJob      KueueIntegration = "XGBoostJob"
-	KueueIntegrationJaxJob          KueueIntegration = "JaxJob"
-	KueueIntegrationAppWrapper      KueueIntegration = "AppWrapper"
-	KueueIntegrationPod             KueueIntegration = "Pod"
-	KueueIntegrationDeployment      KueueIntegration = "Deployment"
-	KueueIntegrationStatefulSet     KueueIntegration = "StatefulSet"
-	KueueIntegrationLeaderWorkerSet KueueIntegration = "LeaderWorkerSet"
+	KueueIntegrationBatchJob         KueueIntegration = "BatchJob"
+	KueueIntegrationRayJob           KueueIntegration = "RayJob"
+	KueueIntegrationRayCluster       KueueIntegration = "RayCluster"
+	KueueIntegrationRayService       KueueIntegration = "RayService"
+	KueueIntegrationJobSet           KueueIntegration = "JobSet"
+	KueueIntegrationMPIJob           KueueIntegration = "MPIJob"
+	KueueIntegrationPaddleJob        KueueIntegration = "PaddleJob"
+	KueueIntegrationPyTorchJob       KueueIntegration = "PyTorchJob"
+	KueueIntegrationTFJob            KueueIntegration = "TFJob"
+	KueueIntegrationTrainJob         KueueIntegration = "TrainJob"
+	KueueIntegrationXGBoostJob       KueueIntegration = "XGBoostJob"
+	KueueIntegrationJaxJob           KueueIntegration = "JaxJob"
+	KueueIntegrationAppWrapper       KueueIntegration = "AppWrapper"
+	KueueIntegrationPod              KueueIntegration = "Pod"
+	KueueIntegrationDeployment       KueueIntegration = "Deployment"
+	KueueIntegrationStatefulSet      KueueIntegration = "StatefulSet"
+	KueueIntegrationLeaderWorkerSet  KueueIntegration = "LeaderWorkerSet"
+	KueueIntegrationSparkApplication KueueIntegration = "SparkApplication"
 )
 
 // This is the GVR for an external framework.
@@ -169,11 +170,11 @@ type ExternalFramework struct {
 // which jobs will be managed by Kueue.
 type Integrations struct {
 	// frameworks are a list of frameworks that Kueue has support for.
-	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet and LeaderWorkerSet.
+	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet and SparkApplication.
 	// frameworks are required and must have at least one element.
-	// frameworks can not have more than 17 elements.
+	// frameworks can not have more than 18 elements.
 	// Each framework represents a type of job that Kueue will manage.
-	// +kubebuilder:validation:MaxItems=17
+	// +kubebuilder:validation:MaxItems=18
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, x == y))",message="each item in frameworks must be unique"
 	// +listType=set
