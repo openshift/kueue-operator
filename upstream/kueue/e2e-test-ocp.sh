@@ -16,7 +16,9 @@ export KUEUE_NAMESPACE="openshift-kueue-operator"
 # Set this to empty value for OCP tests.
 export E2E_KIND_VERSION=""
 
-# To label worker nodes for e2e tests.
+# Space-separated list of e2e test folders to run (e.g. "singlecluster certmanager").
+E2E_TARGET_FOLDERS="${E2E_TARGET_FOLDERS:-${E2E_TARGET_FOLDER:-singlecluster}}"
+
 function label_worker_nodes() {
   echo "Labeling two worker nodes for e2e tests..."
   # Retrieve the names of nodes with the "worker" role.
@@ -38,6 +40,22 @@ function label_worker_nodes() {
 function allow_privileged_access {
   $OC adm policy add-scc-to-group privileged system:authenticated system:serviceaccounts
   $OC adm policy add-scc-to-group anyuid system:authenticated system:serviceaccounts
+}
+
+# Returns the ginkgo --label-filter value for a given target folder.
+function ginkgo_label_filter() {
+  local folder="$1"
+  case "$folder" in
+    singlecluster)
+      echo "feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:statefulset,feature:visibility"
+      ;;
+    certmanager)
+      echo "!feature:prometheus"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
 }
 
 skips=(
@@ -63,16 +81,25 @@ label_worker_nodes
 # Disable scc rules for e2e pod tests
 allow_privileged_access
 
-export GINKGO_ARGS="$GINKGO_ARGS --label-filter=feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:statefulset,feature:visibility"
+exit_code=0
+for folder in $E2E_TARGET_FOLDERS; do
+  echo "=== Running upstream e2e tests for: ${folder} ==="
+  label_filter=$(ginkgo_label_filter "$folder")
+  folder_ginkgo_args="${GINKGO_ARGS:-}"
+  if [ -n "$label_filter" ]; then
+    folder_ginkgo_args="$folder_ginkgo_args --label-filter=$label_filter"
+  fi
 
-# shellcheck disable=SC2086
-$GINKGO ${GINKGO_ARGS:-} \
-  --skip="${GINKGO_SKIP_PATTERN}" \
-  --junit-report=e2e-upstream-junit.xml \
-  --json-report=e2e-upstream.json \
-  --output-dir="$ARTIFACT_DIR" \
-  --keep-going \
-  --flake-attempts=3 \
-  --no-color \
-  -v ./upstream/kueue/src/test/e2e/"$E2E_TARGET_FOLDER"/...
+  # shellcheck disable=SC2086
+  $GINKGO ${folder_ginkgo_args} \
+    --skip="${GINKGO_SKIP_PATTERN}" \
+    --junit-report="e2e-upstream-${folder}-junit.xml" \
+    --json-report="e2e-upstream-${folder}.json" \
+    --output-dir="$ARTIFACT_DIR" \
+    --keep-going \
+    --flake-attempts=3 \
+    --no-color \
+    -v "./upstream/kueue/src/test/e2e/${folder}/..." || exit_code=$?
+done
+exit $exit_code
 
