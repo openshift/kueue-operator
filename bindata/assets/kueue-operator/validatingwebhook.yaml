@@ -375,6 +375,26 @@ webhooks:
     service:
       name: kueue-webhook-service
       namespace: openshift-kueue-operator
+      path: /validate-sparkoperator-k8s-io-v1beta2-sparkapplication
+  failurePolicy: Fail
+  name: vsparkapplication.kb.io
+  rules:
+  - apiGroups:
+    - sparkoperator.k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - sparkapplications
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kueue-webhook-service
+      namespace: openshift-kueue-operator
       path: /validate-kubeflow-org-v1-tfjob
   failurePolicy: Fail
   name: vtfjob.kb.io
