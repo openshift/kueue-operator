@@ -690,7 +690,9 @@ func CleanUpJob(ctx context.Context, kubeClient *kubernetes.Clientset, namespace
 		return err
 	})
 	err := kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy})
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil && !apierrors.IsNotFound(err) {
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 // CleanUpWorkload deletes the specified Kueue Workload in the given namespace.
@@ -821,6 +823,22 @@ func IsPodScheduled(ctx context.Context, kubeClient *kubernetes.Clientset, names
 	}
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == "PodScheduled" && condition.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+// IsJobPodRunning returns true if at least one pod owned by the job is in Running phase.
+func IsJobPodRunning(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, jobName string) bool {
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", jobName),
+	})
+	if err != nil {
+		return false
+	}
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodRunning {
 			return true
 		}
 	}
