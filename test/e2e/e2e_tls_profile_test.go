@@ -38,12 +38,16 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		configClient         *configclientv1.ConfigV1Client
 		originalTLSProfile   *configv1.TLSSecurityProfile
 		initialConfigMapData string
+		isHyperShift         bool
 	)
 
 	BeforeAll(func() {
 		var err error
 		configClient, err = configclientv1.NewForConfig(clients.RestConfig)
 		Expect(err).NotTo(HaveOccurred(), "failed to create OpenShift config client")
+
+		isHyperShift, err = testutils.IsHyperShiftCluster(configClient)
+		Expect(err).NotTo(HaveOccurred(), "failed to detect HyperShift cluster")
 
 		// Save the original TLS profile so we can restore it after tests
 		apiServer, err := configClient.APIServers().Get(context.TODO(), "cluster", metav1.GetOptions{})
@@ -58,6 +62,9 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 	})
 
 	AfterAll(func() {
+		if isHyperShift {
+			return
+		}
 		ctx := context.TODO()
 		By("Restoring original TLS security profile")
 		err := updateAPIServerTLSProfile(ctx, configClient, originalTLSProfile)
@@ -89,6 +96,9 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 
 	When("the cluster TLS profile is set to Modern (TLS 1.3)", func() {
 		It("should propagate TLS 1.3 settings to the operand ConfigMap", func(ctx context.Context) {
+			if isHyperShift {
+				Skip("APIServer TLS profile mutation is not supported on HyperShift clusters")
+			}
 			By("Setting APIServer TLS profile to Modern")
 			modernProfile := &configv1.TLSSecurityProfile{
 				Type:   configv1.TLSProfileModernType,
@@ -154,6 +164,9 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 
 	When("the cluster TLS profile is set to Custom", func() {
 		It("should propagate custom TLS settings to the operand ConfigMap", func(ctx context.Context) {
+			if isHyperShift {
+				Skip("APIServer TLS profile mutation is not supported on HyperShift clusters")
+			}
 			By("Setting APIServer TLS profile to Custom with specific ciphers")
 			customProfile := &configv1.TLSSecurityProfile{
 				Type: configv1.TLSProfileCustomType,

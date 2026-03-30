@@ -9,7 +9,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
+	configclientv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 
@@ -31,6 +33,16 @@ import (
 const (
 	defaultImage = "quay.io/openshift/origin-cli:latest"
 )
+
+// IsHyperShiftCluster returns true if the cluster is a HyperShift (Hosted Control Plane) cluster
+// by checking if the Infrastructure CR has controlPlaneTopology set to External.
+func IsHyperShiftCluster(configClient *configclientv1.ConfigV1Client) (bool, error) {
+	infra, err := configClient.Infrastructures().Get(context.TODO(), "cluster", metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to get Infrastructure CR: %w", err)
+	}
+	return infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode, nil
+}
 
 var removeFinalizersMergePatch = []byte(`{"metadata":{"finalizers":[]}}`)
 
