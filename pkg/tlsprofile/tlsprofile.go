@@ -40,10 +40,20 @@ func FetchAPIServerTLSProfile(ctx context.Context, client configclient.Interface
 // TLSOptionsFromProfile resolves an OpenShift TLSSecurityProfile to kueue TLSOptions.
 // If profile is nil, the Intermediate profile is used as the default.
 // Cipher suites are converted from OpenSSL names to IANA format.
+// Returns an error if the profile uses a TLS version below 1.2, which is not
+// supported by Kueue.
 func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLSOptions, error) {
 	profileSpec, err := getProfileSpec(profile)
 	if err != nil {
 		return nil, err
+	}
+
+	if profileSpec.MinTLSVersion == configv1.VersionTLS10 || profileSpec.MinTLSVersion == configv1.VersionTLS11 {
+		profileType := "Custom"
+		if profile != nil {
+			profileType = string(profile.Type)
+		}
+		return nil, fmt.Errorf("TLS profile %q uses minimum version %s which is not supported by Kueue (minimum supported: VersionTLS12)", profileType, profileSpec.MinTLSVersion)
 	}
 
 	opts := &configapi.TLSOptions{

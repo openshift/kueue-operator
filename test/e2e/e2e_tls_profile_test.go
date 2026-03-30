@@ -19,10 +19,12 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	configclientv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	"github.com/openshift/kueue-operator/pkg/tlsprofile"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
@@ -162,6 +164,76 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		})
 	})
 
+	When("the cluster TLS profile is set to Old (TLS 1.0)", func() {
+		It("should set Degraded condition instead of crashing the controller", func(ctx context.Context) {
+			if isHyperShift {
+				Skip("APIServer TLS profile mutation is not supported on HyperShift clusters")
+			}
+			By("Setting APIServer TLS profile to Old")
+			oldProfile := &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileOldType,
+				Old:  &configv1.OldTLSProfile{},
+			}
+			err := updateAPIServerTLSProfile(ctx, configClient, oldProfile)
+			Expect(err).NotTo(HaveOccurred(), "failed to set Old TLS profile")
+
+			By("Waiting for the operator to report Degraded condition with UnsupportedTLSProfile reason")
+			// Use a longer timeout because changing the APIServer TLS profile triggers
+			// a kube-apiserver rollout, during which the operator retries until the
+			// API server is available again to fetch the updated TLS profile.
+			Eventually(func() error {
+				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get Kueue instance: %w", err)
+				}
+				for _, condition := range kueueInstance.Status.Conditions {
+					if condition.Type == operatorv1.OperatorStatusTypeDegraded && condition.Status == operatorv1.ConditionTrue &&
+						condition.Reason == "UnsupportedTLSProfile" {
+						klog.Infof("Degraded condition correctly set: reason=%s, message=%s", condition.Reason, condition.Message)
+						return nil
+					}
+				}
+				conditionSummary := formatConditions(kueueInstance.Status.Conditions)
+				return fmt.Errorf("expected Degraded condition with UnsupportedTLSProfile reason, current conditions: %s", conditionSummary)
+			}, 10*time.Minute, testutils.OperatorPoll).Should(Succeed(),
+				"operator should report Degraded condition for Old TLS profile")
+
+			By("Verifying the operator also reports Available=False")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get Kueue instance")
+			foundAvailable := false
+			for _, condition := range kueueInstance.Status.Conditions {
+				if condition.Type == operatorv1.OperatorStatusTypeAvailable {
+					foundAvailable = true
+					Expect(condition.Status).To(Equal(operatorv1.ConditionFalse),
+						"Available condition should be False when TLS profile is unsupported")
+					Expect(condition.Reason).To(Equal("UnsupportedTLSProfile"))
+				}
+			}
+			Expect(foundAvailable).To(BeTrue(), "Available condition must be present")
+
+			By("Restoring TLS profile to Intermediate to recover from Degraded state")
+			err = updateAPIServerTLSProfile(ctx, configClient, nil)
+			Expect(err).NotTo(HaveOccurred(), "failed to restore Intermediate TLS profile")
+
+			By("Waiting for the operator to recover and become Available")
+			Eventually(func() error {
+				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get Kueue instance: %w", err)
+				}
+				for _, condition := range kueueInstance.Status.Conditions {
+					if condition.Type == operatorv1.OperatorStatusTypeAvailable && condition.Status == operatorv1.ConditionTrue {
+						return nil
+					}
+				}
+				conditionSummary := formatConditions(kueueInstance.Status.Conditions)
+				return fmt.Errorf("operator has not recovered to Available state yet, current conditions: %s", conditionSummary)
+			}, 10*time.Minute, testutils.OperatorPoll).Should(Succeed(),
+				"operator should recover after TLS profile is changed back to Intermediate")
+		})
+	})
+
 	When("the cluster TLS profile is set to Custom", func() {
 		It("should propagate custom TLS settings to the operand ConfigMap", func(ctx context.Context) {
 			if isHyperShift {
@@ -274,4 +346,19 @@ func waitForConfigMapToMatch(ctx context.Context, expectedData string) {
 		return nil
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 		"ConfigMap should be restored after TLS profile change")
+}
+
+// formatConditions returns a human-readable summary of operator conditions for debug logging.
+func formatConditions(conditions []operatorv1.OperatorCondition) string {
+	if len(conditions) == 0 {
+		return "<none>"
+	}
+	result := ""
+	for i, c := range conditions {
+		if i > 0 {
+			result += "; "
+		}
+		result += fmt.Sprintf("%s=%s (reason=%s)", c.Type, c.Status, c.Reason)
+	}
+	return result
 }
