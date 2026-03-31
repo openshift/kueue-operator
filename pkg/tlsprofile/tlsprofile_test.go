@@ -83,6 +83,40 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 			expectCiphers:      false,
 		},
 		{
+			name: "Old profile returns error (TLS 1.0 unsupported)",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileOldType,
+				Old:  &configv1.OldTLSProfile{},
+			},
+			expectError: true,
+		},
+		{
+			name: "Custom profile with TLS 1.0 returns error",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+						MinTLSVersion: configv1.VersionTLS10,
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "Custom profile with TLS 1.1 returns error",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+						MinTLSVersion: configv1.VersionTLS11,
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
 			name: "Custom profile with nil Custom returns error",
 			profile: &configv1.TLSSecurityProfile{
 				Type: configv1.TLSProfileCustomType,

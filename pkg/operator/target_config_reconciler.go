@@ -469,16 +469,25 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return err
 	}
 
-	// Resolve TLS security profile from APIServer cluster-wide config, falling back to Intermediate default
+	// Resolve TLS security profile from APIServer cluster-wide config
 	var tlsOpts *kueueconfigapi.TLSOptions
 	if c.isOpenShift {
 		clusterProfile, err := tlsprofile.FetchAPIServerTLSProfile(ctx, c.openshiftConfigClient)
 		if err != nil {
-			klog.Warningf("Failed to fetch TLS profile from APIServer CR: %v - using default Intermediate profile", err)
+			klog.Warningf("Failed to fetch TLS profile from APIServer CR: %v - will retry", err)
+			return err
 		}
 		tlsOpts, err = tlsprofile.TLSOptionsFromProfile(clusterProfile)
 		if err != nil {
-			return fmt.Errorf("failed to resolve TLS profile: %w", err)
+			klog.Errorf("Unsupported TLS profile: %v", err)
+			c.eventRecorder.Eventf("UnsupportedTLSProfile", "%v", err)
+
+			conditions := c.buildUnsupportedTLSProfileConditions(err)
+			if statusErr := c.updateKueueStatus(ctx, kueue, conditions, nil); statusErr != nil {
+				klog.Errorf("failed to update status: %v", statusErr)
+				return statusErr
+			}
+			return nil
 		}
 		if tlsOpts != nil {
 			klog.Infof("TLS Options - MinVersion: %s, CipherSuites: %v", tlsOpts.MinVersion, tlsOpts.CipherSuites)
@@ -866,6 +875,34 @@ func (c *TargetConfigReconciler) buildCertManagerMissingConditions() []*applyope
 		WithStatus(operatorv1.ConditionFalse).
 		WithReason("MissingDependency").
 		WithMessage("waiting for cert-manager to be installed")
+
+	return []*applyoperatorv1.OperatorConditionApplyConfiguration{
+		availableCond,
+		progressingCond,
+		degradedCond,
+	}
+}
+
+// buildUnsupportedTLSProfileConditions creates operator conditions when the cluster TLS profile
+// is not supported by Kueue (e.g., Old profile with TLS 1.0).
+func (c *TargetConfigReconciler) buildUnsupportedTLSProfileConditions(tlsErr error) []*applyoperatorv1.OperatorConditionApplyConfiguration {
+	degradedCond := applyoperatorv1.OperatorCondition().
+		WithType("Degraded").
+		WithStatus(operatorv1.ConditionTrue).
+		WithReason("UnsupportedTLSProfile").
+		WithMessage(fmt.Sprintf("The cluster TLS security profile is not supported: %v. Kueue requires a minimum TLS version of 1.2. Please use Intermediate, Modern, or a Custom profile with at least VersionTLS12.", tlsErr))
+
+	availableCond := applyoperatorv1.OperatorCondition().
+		WithType("Available").
+		WithStatus(operatorv1.ConditionFalse).
+		WithReason("UnsupportedTLSProfile").
+		WithMessage("Kueue cannot be configured with the current cluster TLS profile")
+
+	progressingCond := applyoperatorv1.OperatorCondition().
+		WithType("Progressing").
+		WithStatus(operatorv1.ConditionFalse).
+		WithReason("UnsupportedTLSProfile").
+		WithMessage("waiting for a supported TLS profile to be configured")
 
 	return []*applyoperatorv1.OperatorConditionApplyConfiguration{
 		availableCond,

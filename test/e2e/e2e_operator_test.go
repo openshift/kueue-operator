@@ -28,6 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
@@ -146,7 +147,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				if kueueInstance.Status.ReadyReplicas == 0 {
 					// If ReadyReplicas is 0, check if the operator properly reports degraded condition.
 					for _, condition := range kueueInstance.Status.Conditions {
-						if condition.Type == "Degraded" && condition.Status == "True" {
+						if condition.Type == operatorv1.OperatorStatusTypeDegraded && condition.Status == operatorv1.ConditionTrue {
 							if strings.Contains(condition.Message, "No replicas ready") {
 								return nil
 							}
@@ -467,7 +468,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					return err
 				}
 				for _, condition := range kueueInstance.Status.Conditions {
-					if condition.Type == "Degraded" && condition.Status == "True" &&
+					if condition.Type == operatorv1.OperatorStatusTypeDegraded && condition.Status == operatorv1.ConditionTrue &&
 						strings.Contains(condition.Message, "DRA") {
 						return nil
 					}
