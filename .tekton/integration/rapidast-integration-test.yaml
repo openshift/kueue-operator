@@ -108,7 +108,7 @@ spec:
               IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
               echo "Extracted image: $IMAGE"
 
-              oc create deployment test-component --image=$IMAGE
+              oc create deployment kueue-operator --image=$IMAGE
               oc wait --for=condition=Available=true deployment/test-component --timeout=120s
 
     - name: rapidast-check
