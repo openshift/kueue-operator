@@ -118,10 +118,10 @@ spec:
         resolver: git
         params:
           - name: url
-            value: https://github.com/redhatproductsecurity/rapidast
+            value: https://github.com/cpmeadors/kueue-operator
             # TODO change revision after merge
           - name: revision
-            value: konflux-example
+            value: rapidast-integration-test
           - name: pathInRepo
             value: .tekton/integration/rapidast-check.yaml
       params:
