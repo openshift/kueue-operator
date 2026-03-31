@@ -3,7 +3,7 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: rapidast-integration-test
+  name: rapidast-check
 spec:
   params:
     # this SNAPSHOT should be produced by the build pipeline and contain the containerImage we want to test with rapidast
