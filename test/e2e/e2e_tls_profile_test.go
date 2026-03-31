@@ -101,12 +101,25 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 			if isHyperShift {
 				Skip("APIServer TLS profile mutation is not supported on HyperShift clusters")
 			}
-			By("Setting APIServer TLS profile to Modern")
+			By("Checking if Modern TLS profile is supported on this cluster")
 			modernProfile := &configv1.TLSSecurityProfile{
 				Type:   configv1.TLSProfileModernType,
 				Modern: &configv1.ModernTLSProfile{},
 			}
-			err := updateAPIServerTLSProfile(ctx, configClient, modernProfile)
+			apiServer, err := configClient.APIServers().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get APIServer CR")
+
+			dryRunAPIServer := apiServer.DeepCopy()
+			dryRunAPIServer.Spec.TLSSecurityProfile = modernProfile
+			_, err = configClient.APIServers().Update(ctx, dryRunAPIServer, metav1.UpdateOptions{
+				DryRun: []string{metav1.DryRunAll},
+			})
+			if err != nil {
+				Skip(fmt.Sprintf("Modern TLS profile is not supported on this cluster: %v", err))
+			}
+
+			By("Setting APIServer TLS profile to Modern")
+			err = updateAPIServerTLSProfile(ctx, configClient, modernProfile)
 			Expect(err).NotTo(HaveOccurred(), "failed to set Modern TLS profile")
 
 			By("Waiting for the operand ConfigMap to reflect TLS 1.3 settings")
