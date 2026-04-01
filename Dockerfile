@@ -21,8 +21,8 @@ LABEL distribution-scope="public"
 LABEL name="kueue-operator-rhel9-operator"
 LABEL cpe="cpe:/a:redhat:kueue_operator:1.3::el9"
 LABEL vendor="Red Hat, Inc."
-LABEL version=1.3.0
-LABEL release=1.3.0
+LABEL version=1.3.1
+LABEL release=1.3.1
 LABEL maintainer="Node team, <aos-node@redhat.com>"
 
 USER 1001
