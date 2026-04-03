@@ -28,7 +28,7 @@ index cc7d1f901..a68b8b9f4 100644
 +++ b/test/util/e2e.go
 @@ -473,8 +473,14 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
  }
- 
+
  func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
 -	MustCreate(ctx, k8sClient, ns)
 -	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns.Name)
@@ -43,12 +43,31 @@ index cc7d1f901..a68b8b9f4 100644
  	return ns
  }
 
+@@ -613,7 +619,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
+ 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred())
+ 		g.Expect(metricsOutput).Should(utiltesting.ContainMetrics(metrics))
+-	}, LongTimeout, Interval).Should(gomega.Succeed())
++	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
+ }
+
+ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restClient *rest.RESTClient, curlPodName, curlContainerName string, metrics [][]string) {
+@@ -622,7 +628,7 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
+ 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred())
+ 		g.Expect(metricsOutput).Should(utiltesting.ExcludeMetrics(metrics))
+-	}, LongTimeout, Interval).Should(gomega.Succeed())
++	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
+ }
+
+ func WaitForPodRunning(ctx context.Context, k8sClient client.Client, pod *corev1.Pod) {
+
 diff --git a/test/e2e/certmanager/certmanager_test.go b/test/e2e/certmanager/certmanager_test.go
 index b175863ca..ddefdb139 100644
 --- a/test/e2e/certmanager/certmanager_test.go
 +++ b/test/e2e/certmanager/certmanager_test.go
 @@ -40,7 +40,10 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
- 
+
  	ginkgo.BeforeEach(func() {
  		ns = &corev1.Namespace{
 -			ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-cert-manager-"},
@@ -58,7 +77,7 @@ index b175863ca..ddefdb139 100644
 +			},
  		}
  		util.MustCreate(ctx, k8sClient, ns)
- 
+
 diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
 index 19f27e21c..bafcde7cf 100644
 --- a/test/e2e/certmanager/metrics_test.go
@@ -71,4 +90,4 @@ index 19f27e21c..bafcde7cf 100644
 +	certSecretName               = "metrics-server-cert"
  	certMountPath                = "/etc/kueue/metrics/certs"
  )
- 
+

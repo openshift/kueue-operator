@@ -47,7 +47,7 @@ function ginkgo_label_filter() {
   local folder="$1"
   case "$folder" in
     singlecluster)
-      echo "feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:statefulset,feature:visibility"
+      echo "feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:metrics,feature:statefulset,feature:visibility"
       ;;
     certmanager)
       echo "!feature:prometheus"
