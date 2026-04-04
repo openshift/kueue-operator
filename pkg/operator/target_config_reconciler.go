@@ -477,7 +477,8 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			klog.Warningf("Failed to fetch TLS profile from APIServer CR: %v - will retry", err)
 			return err
 		}
-		tlsOpts, err = tlsprofile.TLSOptionsFromProfile(clusterProfile)
+		var unmappedCiphers []string
+		tlsOpts, unmappedCiphers, err = tlsprofile.TLSOptionsFromProfile(clusterProfile)
 		if err != nil {
 			klog.Errorf("Unsupported TLS profile: %v", err)
 			c.eventRecorder.Eventf("UnsupportedTLSProfile", "%v", err)
@@ -488,6 +489,10 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 				return statusErr
 			}
 			return nil
+		}
+		if len(unmappedCiphers) > 0 {
+			klog.Warningf("The following TLS cipher suites from the APIServer CR could not be mapped to IANA format and were excluded from the Kueue configuration: %v", unmappedCiphers)
+			c.eventRecorder.Warningf("InvalidTLSCipherSuites", "The following TLS cipher suites from the APIServer CR could not be mapped and were excluded: %v", unmappedCiphers)
 		}
 		if tlsOpts != nil {
 			klog.Infof("TLS Options - MinVersion: %s, CipherSuites: %v", tlsOpts.MinVersion, tlsOpts.CipherSuites)
