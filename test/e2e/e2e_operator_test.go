@@ -1750,7 +1750,7 @@ func deployOperand() error {
 		requiredSS := testutils.NewKueueDefault()
 		_, err := ssClient.KueueV1().Kueues().Create(ctx, requiredSS.GetKueue(), metav1.CreateOptions{})
 		if err != nil {
-			if !apierrors.IsNotFound(err) {
+			if apierrors.IsAlreadyExists(err) {
 				return nil
 			}
 			return err
