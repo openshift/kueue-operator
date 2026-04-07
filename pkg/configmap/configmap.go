@@ -156,6 +156,23 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
+func buildFeatureGates(integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+	featureGates := map[string]bool{}
+
+	// ShortWorkloadNames is Alpha in Kueue. Enable it when external frameworks
+	// are configured to prevent workload names from exceeding the 63-character
+	// Kubernetes label value limit in the MultiKueue external frameworks adapter.
+	// See https://issues.redhat.com/browse/OCPBUGS-82009.
+	if len(integrationExtFrameworks) > 0 || (multiKueue != nil && len(multiKueue.ExternalFrameworks) > 0) {
+		featureGates["ShortWorkloadNames"] = true
+	}
+
+	if len(featureGates) == 0 {
+		return nil
+	}
+	return featureGates
+}
+
 func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string) *configapi.Configuration {
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
@@ -206,6 +223,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 	}
 }
