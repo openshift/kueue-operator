@@ -19,7 +19,15 @@ package v1
 
 // MultiKueueApplyConfiguration represents a declarative configuration of the MultiKueue type for use
 // with apply.
+//
+// MultiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
 type MultiKueueApplyConfiguration struct {
+	// externalFrameworks are a list of GroupVersionKinds that should be supported
+	// by the generic MultiKueue adapter. Each entry defines how to handle a specific
+	// GroupVersionKind (GVK) for MultiKueue operations.
+	// externalFrameworks are optional and should only be used if you have external frameworks
+	// that need MultiKueue support.
+	// externalFrameworks, if specified, must have at least one item and no more than 32 items.
 	ExternalFrameworks []ExternalFrameworkApplyConfiguration `json:"externalFrameworks,omitempty"`
 }
 

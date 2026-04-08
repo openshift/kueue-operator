@@ -23,7 +23,22 @@ import (
 
 // ByWorkloadApplyConfiguration represents a declarative configuration of the ByWorkload type for use
 // with apply.
+//
+// ByWorkload controls how admission is done
 type ByWorkloadApplyConfiguration struct {
+	// admission controls how Kueue will process workloads.
+	// admission is required.
+	// Allowed values are Sequential, Parallel and "".
+	// When admission is set to Sequential, only pods from the currently processing workload will be admitted.
+	// Once all pods from the current workload are admitted, and ready, Kueue will process the next workload.
+	// Sequential processing may slow down admission when the cluster has sufficient capacity for multiple workloads,
+	// but provides a higher guarantee of workloads scheduling all pods together successfully.
+	// When set to Parallel, pods from any workload will be admitted at any time.
+	// This may lead to a deadlock where workloads are in contention for cluster capacity and
+	// pods from another workload having successfully scheduled prevent pods from the current workload scheduling.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Parallel.
 	Admission *kueueoperatorv1.GangSchedulingWorkloadAdmission `json:"admission,omitempty"`
 }
 

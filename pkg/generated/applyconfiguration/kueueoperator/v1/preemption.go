@@ -24,6 +24,23 @@ import (
 // PreemptionApplyConfiguration represents a declarative configuration of the Preemption type for use
 // with apply.
 type PreemptionApplyConfiguration struct {
+	// preemptionPolicy are the types of preemption Kueue allows.
+	// preemptionPolicy is an optional field.
+	// The allowed values are Classical, FairSharing and "".
+	// Classical means that an incoming workload, which does
+	// not fit within the unusued quota, is eligible to issue preemptions
+	// when the requests of the workload are below the
+	// resource flavor's nominal quota or borrowWithinCohort is enabled
+	// on the Cluster Queue.
+	// FairSharing means that ClusterQueues with pending Workloads can preempt other Workloads
+	// in their cohort until the preempting ClusterQueue
+	// obtains an equal or weighted share of the borrowable resources.
+	// The borrowable resources are the unused nominal quota
+	// of all the ClusterQueues in the cohort.
+	// FairSharing is a more heavy weight algorithm.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Classical.
 	PreemptionPolicy *kueueoperatorv1.PreemptionPolicy `json:"preemptionPolicy,omitempty"`
 }
 

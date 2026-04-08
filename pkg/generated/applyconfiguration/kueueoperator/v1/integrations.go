@@ -23,10 +23,28 @@ import (
 
 // IntegrationsApplyConfiguration represents a declarative configuration of the Integrations type for use
 // with apply.
+//
+// This is the integrations for Kueue.
+// Kueue uses these apis to determine
+// which jobs will be managed by Kueue.
 type IntegrationsApplyConfiguration struct {
-	Frameworks         []kueueoperatorv1.KueueIntegration    `json:"frameworks,omitempty"`
+	// frameworks are a list of frameworks that Kueue has support for.
+	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet and SparkApplication.
+	// frameworks are required and must have at least one element.
+	// frameworks can not have more than 18 elements.
+	// Each framework represents a type of job that Kueue will manage.
+	Frameworks []kueueoperatorv1.KueueIntegration `json:"frameworks,omitempty"`
+	// externalFrameworks are a list of GroupVersionResources
+	// that are managed for Kueue by external controllers.
+	// externalFrameworks are optional and should only be used if you have an external controller
+	// that integrates with Kueue.
+	// externalFrameworks, if specified, can not have more than 32 items.
 	ExternalFrameworks []ExternalFrameworkApplyConfiguration `json:"externalFrameworks,omitempty"`
-	LabelKeysToCopy    []LabelKeysApplyConfiguration         `json:"labelKeysToCopy,omitempty"`
+	// labelKeysToCopy are a list of label keys that are copied once a workload is created.
+	// These keys are persisted to the internal Kueue workload object.
+	// If not specified, only the Kueue labels will be copied.
+	// labelKeysToCopy, if specified, is limited to a maximum of 64 items.
+	LabelKeysToCopy []LabelKeysApplyConfiguration `json:"labelKeysToCopy,omitempty"`
 }
 
 // IntegrationsApplyConfiguration constructs a declarative configuration of the Integrations type for use with

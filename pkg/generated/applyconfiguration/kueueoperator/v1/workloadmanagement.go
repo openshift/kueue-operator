@@ -24,6 +24,20 @@ import (
 // WorkloadManagementApplyConfiguration represents a declarative configuration of the WorkloadManagement type for use
 // with apply.
 type WorkloadManagementApplyConfiguration struct {
+	// labelPolicy controls whether or not Kueue reconciles
+	// jobs that don't set the label kueue.x-k8s.io/queue-name.
+	// labelPolicy is a required field.
+	// The allowed values are QueueName, None and "".
+	// None means that workloads will be suspended on
+	// creation and a label will be added via a mutating webhook.
+	// This will be applied for all integrations that Kueue manages.
+	// QueueName means that workloads that are managed
+	// by Kueue must have a label kueue.x-k8s.io/queue-name.
+	// If this label is not present on the workload, then Kueue will
+	// ignore this workload.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is QueueName.
 	LabelPolicy *kueueoperatorv1.LabelPolicy `json:"labelPolicy,omitempty"`
 }
 

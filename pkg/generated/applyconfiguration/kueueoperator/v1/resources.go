@@ -19,7 +19,13 @@ package v1
 
 // ResourcesApplyConfiguration represents a declarative configuration of the Resources type for use
 // with apply.
+//
+// Resources provides additional configuration options for handling resources in Kueue.
 type ResourcesApplyConfiguration struct {
+	// deviceClassMappings defines mappings from Kubernetes DeviceClass names
+	// to Kueue resource names for DRA quota tracking in ClusterQueues.
+	// Each DeviceClass name can only appear in one mapping.
+	// deviceClassMappings is limited to a maximum of 16 items.
 	DeviceClassMappings []DeviceClassMappingApplyConfiguration `json:"deviceClassMappings,omitempty"`
 }
 

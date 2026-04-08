@@ -23,6 +23,8 @@ import (
 
 // KueueStatusApplyConfiguration represents a declarative configuration of the KueueStatus type for use
 // with apply.
+//
+// KueueStatus defines the observed state of Kueue
 type KueueStatusApplyConfiguration struct {
 	operatorv1.OperatorStatusApplyConfiguration `json:",inline"`
 }

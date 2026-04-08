@@ -28,11 +28,17 @@ import (
 
 // KueueApplyConfiguration represents a declarative configuration of the Kueue type for use
 // with apply.
+//
+// Kueue is the CRD to represent the Kueue operator.
 type KueueApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration `json:",inline"`
+	// metadata for Kueue.
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *KueueOperandSpecApplyConfiguration `json:"spec,omitempty"`
-	Status                               *KueueStatusApplyConfiguration      `json:"status,omitempty"`
+	// spec holds user settable values for configuration
+	Spec *KueueOperandSpecApplyConfiguration `json:"spec,omitempty"`
+	// status holds observed values from the cluster.
+	// They may not be overridden.
+	Status *KueueStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // Kueue constructs a declarative configuration of the Kueue type for use with
@@ -45,29 +51,14 @@ func Kueue(name string) *KueueApplyConfiguration {
 	return b
 }
 
-// ExtractKueue extracts the applied configuration owned by fieldManager from
-// kueue. If no managedFields are found in kueue for fieldManager, a
-// KueueApplyConfiguration is returned with only the Name, Namespace (if applicable),
-// APIVersion and Kind populated. It is possible that no managed fields were found for because other
-// field managers have taken ownership of all the fields previously owned by fieldManager, or because
-// the fieldManager never owned fields any fields.
+// ExtractKueueFrom extracts the applied configuration owned by fieldManager from
+// kueue for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
 // kueue must be a unmodified Kueue API object that was retrieved from the Kubernetes API.
-// ExtractKueue provides a way to perform a extract/modify-in-place/apply workflow.
+// ExtractKueueFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-// Experimental!
-func ExtractKueue(kueue *kueueoperatorv1.Kueue, fieldManager string) (*KueueApplyConfiguration, error) {
-	return extractKueue(kueue, fieldManager, "")
-}
-
-// ExtractKueueStatus is the same as ExtractKueue except
-// that it extracts the status subresource applied configuration.
-// Experimental!
-func ExtractKueueStatus(kueue *kueueoperatorv1.Kueue, fieldManager string) (*KueueApplyConfiguration, error) {
-	return extractKueue(kueue, fieldManager, "status")
-}
-
-func extractKueue(kueue *kueueoperatorv1.Kueue, fieldManager string, subresource string) (*KueueApplyConfiguration, error) {
+func ExtractKueueFrom(kueue *kueueoperatorv1.Kueue, fieldManager string, subresource string) (*KueueApplyConfiguration, error) {
 	b := &KueueApplyConfiguration{}
 	err := managedfields.ExtractInto(kueue, internal.Parser().Type("com.github.openshift.kueue-operator.pkg.apis.kueueoperator.v1.Kueue"), fieldManager, b, subresource)
 	if err != nil {
@@ -79,6 +70,27 @@ func extractKueue(kueue *kueueoperatorv1.Kueue, fieldManager string, subresource
 	b.WithAPIVersion("kueue.openshift.io/v1")
 	return b, nil
 }
+
+// ExtractKueue extracts the applied configuration owned by fieldManager from
+// kueue. If no managedFields are found in kueue for fieldManager, a
+// KueueApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// kueue must be a unmodified Kueue API object that was retrieved from the Kubernetes API.
+// ExtractKueue provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractKueue(kueue *kueueoperatorv1.Kueue, fieldManager string) (*KueueApplyConfiguration, error) {
+	return ExtractKueueFrom(kueue, fieldManager, "")
+}
+
+// ExtractKueueStatus extracts the applied configuration owned by fieldManager from
+// kueue for the status subresource.
+func ExtractKueueStatus(kueue *kueueoperatorv1.Kueue, fieldManager string) (*KueueApplyConfiguration, error) {
+	return ExtractKueueFrom(kueue, fieldManager, "status")
+}
+
 func (b KueueApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
