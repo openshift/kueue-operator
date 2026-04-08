@@ -23,8 +23,27 @@ import (
 
 // DeviceClassMappingApplyConfiguration represents a declarative configuration of the DeviceClassMapping type for use
 // with apply.
+//
+// DeviceClassMapping maps Kubernetes DeviceClass names to a Kueue resource name.
 type DeviceClassMappingApplyConfiguration struct {
-	Name             *string                           `json:"name,omitempty"`
+	// name is the Kueue resource name used in ClusterQueue quotas
+	// (e.g., "nvidia.com/gpu").
+	// Must consist of at most 253 characters with an optional DNS subdomain
+	// prefix and a single forward slash. The prefix must consist only of
+	// lowercase alphanumeric characters, hyphens, and dots. The name segment
+	// after the slash may contain alphanumeric characters, hyphens, underscores,
+	// and dots. Each segment must start and end with an alphanumeric character.
+	// This matches upstream kueue's use of IsQualifiedName for this field.
+	Name *string `json:"name,omitempty"`
+	// deviceClassNames is the list of Kubernetes DeviceClass names
+	// (e.g., "gpu.nvidia.com") that map to the resource name above.
+	// Must consist of at most 253 characters with an optional DNS subdomain
+	// prefix and a single forward slash, or just a name on its own. The prefix
+	// must consist only of lowercase alphanumeric characters, hyphens, and dots.
+	// The name segment after the slash may contain alphanumeric characters,
+	// hyphens, underscores, and dots. Each segment must start and end with
+	// an alphanumeric character.
+	// This matches upstream kueue's use of IsQualifiedName for this field.
 	DeviceClassNames []kueueoperatorv1.DeviceClassName `json:"deviceClassNames,omitempty"`
 }
 

@@ -20,12 +20,42 @@ package v1
 // KueueConfigurationApplyConfiguration represents a declarative configuration of the KueueConfiguration type for use
 // with apply.
 type KueueConfigurationApplyConfiguration struct {
-	Integrations       *IntegrationsApplyConfiguration       `json:"integrations,omitempty"`
+	// integrations is a required field that configures the Kueue's workload integrations.
+	// Kueue has both standard integrations, known as job frameworks, and external integrations
+	// known as external frameworks.
+	// Kueue will only manage workloads that correspond to the specified integrations.
+	Integrations *IntegrationsApplyConfiguration `json:"integrations,omitempty"`
+	// workloadManagement controls how Kueue manages workloads.
+	// By default Kueue will manage workloads that have a queue-name label.
+	// Workloads that are missing the queue-name will be ignored by Kueue.
+	// If workloadManagement is not specified, the operator will decide the
+	// default.
+	// This default could change over time.
+	// This field is optional.
 	WorkloadManagement *WorkloadManagementApplyConfiguration `json:"workloadManagement,omitempty"`
-	GangScheduling     *GangSchedulingApplyConfiguration     `json:"gangScheduling,omitempty"`
-	Preemption         *PreemptionApplyConfiguration         `json:"preemption,omitempty"`
-	Resources          *ResourcesApplyConfiguration          `json:"resources,omitempty"`
-	MultiKueue         *MultiKueueApplyConfiguration         `json:"multiKueue,omitempty"`
+	// gangScheduling controls how Kueue admits workloads.
+	// Gang Scheduling is the act of all or nothing scheduling,
+	// where workloads do not become ready within a certain period, they may be evicted and later retried.
+	// This field is optional.
+	// If gangScheduling is not specified, the operator will decide the default.
+	// This default could change over time.
+	GangScheduling *GangSchedulingApplyConfiguration `json:"gangScheduling,omitempty"`
+	// preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
+	// Kueue has classical premption and preemption via fair sharing.
+	// preemption is optional.
+	// If preemption is not specified, the operator will decide the default.
+	// This default could change over time.
+	Preemption *PreemptionApplyConfiguration `json:"preemption,omitempty"`
+	// resources provides additional configuration options for how Kueue handles resources.
+	// When resources.deviceClassMappings is configured, Kueue can track and
+	// enforce quotas for DRA devices in ClusterQueues.
+	// resources is optional.
+	Resources *ResourcesApplyConfiguration `json:"resources,omitempty"`
+	// multiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+	// MultiKueue enables multi-cluster workload distribution.
+	// This field is optional.
+	// If multiKueue is not specified, MultiKueue is disabled.
+	MultiKueue *MultiKueueApplyConfiguration `json:"multiKueue,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with

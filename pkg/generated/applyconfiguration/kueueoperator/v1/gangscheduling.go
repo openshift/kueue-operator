@@ -23,9 +23,24 @@ import (
 
 // GangSchedulingApplyConfiguration represents a declarative configuration of the GangScheduling type for use
 // with apply.
+//
+// Kueue provides the ability to admit workloads all in one (gang admission)
+// and evicts workloads if they are not ready within a specific time.
 type GangSchedulingApplyConfiguration struct {
-	Policy     *kueueoperatorv1.GangSchedulingPolicy `json:"policy,omitempty"`
-	ByWorkload *ByWorkloadApplyConfiguration         `json:"byWorkload,omitempty"`
+	// policy allows you to enable and configure gang scheduling.
+	// The allowed values are ByWorkload, None and "".
+	// When set to ByWorkload, this means each workload is processed and considered
+	// for admission as a single unit.
+	// Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
+	// None means gang scheduling is disabled.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is None.
+	// policy is a required field.
+	Policy *kueueoperatorv1.GangSchedulingPolicy `json:"policy,omitempty"`
+	// byWorkload configures how Kueue will process workloads for admission.
+	// byWorkload is required when policy is ByWorkload, and forbidden otherwise.
+	ByWorkload *ByWorkloadApplyConfiguration `json:"byWorkload,omitempty"`
 }
 
 // GangSchedulingApplyConfiguration constructs a declarative configuration of the GangScheduling type for use with

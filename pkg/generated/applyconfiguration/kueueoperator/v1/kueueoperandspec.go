@@ -27,7 +27,9 @@ import (
 // with apply.
 type KueueOperandSpecApplyConfiguration struct {
 	operatorv1.OperatorSpecApplyConfiguration `json:",inline"`
-	Config                                    *KueueConfigurationApplyConfiguration `json:"config,omitempty"`
+	// config is the desired configuration
+	// for the Kueue operator.
+	Config *KueueConfigurationApplyConfiguration `json:"config,omitempty"`
 }
 
 // KueueOperandSpecApplyConfiguration constructs a declarative configuration of the KueueOperandSpec type for use with

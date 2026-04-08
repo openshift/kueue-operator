@@ -20,6 +20,15 @@ package v1
 // LabelKeysApplyConfiguration represents a declarative configuration of the LabelKeys type for use
 // with apply.
 type LabelKeysApplyConfiguration struct {
+	// key is the label key.
+	// A label key must be a valid qualified name consisting of a lower-case alphanumeric string,
+	// and hyphens of at most 63 characters in length.
+	// To support older openshift versions, matches is used instead of CEL validation.
+	// The name must start and end with an alphanumeric character.
+	// The name may be optionally prefixed with a subdomain consisting of lower-case alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
+	// The optional prefix and the name are separate by a forward slash (/).
 	Key *string `json:"key,omitempty"`
 }
 

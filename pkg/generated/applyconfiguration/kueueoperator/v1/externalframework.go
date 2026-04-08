@@ -19,10 +19,27 @@ package v1
 
 // ExternalFrameworkApplyConfiguration represents a declarative configuration of the ExternalFramework type for use
 // with apply.
+//
+// This is the GVR for an external framework.
+// Controller runtime requires this in this format
+// for api discoverability.
 type ExternalFrameworkApplyConfiguration struct {
-	Group    *string `json:"group,omitempty"`
+	// group is the API group of the externalFramework.
+	// Must be a valid DNS 1123 subdomain consisting of of lower-case alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
+	Group *string `json:"group,omitempty"`
+	// resource is the Resource type of the external framework.
+	// Resource types are lowercase and plural (e.g. pods, deployments).
+	// Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
+	// and hyphens of at most 63 characters in length.
+	// The value must start and end with an alphanumeric character.
 	Resource *string `json:"resource,omitempty"`
-	Version  *string `json:"version,omitempty"`
+	// version is the version of the api (e.g. v1alpha1, v1beta1, v1).
+	// Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
+	// and hyphens of at most 63 characters in length.
+	// The value must start with an alphabetic character and end with an alphanumeric character.
+	Version *string `json:"version,omitempty"`
 }
 
 // ExternalFrameworkApplyConfiguration constructs a declarative configuration of the ExternalFramework type for use with
