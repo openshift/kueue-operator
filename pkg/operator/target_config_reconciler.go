@@ -490,7 +490,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			return nil
 		}
 		if tlsOpts != nil {
-			klog.Infof("TLS Options - MinVersion: %s, CipherSuites: %v", tlsOpts.MinVersion, tlsOpts.CipherSuites)
+			klog.V(4).Infof("TLS Options - MinVersion: %s, CipherSuites: %v", tlsOpts.MinVersion, tlsOpts.CipherSuites)
 		}
 	}
 
