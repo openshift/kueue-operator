@@ -183,7 +183,7 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegration, draSupported bool) map[string]bool {
+func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegration, draSupported bool, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
@@ -203,6 +203,14 @@ func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegr
 			featureGates["SparkApplicationIntegration"] = true
 			break
 		}
+	}
+
+	// ShortWorkloadNames is Alpha in Kueue. Enable it when external frameworks
+	// are configured to prevent workload names from exceeding the 63-character
+	// Kubernetes label value limit in the MultiKueue external frameworks adapter.
+	// See https://issues.redhat.com/browse/OCPBUGS-82009.
+	if len(integrationExtFrameworks) > 0 || (multiKueue != nil && len(multiKueue.ExternalFrameworks) > 0) {
+		featureGates["ShortWorkloadNames"] = true
 	}
 
 	if len(featureGates) == 0 {
@@ -263,7 +271,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Resources, kueueCfg.Integrations.Frameworks, draSupported),
+		FeatureGates:               buildFeatureGates(kueueCfg.Resources, kueueCfg.Integrations.Frameworks, draSupported, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 	}
 }
