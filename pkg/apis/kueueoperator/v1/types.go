@@ -365,7 +365,7 @@ type DeviceClassMapping struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name consisting of alphanumeric characters, hyphens, underscores, dots, with an optional DNS subdomain prefix and forward slash (e.g., 'nvidia.com/gpu' or 'gpu')"
 	// +required
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 
 	// deviceClassNames is the list of Kubernetes DeviceClass names
 	// (e.g., "gpu.nvidia.com") that map to the resource name above.
@@ -380,7 +380,7 @@ type DeviceClassMapping struct {
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:MinItems=1
 	// +required
-	DeviceClassNames []DeviceClassName `json:"deviceClassNames"`
+	DeviceClassNames []DeviceClassName `json:"deviceClassNames,omitempty"`
 }
 
 // DeviceClassName is a Kubernetes DeviceClass name.
