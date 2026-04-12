@@ -5,7 +5,7 @@ COPY . .
 WORKDIR /workspace/upstream/kueue
 RUN ./build.sh
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.21
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.19
 WORKDIR /
 COPY --from=build /workspace/upstream/kueue/src/bin/manager /
 USER 65532:65532
