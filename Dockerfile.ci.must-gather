@@ -1,6 +1,6 @@
 FROM registry.ci.openshift.org/ocp/4.20:cli AS cli-image
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.21
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.19
 
 COPY --from=cli-image /usr/bin/oc /usr/bin/oc
 
