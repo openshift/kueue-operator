@@ -40,12 +40,13 @@ func FetchAPIServerTLSProfile(ctx context.Context, client configclient.Interface
 // TLSOptionsFromProfile resolves an OpenShift TLSSecurityProfile to kueue TLSOptions.
 // If profile is nil, the Intermediate profile is used as the default.
 // Cipher suites are converted from OpenSSL names to IANA format.
-// Returns an error if the profile uses a TLS version below 1.2, which is not
-// supported by Kueue.
-func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLSOptions, error) {
+// Returns the TLS options, a list of cipher suite names that could not be mapped
+// to IANA format (unmapped ciphers), and an error if the profile uses a TLS
+// version below 1.2, which is not supported by Kueue.
+func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLSOptions, []string, error) {
 	profileSpec, err := getProfileSpec(profile)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if profileSpec.MinTLSVersion == configv1.VersionTLS10 || profileSpec.MinTLSVersion == configv1.VersionTLS11 {
@@ -53,7 +54,7 @@ func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLS
 		if profile != nil {
 			profileType = string(profile.Type)
 		}
-		return nil, fmt.Errorf("TLS profile %q uses minimum version %s which is not supported by Kueue (minimum supported: VersionTLS12)", profileType, profileSpec.MinTLSVersion)
+		return nil, nil, fmt.Errorf("TLS profile %q uses minimum version %s which is not supported by Kueue (minimum supported: VersionTLS12)", profileType, profileSpec.MinTLSVersion)
 	}
 
 	opts := &configapi.TLSOptions{
@@ -62,11 +63,26 @@ func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLS
 
 	// TLS 1.3 cipher suites are not configurable in Go's crypto/tls.
 	// Only set cipher suites for TLS 1.2 and below.
+	var unmappedCiphers []string
 	if profileSpec.MinTLSVersion != configv1.VersionTLS13 {
 		opts.CipherSuites = crypto.OpenSSLToIANACipherSuites(profileSpec.Ciphers)
+		unmappedCiphers = findUnmappedCiphers(profileSpec.Ciphers)
 	}
 
-	return opts, nil
+	return opts, unmappedCiphers, nil
+}
+
+// findUnmappedCiphers returns cipher suite names from the input that cannot be
+// mapped from OpenSSL to IANA format. It identifies each cipher individually by
+// checking whether OpenSSLToIANACipherSuites produces a result for it.
+func findUnmappedCiphers(ciphers []string) []string {
+	var unmapped []string
+	for _, c := range ciphers {
+		if mapped := crypto.OpenSSLToIANACipherSuites([]string{c}); len(mapped) == 0 {
+			unmapped = append(unmapped, c)
+		}
+	}
+	return unmapped
 }
 
 // getProfileSpec resolves a TLSSecurityProfile to its TLSProfileSpec.

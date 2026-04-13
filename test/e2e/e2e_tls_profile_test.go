@@ -79,7 +79,7 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 	When("the default Intermediate TLS profile is configured", func() {
 		It("should have Intermediate TLS settings in the initial operand ConfigMap", func(ctx context.Context) {
 			By("Verifying the initial ConfigMap captured in BeforeAll contains Intermediate TLS settings")
-			expectedTLSOpts, err := tlsprofile.TLSOptionsFromProfile(nil)
+			expectedTLSOpts, _, err := tlsprofile.TLSOptionsFromProfile(nil)
 			Expect(err).NotTo(HaveOccurred(), "failed to resolve default TLS profile")
 
 			tlsOpts, err := extractTLSOptions(initialConfigMapData)
@@ -305,6 +305,82 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"operand ConfigMap should contain Custom TLS settings")
+		})
+	})
+
+	When("the cluster TLS profile is set to Custom with invalid cipher suites", func() {
+		It("should emit an InvalidTLSCipherSuites warning event for unmapped ciphers", func(ctx context.Context) {
+			if isHyperShift {
+				Skip("APIServer TLS profile mutation is not supported on HyperShift clusters")
+			}
+
+			By("Setting APIServer TLS profile to Custom with a mix of valid and invalid ciphers")
+			customProfile := &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers: []string{
+							"ECDHE-RSA-AES128-GCM-SHA256",
+							"TLS_ALICE_POLY1305_SHA256",
+							"INVALID-CIPHER",
+						},
+						MinTLSVersion: configv1.VersionTLS12,
+					},
+				},
+			}
+			err := updateAPIServerTLSProfile(ctx, configClient, customProfile)
+			Expect(err).NotTo(HaveOccurred(), "failed to set Custom TLS profile with invalid ciphers")
+
+			By("Waiting for the operand ConfigMap to contain only the valid cipher")
+			Eventually(func() error {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
+					ctx, "kueue-manager-config", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get ConfigMap: %w", err)
+				}
+
+				configData, ok := configMap.Data["controller_manager_config.yaml"]
+				if !ok {
+					return fmt.Errorf("controller_manager_config.yaml key not found in ConfigMap")
+				}
+
+				tlsOpts, err := extractTLSOptions(configData)
+				if err != nil {
+					return fmt.Errorf("failed to extract TLS options: %w", err)
+				}
+
+				if tlsOpts == nil {
+					return fmt.Errorf("TLS options not found in operand ConfigMap")
+				}
+
+				// Only the valid cipher should be present
+				if len(tlsOpts.CipherSuites) != 1 {
+					return fmt.Errorf("expected 1 cipher suite (only valid ones), got %d: %v",
+						len(tlsOpts.CipherSuites), tlsOpts.CipherSuites)
+				}
+
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"operand ConfigMap should contain only valid cipher suites")
+
+			By("Verifying that an InvalidTLSCipherSuites warning event was emitted")
+			Eventually(func() error {
+				events, err := kubeClient.CoreV1().Events(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{
+					FieldSelector: "reason=InvalidTLSCipherSuites",
+				})
+				if err != nil {
+					return fmt.Errorf("failed to list events: %w", err)
+				}
+
+				for _, event := range events.Items {
+					if event.Type == "Warning" && event.Reason == "InvalidTLSCipherSuites" {
+						klog.Infof("Found expected warning event: reason=%s, message=%s", event.Reason, event.Message)
+						return nil
+					}
+				}
+				return fmt.Errorf("no InvalidTLSCipherSuites warning event found in namespace %s", testutils.OperatorNamespace)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"operator should emit InvalidTLSCipherSuites warning event for unmapped ciphers")
 		})
 	})
 })
