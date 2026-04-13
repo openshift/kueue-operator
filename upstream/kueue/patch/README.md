@@ -4,6 +4,10 @@
 
 This patch sets up our e2e tests to skip waiting for operators as the namespace name is different and set up our namespaces.
 
+## test_util_e2e.patch
+
+This patch modifies `test/util/e2e.go` to add the `kueue.openshift.io/managed` label to namespaces created in e2e tests and increases the metrics timeout from `LongTimeout` to `VeryLongTimeout`.
+
 ## golang-1.24.patch
 
 This patch can be dropped once there is a golang 1.25 builder image.

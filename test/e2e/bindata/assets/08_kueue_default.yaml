@@ -9,6 +9,8 @@ metadata:
 spec:
   managementState: Managed
   config:
+    preemption:
+      preemptionPolicy: FairSharing
     integrations:
       frameworks:
       - BatchJob
