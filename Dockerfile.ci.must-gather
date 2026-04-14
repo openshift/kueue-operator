@@ -1,0 +1,19 @@
+FROM registry.ci.openshift.org/ocp/4.20:cli AS cli-image
+
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.21
+
+COPY --from=cli-image /usr/bin/oc /usr/bin/oc
+
+RUN dnf install -y rsync tar && dnf clean all
+
+COPY must-gather/collection-scripts/gather /usr/bin/gather
+COPY must-gather/collection-scripts/gather-kueue /usr/bin/gather-kueue
+
+RUN chmod +x /usr/bin/gather /usr/bin/gather-kueue
+
+CMD ["/bin/bash", "/usr/bin/gather"]
+
+LABEL io.k8s.display-name="OpenShift Kueue must-gather" \
+      io.k8s.description="This is a must-gather for the Kueue" \
+      io.openshift.tags="openshift,kueue-must-gather" \
+      maintainer="AOS Node team, <aos-node@redhat.com>"
