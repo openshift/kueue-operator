@@ -5,7 +5,7 @@
   },
   {
     "name": "must-gather",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main@sha256:185768621716ef898eb18c60227a0538fb0d78c136854c3b8caeb244c06c35c2 "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-must-gather-main@sha256:375b50a2e7a109991cd3fb3e9d7ae068ce2680b4fc28a2bbae1e366c511543b2 "
   },
   {
     "name": "operand",
