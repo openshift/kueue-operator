@@ -358,6 +358,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+featureGates:
+  ShortWorkloadNames: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -430,6 +432,8 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
+featureGates:
+  ShortWorkloadNames: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -458,6 +462,68 @@ multiKueue:
   - name: CustomJob.v1.example.com
   - name: myworkloads.v1alpha1.test.io
   gcInterval: null
+namespace: test
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"integration external frameworks enables short workload names": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+					ExternalFrameworks: []kueue.ExternalFramework{
+						{
+							Group:    "tekton.dev",
+							Version:  "v1",
+							Resource: "pipelineruns",
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  ShortWorkloadNames: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  externalFrameworks:
+  - pipelineruns.v1.tekton.dev
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
 namespace: test
 webhook:
   port: 9443
