@@ -855,6 +855,129 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"Admission Fair Sharing with Default configuration": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				AdmissionFairSharing: kueue.AdmissionFairSharing{
+					Configuration: kueue.AdmissionFairSharingConfigurationDefault,
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `admissionFairSharing:
+  usageHalfLifeTime: 0s
+  usageSamplingInterval: 0s
+apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"Admission Fair Sharing with only resourceWeights set": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				AdmissionFairSharing: kueue.AdmissionFairSharing{
+					Configuration: kueue.AdmissionFairSharingConfigurationCustom,
+					Custom: kueue.AdmissionFairSharingCustom{
+						ResourceWeights: []kueue.ResourceWeight{
+							{Name: string(corev1.ResourceCPU), Weight: "+0.5"},
+							{Name: string(corev1.ResourceMemory), Weight: "2.0"},
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `admissionFairSharing:
+  resourceWeights:
+    cpu: 0.5
+    memory: 2
+  usageHalfLifeTime: 0s
+  usageSamplingInterval: 0s
+apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 	}
 
 	for desc, tc := range testCases {

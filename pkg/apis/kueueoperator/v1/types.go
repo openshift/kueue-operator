@@ -82,6 +82,13 @@ type KueueConfiguration struct {
 	// If multiKueue is not specified, MultiKueue is disabled.
 	// +optional
 	MultiKueue *MultiKueue `json:"multiKueue,omitempty"`
+
+	// admissionFairSharing enables fair sharing at admission time.
+	// It makes Kueue order pending workloads by each LocalQueue's accumulated resource usage,
+	// so that queues which have consumed fewer resources are admitted first.
+	// This section configures the usage decay rate, the sampling frequency, and per-resource weights.
+	// +optional
+	AdmissionFairSharing AdmissionFairSharing `json:"admissionFairSharing,omitzero"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -127,6 +134,90 @@ const (
 	KueueIntegrationLeaderWorkerSet  KueueIntegration = "LeaderWorkerSet"
 	KueueIntegrationSparkApplication KueueIntegration = "SparkApplication"
 )
+
+// +kubebuilder:validation:Enum=Default;Custom
+type AdmissionFairSharingConfiguration string
+
+const (
+	AdmissionFairSharingConfigurationDefault AdmissionFairSharingConfiguration = "Default"
+	AdmissionFairSharingConfigurationCustom  AdmissionFairSharingConfiguration = "Custom"
+)
+
+// AdmissionFairSharing provides configuration of intervals
+// and resource weights for Admission Fair Sharing.
+// +kubebuilder:validation:XValidation:rule="has(self.configuration) && self.configuration == 'Custom' ? has(self.custom) : !has(self.custom)",message="custom is required when configuration is Custom, and forbidden otherwise"
+// +union
+type AdmissionFairSharing struct {
+	// configuration determines if admission fair sharing uses default or custom settings.
+	// The allowed values are Default and Custom.
+	// Default means admission fair sharing is enabled with kueue's defaults,
+	// which are subject to change over time.
+	// Custom means admission fair sharing is enabled with user-provided configuration
+	// in the custom field.
+	// +required
+	// +unionDiscriminator
+	Configuration AdmissionFairSharingConfiguration `json:"configuration,omitempty"`
+	// custom provides customized configuration for admission fair sharing.
+	// custom is required when configuration is Custom, and forbidden otherwise.
+	// When custom is specified, at least one of its fields must be set.
+	// +optional
+	Custom AdmissionFairSharingCustom `json:"custom,omitzero"`
+}
+
+// +kubebuilder:validation:MinProperties=1
+type AdmissionFairSharingCustom struct {
+	// usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
+	// When omitted, usage will be reset to 0 immediately.
+	// The value must be between 1 and 31536000 (one year in seconds).
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=31536000
+	// +optional
+	UsageHalfLifeTimeSeconds int32 `json:"usageHalfLifeTimeSeconds,omitempty"`
+
+	// usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
+	// When omitted, kueue will decide the default, which is subject to change over time.
+	// The current default is 300 (5 minutes).
+	// The value must be between 1 and 3600 (one hour in seconds).
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3600
+	// +optional
+	UsageSamplingIntervalSeconds int32 `json:"usageSamplingIntervalSeconds,omitempty"`
+
+	// resourceWeights assigns weights to resources which are then used to calculate LocalQueue's
+	// resource usage and order Workloads.
+	// When omitted, kueue will decide the default, which is subject to change over time.
+	// The current default weight is 1 for any resource.
+	// When specified, the list must contain between 1 and 16 items.
+	// Each entry must have a unique resource name.
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	ResourceWeights []ResourceWeight `json:"resourceWeights,omitempty"`
+}
+
+// ResourceWeight associates a resource name with a weight used for fair sharing calculations.
+type ResourceWeight struct {
+	// name consists of an optional DNS subdomain prefix (lowercase alphanumeric, hyphens, dots,
+	// up to 253 characters), followed by a slash '/', and a name segment.
+	// The name segment must be at most 63 characters, consisting of alphanumeric characters (upper or lower case),
+	// with '-', '_', and '.' allowed anywhere except the first or last character.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=317
+	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name (e.g., 'nvidia.com/gpu' or 'cpu')"
+	// +required
+	Name string `json:"name,omitempty"`
+
+	// weight is a string representation of a non-negative float64 value
+	// used as a weight for a resource in fair sharing calculations (e.g., "1.0", "0.5", ".5", "+0.5", "1e-3").
+	// The weight must be at most 32 characters.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=32
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[+]?([0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?$')",message="must be a non-negative number (e.g., '1.0', '0.5', '.5', '+0.5', '1e-3')"
+	// +required
+	Weight string `json:"weight,omitempty"`
+}
 
 // This is the GVR for an external framework.
 // Controller runtime requires this in this format

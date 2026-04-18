@@ -18,6 +18,7 @@ package configmap
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -32,7 +33,10 @@ import (
 )
 
 func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
-	config := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draSupported, tlsOpts)
+	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draSupported, tlsOpts)
+	if err != nil {
+		return nil, err
+	}
 	cfg, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, err
@@ -219,7 +223,37 @@ func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegr
 	return featureGates
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool, tlsOpts *configapi.TLSOptions) *configapi.Configuration {
+func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) (*configapi.AdmissionFairSharing, error) {
+	if admissionFairSharing.Configuration == "" {
+		return nil, nil
+	}
+	result := &configapi.AdmissionFairSharing{}
+	if admissionFairSharing.Configuration == kueue.AdmissionFairSharingConfigurationCustom {
+		custom := admissionFairSharing.Custom
+		if custom.UsageHalfLifeTimeSeconds > 0 {
+			result.UsageHalfLifeTime = v1.Duration{Duration: time.Duration(custom.UsageHalfLifeTimeSeconds) * time.Second}
+		}
+		if custom.UsageSamplingIntervalSeconds > 0 {
+			result.UsageSamplingInterval = v1.Duration{Duration: time.Duration(custom.UsageSamplingIntervalSeconds) * time.Second}
+		}
+		resourceWeights := make(map[corev1.ResourceName]float64, len(custom.ResourceWeights))
+		for _, entry := range custom.ResourceWeights {
+			f, err := strconv.ParseFloat(entry.Weight, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse resource weight for resource %s: %w", entry.Name, err)
+			}
+			resourceWeights[corev1.ResourceName(entry.Name)] = f
+		}
+		result.ResourceWeights = resourceWeights
+	}
+	return result, nil
+}
+
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
+	admissionFairSharing, err := buildAdmissionFairSharing(kueueCfg.AdmissionFairSharing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
+	}
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -273,7 +307,8 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		Resources:                  buildResources(kueueCfg.Resources),
 		FeatureGates:               buildFeatureGates(kueueCfg.Resources, kueueCfg.Integrations.Frameworks, draSupported, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
-	}
+		AdmissionFairSharing:       admissionFairSharing,
+	}, nil
 }
 
 func float32Ptr(f float32) *float32 {

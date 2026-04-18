@@ -56,6 +56,11 @@ type KueueConfigurationApplyConfiguration struct {
 	// This field is optional.
 	// If multiKueue is not specified, MultiKueue is disabled.
 	MultiKueue *MultiKueueApplyConfiguration `json:"multiKueue,omitempty"`
+	// admissionFairSharing enables fair sharing at admission time.
+	// It makes Kueue order pending workloads by each LocalQueue's accumulated resource usage,
+	// so that queues which have consumed fewer resources are admitted first.
+	// This section configures the usage decay rate, the sampling frequency, and per-resource weights.
+	AdmissionFairSharing *AdmissionFairSharingApplyConfiguration `json:"admissionFairSharing,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -109,5 +114,13 @@ func (b *KueueConfigurationApplyConfiguration) WithResources(value *ResourcesApp
 // If called multiple times, the MultiKueue field is set to the value of the last call.
 func (b *KueueConfigurationApplyConfiguration) WithMultiKueue(value *MultiKueueApplyConfiguration) *KueueConfigurationApplyConfiguration {
 	b.MultiKueue = value
+	return b
+}
+
+// WithAdmissionFairSharing sets the AdmissionFairSharing field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AdmissionFairSharing field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithAdmissionFairSharing(value *AdmissionFairSharingApplyConfiguration) *KueueConfigurationApplyConfiguration {
+	b.AdmissionFairSharing = value
 	return b
 }
