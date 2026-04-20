@@ -30,16 +30,19 @@ import (
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
+	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )
 
 const (
-	draDeviceClassName  = "gpu.nvidia.com"
-	draLogicalResource  = "nvidia-gpu"
-	draTestNamespace    = "kueue-dra-test"
-	draTestQueue        = "dra-test-queue"
-	draClusterQueueName = "dra-test-clusterqueue"
+	draDeviceClassName     = "gpu.nvidia.com"
+	draLogicalResource     = "nvidia-gpu"
+	draTestNamespacePrefix = "kueue-dra-test-"
+	draTestQueue           = "dra-test-queue"
+	draClusterQueueName    = "dra-test-clusterqueue"
 )
 
 // setDRAJobCPU reduces CPU request for DRA test jobs to fit on GPU nodes
@@ -51,7 +54,9 @@ func setDRAJobCPU(job *batchv1.Job) {
 var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered, func() {
 	var (
 		draSupported          bool
+		draTestNamespace      string
 		initialKueueInstance  *ssv1.Kueue
+		kueueClient           *upstreamkueueclient.Clientset
 		cleanupClusterQueue   func()
 		cleanupLocalQueue     func()
 		cleanupResourceFlavor func()
@@ -129,33 +134,24 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
-		_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ns, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: draTestNamespace,
+				GenerateName: draTestNamespacePrefix,
 				Labels: map[string]string{
 					testutils.OpenShiftManagedLabel: "true",
 				},
 			},
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		draTestNamespace = ns.Name
 
-		kueueClient := clients.UpstreamKueueClient
+		kueueClient = clients.UpstreamKueueClient
 		cleanupResourceFlavor, err = testutils.NewResourceFlavor().Create(ctx, kueueClient)
 		Expect(err).NotTo(HaveOccurred())
 
 		cq := testutils.NewClusterQueue()
 		cq.Name = draClusterQueueName
-		cq.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
-			CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(draLogicalResource)},
-			Flavors: []kueuev1beta2.FlavorQuotas{{
-				Name: "default",
-				Resources: []kueuev1beta2.ResourceQuota{
-					{Name: "cpu", NominalQuota: resource.MustParse("100")},
-					{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
-					{Name: corev1.ResourceName(draLogicalResource), NominalQuota: resource.MustParse("1")},
-				},
-			}},
-		}}
+		cq.WithDRAResource(draLogicalResource, "1")
 		cleanupClusterQueue, err = cq.Create(ctx, kueueClient)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -176,320 +172,596 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			cleanupResourceFlavor()
 		}
 
-		kubeClient.CoreV1().Namespaces().Delete(ctx, draTestNamespace, metav1.DeleteOptions{})
+		err := kubeClient.CoreV1().Namespaces().Delete(ctx, draTestNamespace, metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
 
 		if initialKueueInstance != nil {
 			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		}
 	})
 
-	It("should admit job with ResourceClaimTemplate and account DRA quota correctly", func(ctx context.Context) {
-		By("Creating ResourceClaimTemplate for gpu.nvidia.com")
-		rct := &resourcev1.ResourceClaimTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "gpu-template-basic",
-				Namespace: draTestNamespace,
-			},
-			Spec: resourcev1.ResourceClaimTemplateSpec{
-				Spec: resourcev1.ResourceClaimSpec{
-					Devices: resourcev1.DeviceClaim{
-						Requests: []resourcev1.DeviceRequest{
-							{
-								Name: "gpu-req",
-								Exactly: &resourcev1.ExactDeviceRequest{
-									DeviceClassName: draDeviceClassName,
-									Count:           1,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-		_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
+	When("basic DRA quota is configured", func() {
+		It("should admit job with ResourceClaimTemplate and account DRA quota correctly", func(ctx context.Context) {
+			By("Creating ResourceClaimTemplate for gpu.nvidia.com")
+			rct := newDRAResourceClaimTemplate("gpu-template-basic", draTestNamespace, 1)
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		By("Creating Job referencing ResourceClaimTemplate")
-		builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
-		job := builder.NewJob()
-		setDRAJobCPU(job)
-		job.Name = "dra-basic-job"
-		job.Labels[testutils.QueueLabel] = draTestQueue
-		job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
-			{Name: "gpu", ResourceClaimTemplateName: ptr.To("gpu-template-basic")},
-		}
-		job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{
-			{Name: "gpu"},
-		}
-		createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			By("Creating Job referencing ResourceClaimTemplate")
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
+			job := newDRAJob(builder, "dra-basic-job", "gpu-template-basic", draTestQueue)
+			createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
-		By("Verifying workload is admitted with correct DRA quota")
-		kueueClient := clients.UpstreamKueueClient
-		Eventually(func(g Gomega) {
-			wlList, err := kueueClient.KueueV1beta2().Workloads(draTestNamespace).List(ctx, metav1.ListOptions{
-				LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
+			By("Verifying workload is admitted with correct DRA quota")
+			Eventually(func(g Gomega) {
+				wlList, err := kueueClient.KueueV1beta2().Workloads(draTestNamespace).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(wlList.Items).NotTo(BeEmpty(), "workload not found for job %s", createdJob.Name)
+
+				wl := wlList.Items[0]
+				g.Expect(wl.Status.Admission).NotTo(BeNil(), "workload should be admitted")
+				g.Expect(wl.Status.Admission.PodSetAssignments).To(HaveLen(1))
+
+				assignment := wl.Status.Admission.PodSetAssignments[0]
+				g.Expect(assignment.ResourceUsage).To(HaveKey(corev1.ResourceName(draLogicalResource)))
+				g.Expect(assignment.ResourceUsage[corev1.ResourceName(draLogicalResource)]).To(Equal(resource.MustParse("1")))
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job is unsuspended")
+			Eventually(func(g Gomega) {
+				j, err := kubeClient.BatchV1().Jobs(draTestNamespace).Get(ctx, createdJob.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(j.Spec.Suspend == nil || !*j.Spec.Suspend).To(BeTrue())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job pod is running")
+			Eventually(func() bool {
+				return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+		})
+
+		It("should suspend job when DRA quota is exceeded", func(ctx context.Context) {
+			By("Creating ResourceClaimTemplate requesting more GPUs than quota allows")
+			rct := newDRAResourceClaimTemplate("gpu-template-exceed", draTestNamespace, 5) // quota is 1
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Job that exceeds DRA quota")
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
+			job := newDRAJob(builder, "dra-exceed-job", "gpu-template-exceed", draTestQueue)
+			createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+
+			By("Verifying job remains suspended")
+			Consistently(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob.Name)
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+		})
+
+		It("should admit waiting job after DRA quota is freed", func(ctx context.Context) {
+			By("Waiting for DRA quota to be fully released from previous tests")
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			By("Creating shared ResourceClaimTemplate requesting 1 GPU")
+			rct := newDRAResourceClaimTemplate("gpu-template-shared", draTestNamespace, 1)
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating first job referencing shared template (fills 1/1 quota)")
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
+			job1 := newDRAJob(builder, "dra-fill-job-1", "gpu-template-shared", draTestQueue)
+			createdJob1, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for first job to be admitted")
+			Eventually(func() bool {
+				return !testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob1.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Verifying first job pod is running")
+			Eventually(func() bool {
+				return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob1.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Creating second job referencing same shared template (quota full, should be suspended)")
+			job2 := newDRAJob(builder, "dra-fill-job-2", "gpu-template-shared", draTestQueue)
+			createdJob2, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
+
+			By("Verifying second job is suspended (quota full)")
+			Consistently(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob2.Name)
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+
+			By("Deleting first job to free quota")
+			testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
+
+			By("Verifying second job is admitted after quota freed")
+			Eventually(func() bool {
+				return !testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob2.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Verifying second job pod is running")
+			Eventually(func() bool {
+				return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob2.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+		})
+
+		It("should verify ClusterQueue shows correct DRA resource usage", func(ctx context.Context) {
+			By("Waiting for DRA quota to be fully released from previous tests")
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			By("Creating ResourceClaimTemplate for 1 GPU")
+			rct := newDRAResourceClaimTemplate("gpu-template-usage", draTestNamespace, 1)
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Job")
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
+			job := newDRAJob(builder, "dra-usage-job", "gpu-template-usage", draTestQueue)
+			createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+
+			By("Verifying ClusterQueue shows DRA resource reservation")
+			Eventually(func(g Gomega) {
+				cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, draClusterQueueName, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cq.Status.FlavorsReservation).NotTo(BeEmpty())
+
+				found := false
+				for _, flavor := range cq.Status.FlavorsReservation {
+					for _, res := range flavor.Resources {
+						if res.Name == corev1.ResourceName(draLogicalResource) {
+							g.Expect(res.Total.Cmp(resource.MustParse("1"))).To(Equal(0),
+								"ClusterQueue should show 1 %s reserved", draLogicalResource)
+							found = true
+						}
+					}
+				}
+				g.Expect(found).To(BeTrue(), "DRA resource %s not found in ClusterQueue reservation", draLogicalResource)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job pod is running")
+			Eventually(func() bool {
+				return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+		})
+	})
+
+	When("different workload types use DRA resources", func() {
+		It("should admit DRA workloads for Pod, Deployment, and StatefulSet types", func(ctx context.Context) {
+			By("Waiting for DRA quota to be fully released from previous tests")
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			By("Creating ResourceClaimTemplate requesting 1 GPU")
+			rct := newDRAResourceClaimTemplate("gpu-template-workload-types", draTestNamespace, 1)
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
+
+			// --- Standalone Pod ---
+			By("Creating a Kueue-managed Pod with DRA ResourceClaim")
+			podStart := metav1.Now()
+			pod := builder.NewPod()
+			addDRAClaims(&pod.Spec, "gpu-template-workload-types")
+			createdPod, err := kubeClient.CoreV1().Pods(draTestNamespace).Create(ctx, pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			verifyWorkloadCreated(kueueClient, draTestNamespace, string(createdPod.UID))
+
+			By("Verifying Pod is running")
+			Eventually(func(g Gomega) {
+				p, err := kubeClient.CoreV1().Pods(draTestNamespace).Get(ctx, createdPod.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(p.Status.Phase).To(Equal(corev1.PodRunning), "Pod not running")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying ResourceClaim is allocated and reserved for Pod")
+			verifyResourceClaimAllocated(ctx, kubeClient, draTestNamespace, podStart)
+
+			By("Cleaning up Pod to free DRA quota")
+			testutils.CleanUpObject(ctx, genericClient, createdPod)
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			// --- Deployment ---
+			By("Creating a Kueue-managed Deployment with DRA ResourceClaim")
+			deployStart := metav1.Now()
+			deploy := builder.NewDeployment()
+			addDRAClaims(&deploy.Spec.Template.Spec, "gpu-template-workload-types")
+			createdDeploy, err := kubeClient.AppsV1().Deployments(draTestNamespace).Create(ctx, deploy, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for Deployment pod to be created and workload to be admitted")
+			waitForPodWorkloadAdmitted(ctx, kubeClient, kueueClient, draTestNamespace, "app=test-deployment")
+
+			By("Verifying Deployment is available")
+			Eventually(func(g Gomega) {
+				d, err := kubeClient.AppsV1().Deployments(draTestNamespace).Get(ctx, createdDeploy.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(d.Status.AvailableReplicas).To(Equal(int32(1)), "Deployment not available")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying ResourceClaim is allocated and reserved for Deployment")
+			verifyResourceClaimAllocated(ctx, kubeClient, draTestNamespace, deployStart)
+
+			By("Cleaning up Deployment to free DRA quota")
+			testutils.CleanUpObject(ctx, genericClient, createdDeploy)
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			// --- StatefulSet ---
+			By("Creating a Kueue-managed StatefulSet with DRA ResourceClaim")
+			ssStart := metav1.Now()
+			ss := builder.NewStatefulSet()
+			addDRAClaims(&ss.Spec.Template.Spec, "gpu-template-workload-types")
+			createdSS, err := kubeClient.AppsV1().StatefulSets(draTestNamespace).Create(ctx, ss, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpObject(ctx, genericClient, createdSS)
+
+			By("Waiting for StatefulSet pod to be created and workload to be admitted")
+			waitForPodWorkloadAdmitted(ctx, kubeClient, kueueClient, draTestNamespace, "app=test-statefulset")
+
+			By("Verifying StatefulSet is ready")
+			Eventually(func(g Gomega) {
+				s, err := kubeClient.AppsV1().StatefulSets(draTestNamespace).Get(ctx, createdSS.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(s.Status.ReadyReplicas).To(Equal(int32(1)), "StatefulSet not ready")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying ResourceClaim is allocated and reserved for StatefulSet")
+			verifyResourceClaimAllocated(ctx, kubeClient, draTestNamespace, ssStart)
+		})
+	})
+
+	When("deviceClassMappings are misconfigured", func() {
+		It("should not admit DRA workloads when deviceClassMappings point to wrong DeviceClass", func(ctx context.Context) {
+			By("Waiting for DRA quota to be fully released from previous tests")
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			By("Saving current Kueue config before modifying deviceClassMappings")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			savedConfig := kueueInstance.Spec.Config.DeepCopy()
+			DeferCleanup(func(cleanupCtx context.Context) {
+				applyKueueConfig(cleanupCtx, *savedConfig, kubeClient)
 			})
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(wlList.Items).NotTo(BeEmpty(), "workload not found for job %s", createdJob.Name)
 
-			wl := wlList.Items[0]
-			g.Expect(wl.Status.Admission).NotTo(BeNil(), "workload should be admitted")
-			g.Expect(wl.Status.Admission.PodSetAssignments).To(HaveLen(1))
-
-			assignment := wl.Status.Admission.PodSetAssignments[0]
-			g.Expect(assignment.ResourceUsage).To(HaveKey(corev1.ResourceName(draLogicalResource)))
-			g.Expect(assignment.ResourceUsage[corev1.ResourceName(draLogicalResource)]).To(Equal(resource.MustParse("1")))
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
-
-		By("Verifying job is unsuspended")
-		Eventually(func() bool {
-			j, err := kubeClient.BatchV1().Jobs(draTestNamespace).Get(ctx, createdJob.Name, metav1.GetOptions{})
-			if err != nil {
-				return false
-			}
-			return j.Spec.Suspend == nil || !*j.Spec.Suspend
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
-
-		By("Verifying job pod is running")
-		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob.Name)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
-	})
-
-	It("should suspend job when DRA quota is exceeded", func(ctx context.Context) {
-		By("Creating ResourceClaimTemplate requesting more GPUs than quota allows")
-		rct := &resourcev1.ResourceClaimTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "gpu-template-exceed",
-				Namespace: draTestNamespace,
-			},
-			Spec: resourcev1.ResourceClaimTemplateSpec{
-				Spec: resourcev1.ResourceClaimSpec{
-					Devices: resourcev1.DeviceClaim{
-						Requests: []resourcev1.DeviceRequest{
-							{
-								Name: "gpu-req",
-								Exactly: &resourcev1.ExactDeviceRequest{
-									DeviceClassName: draDeviceClassName,
-									Count:           5, // quota is 1
-								},
-							},
-						},
-					},
+			By("Setting wrong DeviceClass name in deviceClassMappings")
+			wrongConfig := *savedConfig
+			wrongConfig.Resources.DeviceClassMappings = []ssv1.DeviceClassMapping{
+				{
+					Name:             draLogicalResource,
+					DeviceClassNames: []ssv1.DeviceClassName{"nonexistent.nvidia.com"},
 				},
-			},
-		}
-		_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
+			}
+			applyKueueConfig(ctx, wrongConfig, kubeClient)
 
-		By("Creating Job that exceeds DRA quota")
-		builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
-		job := builder.NewJob()
-		setDRAJobCPU(job)
-		job.Name = "dra-exceed-job"
-		job.Labels[testutils.QueueLabel] = draTestQueue
-		job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
-			{Name: "gpu", ResourceClaimTemplateName: ptr.To("gpu-template-exceed")},
-		}
-		job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{
-			{Name: "gpu"},
-		}
-		createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			By("Verifying ConfigMap has wrong DeviceClass name")
+			Eventually(func(g Gomega) {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				configData := configMap.Data["controller_manager_config.yaml"]
+				g.Expect(configData).To(ContainSubstring("nonexistent.nvidia.com"), "wrong DeviceClass not configured yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
-		By("Verifying job remains suspended")
-		Consistently(func() bool {
-			return testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob.Name)
-		}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+			By("Creating ResourceClaimTemplate for DRA job")
+			rct := newDRAResourceClaimTemplate("gpu-template-wrong-class", draTestNamespace, 1)
+			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating DRA job with wrong DeviceClass mapping")
+			wrongClassStart := metav1.Now()
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
+			job := newDRAJob(builder, "dra-wrong-class", "gpu-template-wrong-class", draTestQueue)
+			createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+
+			By("Verifying job remains suspended due to wrong DeviceClass mapping")
+			Consistently(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob.Name)
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+
+			By("Verifying No ResourceClaim is created since the job was never unsuspended")
+			verifyNoResourceClaims(ctx, kubeClient, draTestNamespace, wrongClassStart)
+		})
 	})
 
-	It("should admit waiting job after DRA quota is freed", func(ctx context.Context) {
-		By("Waiting for DRA quota to be fully released from previous tests")
-		kueueClient := clients.UpstreamKueueClient
-		Eventually(func(g Gomega) {
-			cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, draClusterQueueName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			for _, flavor := range cq.Status.FlavorsReservation {
-				for _, res := range flavor.Resources {
-					if res.Name == corev1.ResourceName(draLogicalResource) {
-						g.Expect(res.Total.Cmp(resource.MustParse("0"))).To(Equal(0),
-							"%s quota should be 0 before test starts, got %s", draLogicalResource, res.Total.String())
-					}
-				}
-			}
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+	When("preemption is enabled", func() {
+		It("should preempt low-priority DRA workload when high-priority DRA workload is submitted", func(ctx context.Context) {
+			By("Waiting for DRA quota to be fully released from previous tests")
+			waitForDRAQuotaRelease(ctx, kueueClient)
 
-		By("Creating shared ResourceClaimTemplate requesting 1 GPU")
-		rct := &resourcev1.ResourceClaimTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "gpu-template-shared",
-				Namespace: draTestNamespace,
-			},
-			Spec: resourcev1.ResourceClaimTemplateSpec{
-				Spec: resourcev1.ResourceClaimSpec{
-					Devices: resourcev1.DeviceClaim{
-						Requests: []resourcev1.DeviceRequest{
-							{
-								Name: "gpu-req",
-								Exactly: &resourcev1.ExactDeviceRequest{
-									DeviceClassName: draDeviceClassName,
-									Count:           1,
-								},
-							},
-						},
-					},
+			By("Creating PriorityClasses")
+			lowPC, cleanupLowPC, err := createPriorityClass(ctx, 100, "Low priority for DRA preemption")
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLowPC)
+			highPC, cleanupHighPC, err := createPriorityClass(ctx, 1000, "High priority for DRA preemption")
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupHighPC)
+
+			By("Creating ClusterQueue with preemption enabled and DRA quota")
+			preemptCQ, cleanupCQ, err := testutils.NewClusterQueue().
+				WithGenerateName().
+				WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
+				WithDRAResource(draLogicalResource, "1").
+				CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
+
+			By("Creating LocalQueue for preemption test")
+			preemptLQ, cleanupLQ, err := testutils.NewLocalQueue(draTestNamespace, "").WithGenerateName().WithClusterQueue(preemptCQ.Name).CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQ)
+
+			By("Creating ResourceClaimTemplate")
+			rct := newDRAResourceClaimTemplate("gpu-template-preempt", draTestNamespace, 1)
+			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Submitting low-priority DRA job that fills the 1-GPU quota")
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, preemptLQ.Name)
+			lowJob := newDRAJob(builder, "dra-low-prio", "gpu-template-preempt", preemptLQ.Name)
+			lowJob.Spec.Template.Spec.PriorityClassName = lowPC.Name
+			createdLowJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, lowJob, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdLowJob.Namespace, createdLowJob.Name)
+
+			By("Verifying low-priority job is admitted")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdLowJob.UID), kueuev1beta2.WorkloadAdmitted, "low-priority")
+
+			By("Verifying low-priority job pod is running")
+			Eventually(func() bool {
+				return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdLowJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Submitting high-priority DRA job that triggers preemption")
+			highJob := newDRAJob(builder, "dra-high-prio", "gpu-template-preempt", preemptLQ.Name)
+			highJob.Spec.Template.Spec.PriorityClassName = highPC.Name
+			createdHighJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, highJob, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdHighJob.Namespace, createdHighJob.Name)
+
+			By("Verifying low-priority job is evicted")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdLowJob.UID), kueuev1beta2.WorkloadEvicted, "low-priority")
+
+			By("Verifying high-priority job is admitted")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdHighJob.UID), kueuev1beta2.WorkloadAdmitted, "high-priority")
+
+			By("Waiting for high-priority job to complete")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdHighJob.UID), kueuev1beta2.WorkloadFinished, "high-priority")
+
+			By("Verifying low-priority job is re-admitted after high-priority completes")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdLowJob.UID), kueuev1beta2.WorkloadAdmitted, "low-priority")
+		})
+	})
+
+	When("gang scheduling is enabled", func() {
+		It("should enforce all-or-nothing admission for gang DRA workloads", func(ctx context.Context) {
+			By("Waiting for DRA quota to be fully released from previous tests")
+			waitForDRAQuotaRelease(ctx, kueueClient)
+
+			By("Saving current Kueue config and enabling gang scheduling")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			savedConfig := kueueInstance.Spec.Config.DeepCopy()
+			DeferCleanup(func(cleanupCtx context.Context) {
+				applyKueueConfig(cleanupCtx, *savedConfig, kubeClient)
+			})
+
+			gangConfig := *savedConfig
+			gangConfig.GangScheduling = ssv1.GangScheduling{
+				Policy: ssv1.GangSchedulingPolicyByWorkload,
+				ByWorkload: &ssv1.ByWorkload{
+					Admission: ssv1.GangSchedulingWorkloadAdmissionSequential,
 				},
-			},
-		}
-		_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
+			}
+			applyKueueConfig(ctx, gangConfig, kubeClient)
 
-		By("Creating first job referencing shared template (fills 1/1 quota)")
-		builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
-		job1 := builder.NewJob()
-		setDRAJobCPU(job1)
-		job1.Name = "dra-fill-job-1"
-		job1.Labels[testutils.QueueLabel] = draTestQueue
-		job1.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
-			{Name: "gpu", ResourceClaimTemplateName: ptr.To("gpu-template-shared")},
-		}
-		job1.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{
-			{Name: "gpu"},
-		}
-		createdJob1, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job1, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
+			By("Creating ClusterQueue with 2 GPU DRA quota")
+			gangCQ, cleanupCQ, err := testutils.NewClusterQueue().
+				WithGenerateName().
+				WithDRAResource(draLogicalResource, "2").
+				CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
 
-		By("Waiting for first job to be admitted")
-		Eventually(func() bool {
-			return !testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob1.Name)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+			By("Creating LocalQueue for gang scheduling test")
+			gangLQ, cleanupLQ, err := testutils.NewLocalQueue(draTestNamespace, "").WithGenerateName().WithClusterQueue(gangCQ.Name).CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQ)
 
-		By("Verifying first job pod is running")
-		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob1.Name)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+			By("Creating ResourceClaimTemplate")
+			rct := newDRAResourceClaimTemplate("gpu-template-gang", draTestNamespace, 1)
+			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		By("Creating second job referencing same shared template (quota full, should be suspended)")
-		job2 := builder.NewJob()
-		setDRAJobCPU(job2)
-		job2.Name = "dra-fill-job-2"
-		job2.Labels[testutils.QueueLabel] = draTestQueue
-		job2.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
-			{Name: "gpu", ResourceClaimTemplateName: ptr.To("gpu-template-shared")},
-		}
-		job2.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{
-			{Name: "gpu"},
-		}
-		createdJob2, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job2, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
+			By("Submitting single-pod DRA job that fills 1 of 2 GPUs")
+			builder := testutils.NewTestResourceBuilder(draTestNamespace, gangLQ.Name)
+			singleJob := newDRAJob(builder, "dra-single-gpu", "gpu-template-gang", gangLQ.Name)
+			createdSingleJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, singleJob, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		By("Verifying second job is suspended (quota full)")
-		Consistently(func() bool {
-			return testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob2.Name)
-		}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+			By("Verifying single-pod job is admitted and running")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdSingleJob.UID), kueuev1beta2.WorkloadAdmitted, "single-gpu")
+			Eventually(func() bool {
+				return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdSingleJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
-		By("Deleting first job to free quota")
-		testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
+			By("Submitting gang DRA job (parallelism=2, needs 2 GPUs, only 1 free)")
+			gangJob := newDRAJob(builder, "dra-gang-job", "gpu-template-gang", gangLQ.Name)
+			gangJob.Spec.Parallelism = ptr.To(int32(2))
+			gangJob.Spec.Completions = ptr.To(int32(2))
+			createdGangJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, gangJob, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdGangJob.Namespace, createdGangJob.Name)
 
-		By("Verifying second job is admitted after quota freed")
-		Eventually(func() bool {
-			return !testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdJob2.Name)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+			By("Verifying gang job remains suspended (not enough DRA quota for all pods)")
+			Consistently(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdGangJob.Name)
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
 
-		By("Verifying second job pod is running")
-		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob2.Name)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+			By("Deleting single-pod job to free its GPU")
+			testutils.CleanUpJob(ctx, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
+
+			By("Verifying gang job is admitted after quota is freed")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdGangJob.UID), kueuev1beta2.WorkloadAdmitted, "gang")
+
+			By("Verifying gang job is unsuspended")
+			Eventually(func() bool {
+				return !testutils.IsJobSuspended(ctx, kubeClient, draTestNamespace, createdGangJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Waiting for gang job to complete")
+			checkWorkloadCondition(ctx, draTestNamespace, string(createdGangJob.UID), kueuev1beta2.WorkloadFinished, "gang")
+		})
 	})
 
-	It("should verify ClusterQueue shows correct DRA resource usage", func(ctx context.Context) {
-		By("Waiting for DRA quota to be fully released from previous tests")
-		kueueClient := clients.UpstreamKueueClient
-		Eventually(func(g Gomega) {
-			cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, draClusterQueueName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			for _, flavor := range cq.Status.FlavorsReservation {
-				for _, res := range flavor.Resources {
-					if res.Name == corev1.ResourceName(draLogicalResource) {
-						g.Expect(res.Total.Cmp(resource.MustParse("0"))).To(Equal(0),
-							"%s quota should be 0 before test starts, got %s", draLogicalResource, res.Total.String())
-					}
-				}
-			}
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
-
-		By("Creating ResourceClaimTemplate for 1 GPU")
-		rct := &resourcev1.ResourceClaimTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "gpu-template-usage",
-				Namespace: draTestNamespace,
-			},
-			Spec: resourcev1.ResourceClaimTemplateSpec{
-				Spec: resourcev1.ResourceClaimSpec{
-					Devices: resourcev1.DeviceClaim{
-						Requests: []resourcev1.DeviceRequest{
-							{
-								Name: "gpu-req",
-								Exactly: &resourcev1.ExactDeviceRequest{
-									DeviceClassName: draDeviceClassName,
-									Count:           1,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-		_, err := kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer kubeClient.ResourceV1().ResourceClaimTemplates(draTestNamespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
-
-		By("Creating Job")
-		builder := testutils.NewTestResourceBuilder(draTestNamespace, draTestQueue)
-		job := builder.NewJob()
-		setDRAJobCPU(job)
-		job.Name = "dra-usage-job"
-		job.Labels[testutils.QueueLabel] = draTestQueue
-		job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
-			{Name: "gpu", ResourceClaimTemplateName: ptr.To("gpu-template-usage")},
-		}
-		job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{
-			{Name: "gpu"},
-		}
-		createdJob, err := kubeClient.BatchV1().Jobs(draTestNamespace).Create(ctx, job, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
-
-		By("Verifying ClusterQueue shows DRA resource reservation")
-		Eventually(func(g Gomega) {
-			cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, draClusterQueueName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(cq.Status.FlavorsReservation).NotTo(BeEmpty())
-
-			found := false
-			for _, flavor := range cq.Status.FlavorsReservation {
-				for _, res := range flavor.Resources {
-					if res.Name == corev1.ResourceName(draLogicalResource) {
-						g.Expect(res.Total.Cmp(resource.MustParse("1"))).To(Equal(0),
-							"ClusterQueue should show 1 %s reserved", draLogicalResource)
-						found = true
-					}
-				}
-			}
-			g.Expect(found).To(BeTrue(), "DRA resource %s not found in ClusterQueue reservation", draLogicalResource)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
-
-		By("Verifying job pod is running")
-		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, draTestNamespace, createdJob.Name)
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
-	})
 })
+
+func newDRAResourceClaimTemplate(name, namespace string, gpuCount int64) *resourcev1.ResourceClaimTemplate {
+	return &resourcev1.ResourceClaimTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: resourcev1.ResourceClaimTemplateSpec{
+			Spec: resourcev1.ResourceClaimSpec{
+				Devices: resourcev1.DeviceClaim{
+					Requests: []resourcev1.DeviceRequest{
+						{
+							Name: "gpu-req",
+							Exactly: &resourcev1.ExactDeviceRequest{
+								DeviceClassName: draDeviceClassName,
+								Count:           gpuCount,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// waitForDRAQuotaRelease waits until the DRA resource quota in the ClusterQueue drops to zero.
+func waitForDRAQuotaRelease(ctx context.Context, kueueClient *upstreamkueueclient.Clientset) {
+	Eventually(func() error {
+		cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, draClusterQueueName, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		for _, flavor := range cq.Status.FlavorsReservation {
+			for _, res := range flavor.Resources {
+				if res.Name == corev1.ResourceName(draLogicalResource) {
+					if res.Total.Cmp(resource.MustParse("0")) != 0 {
+						return fmt.Errorf("%s quota should be 0, got %s", draLogicalResource, res.Total.String())
+					}
+				}
+			}
+		}
+		return nil
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
+
+// waitForPodWorkloadAdmitted waits until a pod matching the label selector has
+// a corresponding admitted Kueue workload, correlating via OwnerReferences.
+func waitForPodWorkloadAdmitted(ctx context.Context, kubeClient *kubernetes.Clientset, kueueClient *upstreamkueueclient.Clientset, namespace, labelSelector string) {
+	Eventually(func() error {
+		pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: labelSelector,
+		})
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) == 0 {
+			return fmt.Errorf("no pods found with label %s", labelSelector)
+		}
+		ownerUIDs := make(map[types.UID]bool)
+		for _, pod := range pods.Items {
+			for _, ref := range pod.OwnerReferences {
+				ownerUIDs[ref.UID] = true
+			}
+			ownerUIDs[pod.UID] = true
+		}
+		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		for _, wl := range workloads.Items {
+			if wl.Status.Admission == nil {
+				continue
+			}
+			for _, ref := range wl.OwnerReferences {
+				if ownerUIDs[ref.UID] {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("no admitted workload correlated to pods with label %s", labelSelector)
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
+
+// verifyResourceClaimAllocated verifies that at least one ResourceClaim created after
+// the given timestamp is in the "allocated,reserved" state.
+func verifyResourceClaimAllocated(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, createdAfter metav1.Time) {
+	Eventually(func(g Gomega) {
+		claims, err := kubeClient.ResourceV1().ResourceClaims(namespace).List(ctx, metav1.ListOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		var filtered []resourcev1.ResourceClaim
+		for _, c := range claims.Items {
+			if c.CreationTimestamp.After(createdAfter.Time) {
+				filtered = append(filtered, c)
+			}
+		}
+		g.Expect(filtered).NotTo(BeEmpty(), "no ResourceClaim created after %v in namespace %s", createdAfter.Time, namespace)
+		claim := filtered[0]
+		g.Expect(claim.Status.Allocation).NotTo(BeNil(), "ResourceClaim not allocated in namespace %s", namespace)
+		g.Expect(claim.Status.ReservedFor).NotTo(BeEmpty(), "ResourceClaim not reserved in namespace %s", namespace)
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
+
+// verifyNoResourceClaims verifies that no ResourceClaims created after the given
+// timestamp exist in the namespace.
+func verifyNoResourceClaims(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, createdAfter metav1.Time) {
+	Consistently(func(g Gomega) {
+		claims, err := kubeClient.ResourceV1().ResourceClaims(namespace).List(ctx, metav1.ListOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		var filtered []resourcev1.ResourceClaim
+		for _, c := range claims.Items {
+			if c.CreationTimestamp.After(createdAfter.Time) {
+				filtered = append(filtered, c)
+			}
+		}
+		g.Expect(filtered).To(BeEmpty(), "expected no ResourceClaims after %v in namespace %s", createdAfter.Time, namespace)
+	}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed())
+}
+
+// newDRAJob creates a Job with DRA ResourceClaim configuration for the given template.
+func newDRAJob(builder *testutils.TestResourceBuilder, name, templateName, queueName string) *batchv1.Job {
+	job := builder.NewJob()
+	setDRAJobCPU(job)
+	job.Name = name
+	job.Labels[testutils.QueueLabel] = queueName
+	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 30"}
+	job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
+		{Name: "gpu", ResourceClaimTemplateName: ptr.To(templateName)},
+	}
+	job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{{Name: "gpu"}}
+	return job
+}
+
+// adds DRA ResourceClaim references and reduces CPU request on a PodSpec.
+func addDRAClaims(spec *corev1.PodSpec, templateName string) {
+	spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+	spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{{Name: "gpu-claim"}}
+	spec.ResourceClaims = []corev1.PodResourceClaim{
+		{Name: "gpu-claim", ResourceClaimTemplateName: ptr.To(templateName)},
+	}
+}
