@@ -31,6 +31,10 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=kueue.openshift.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("AdmissionFairSharing"):
+		return &kueueoperatorv1.AdmissionFairSharingApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("AdmissionFairSharingCustom"):
+		return &kueueoperatorv1.AdmissionFairSharingCustomApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ByWorkload"):
 		return &kueueoperatorv1.ByWorkloadApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeviceClassMapping"):
@@ -57,6 +61,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.PreemptionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Resources"):
 		return &kueueoperatorv1.ResourcesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ResourceWeight"):
+		return &kueueoperatorv1.ResourceWeightApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkloadManagement"):
 		return &kueueoperatorv1.WorkloadManagementApplyConfiguration{}
 

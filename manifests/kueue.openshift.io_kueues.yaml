@@ -44,6 +44,107 @@ spec:
                   config is the desired configuration
                   for the Kueue operator.
                 properties:
+                  admissionFairSharing:
+                    description: |-
+                      admissionFairSharing enables fair sharing at admission time.
+                      It makes Kueue order pending workloads by each LocalQueue's accumulated resource usage,
+                      so that queues which have consumed fewer resources are admitted first.
+                      This section configures the usage decay rate, the sampling frequency, and per-resource weights.
+                    properties:
+                      configuration:
+                        description: |-
+                          configuration determines if admission fair sharing uses default or custom settings.
+                          The allowed values are Default and Custom.
+                          Default means admission fair sharing is enabled with kueue's defaults,
+                          which are subject to change over time.
+                          Custom means admission fair sharing is enabled with user-provided configuration
+                          in the custom field.
+                        enum:
+                        - Default
+                        - Custom
+                        type: string
+                      custom:
+                        description: |-
+                          custom provides customized configuration for admission fair sharing.
+                          custom is required when configuration is Custom, and forbidden otherwise.
+                          When custom is specified, at least one of its fields must be set.
+                        minProperties: 1
+                        properties:
+                          resourceWeights:
+                            description: |-
+                              resourceWeights assigns weights to resources which are then used to calculate LocalQueue's
+                              resource usage and order Workloads.
+                              When omitted, kueue will decide the default, which is subject to change over time.
+                              The current default weight is 1 for any resource.
+                              When specified, the list must contain between 1 and 16 items.
+                              Each entry must have a unique resource name.
+                            items:
+                              description: ResourceWeight associates a resource name
+                                with a weight used for fair sharing calculations.
+                              properties:
+                                name:
+                                  description: |-
+                                    name consists of an optional DNS subdomain prefix (lowercase alphanumeric, hyphens, dots,
+                                    up to 253 characters), followed by a slash '/', and a name segment.
+                                    The name segment must be at most 63 characters, consisting of alphanumeric characters (upper or lower case),
+                                    with '-', '_', and '.' allowed anywhere except the first or last character.
+                                  maxLength: 317
+                                  minLength: 1
+                                  type: string
+                                  x-kubernetes-validations:
+                                  - message: must be a qualified name (e.g., 'nvidia.com/gpu'
+                                      or 'cpu')
+                                    rule: '!format.qualifiedName().validate(self).hasValue()'
+                                weight:
+                                  description: |-
+                                    weight is a string representation of a non-negative float64 value
+                                    used as a weight for a resource in fair sharing calculations (e.g., "1.0", "0.5", ".5", "+0.5", "1e-3").
+                                    The weight must be at most 32 characters.
+                                  maxLength: 32
+                                  minLength: 1
+                                  type: string
+                                  x-kubernetes-validations:
+                                  - message: must be a non-negative number (e.g.,
+                                      '1.0', '0.5', '.5', '+0.5', '1e-3')
+                                    rule: self.matches(r'^[+]?([0-9]*\.?[0-9]+)([eE][+-]?[0-9]+)?$')
+                              required:
+                              - name
+                              - weight
+                              type: object
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                          usageHalfLifeTimeSeconds:
+                            description: |-
+                              usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
+                              When omitted, usage will be reset to 0 immediately.
+                              The value must be between 1 and 31536000 (one year in seconds).
+                            format: int32
+                            maximum: 31536000
+                            minimum: 1
+                            type: integer
+                          usageSamplingIntervalSeconds:
+                            description: |-
+                              usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
+                              When omitted, kueue will decide the default, which is subject to change over time.
+                              The current default is 300 (5 minutes).
+                              The value must be between 1 and 3600 (one hour in seconds).
+                            format: int32
+                            maximum: 3600
+                            minimum: 1
+                            type: integer
+                        type: object
+                    required:
+                    - configuration
+                    type: object
+                    x-kubernetes-validations:
+                    - message: custom is required when configuration is Custom, and
+                        forbidden otherwise
+                      rule: 'has(self.configuration) && self.configuration == ''Custom''
+                        ? has(self.custom) : !has(self.custom)'
                   gangScheduling:
                     description: |-
                       gangScheduling controls how Kueue admits workloads.
