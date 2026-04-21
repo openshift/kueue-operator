@@ -55,6 +55,9 @@ function ginkgo_label_filter() {
     dra)
       echo ""
       ;;
+    customconfigs)
+      echo "feature:admissionfairsharing"
+      ;;
     *)
       echo ""
       ;;
@@ -84,9 +87,34 @@ label_worker_nodes
 # Disable scc rules for e2e pod tests
 allow_privileged_access
 
+function configure_kueue_for_folder() {
+  local folder="$1"
+  case "$folder" in
+    customconfigs)
+      echo "Patching cluster Kueue CR for customconfigs..."
+      $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
+        '{"spec":{"config":{"admissionFairSharing":{"configuration":"Custom","custom":{"usageHalfLifeTimeSeconds":1,"usageSamplingIntervalSeconds":1}}}}}'
+      # Let's wait for the reconciliation to complete. The test suite checks if kueue-controller-manager is available.
+      $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
+      ;;
+  esac
+}
+
+function restore_kueue_for_folder() {
+  local folder="$1"
+  case "$folder" in
+    customconfigs)
+      echo "Removing admissionFairSharing from cluster Kueue CR..."
+      $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
+        '[{"op":"remove","path":"/spec/config/admissionFairSharing"}]'
+      ;;
+  esac
+}
+
 exit_code=0
 for folder in $E2E_TARGET_FOLDERS; do
   echo "=== Running upstream e2e tests for: ${folder} ==="
+  configure_kueue_for_folder "$folder"
   label_filter=$(ginkgo_label_filter "$folder")
   folder_ginkgo_args="${GINKGO_ARGS:-}"
   if [ -n "$label_filter" ]; then
@@ -103,6 +131,8 @@ for folder in $E2E_TARGET_FOLDERS; do
     --flake-attempts=3 \
     --no-color \
     -v "./upstream/kueue/src/test/e2e/${folder}/..." || exit_code=$?
+
+  restore_kueue_for_folder "$folder"
 done
 exit $exit_code
 
