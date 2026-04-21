@@ -6,6 +6,9 @@ metadata:
   labels:
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
     rbac.kueue.x-k8s.io/batch-admin: "true"
     rbac.kueue.x-k8s.io/batch-user: "true"
   name: kueue-rayjob-viewer-role
