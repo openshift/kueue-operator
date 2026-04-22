@@ -34,21 +34,15 @@ import (
 )
 
 const (
-	erTestNamespace         = "kueue-dra-er-test"
-	erTestQueue             = "dra-er-test-queue"
-	erClusterQueueName      = "dra-er-test-clusterqueue"
-	erMixedTestQueue        = "dra-er-mixed-queue"
-	erMixedClusterQueueName = "dra-er-mixed-clusterqueue"
-	extendedResourceName    = "nvidia.com/gpu"
+	erTestNamespacePrefix = "kueue-dra-er-test-"
+	erLocalQueueName      = "er-queue"
+	extendedResourceName  = "nvidia.com/gpu"
 )
 
 var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extended-resources"), Ordered, func() {
 	var (
-		initialKueueInstance  *ssv1.Kueue
-		cleanupClusterQueue   func()
-		cleanupLocalQueue     func()
-		cleanupResourceFlavor func()
-		maxGPUsPerNode        int
+		initialKueueInstance *ssv1.Kueue
+		maxGPUsPerNode       int
 	)
 
 	JustAfterEach(func(ctx context.Context) {
@@ -71,15 +65,26 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 		}
 
-		// Check if ResourceSlices exist for gpu.nvidia.com (driver is running)
+		// Wait for ResourceSlices to exist for gpu.nvidia.com (driver may still be deploying)
 		// and count GPUs per node (only devices with type=="gpu", excluding MIG slices)
+		Eventually(func() bool {
+			slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return false
+			}
+			for _, s := range slices.Items {
+				if s.Spec.Driver == draDeviceClassName {
+					return true
+				}
+			}
+			return false
+		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "No ResourceSlices found for driver gpu.nvidia.com - NVIDIA DRA driver not running")
+
 		slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		hasDriverSlices := false
 		gpusPerNode := map[string]int{}
 		for _, s := range slices.Items {
 			if s.Spec.Driver == draDeviceClassName {
-				hasDriverSlices = true
 				if s.Spec.NodeName != nil {
 					for _, d := range s.Spec.Devices {
 						// The NVIDIA DRA driver uses the bare "type" attribute key (not fully qualified)
@@ -94,10 +99,6 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 				}
 			}
 		}
-		if !hasDriverSlices {
-			Skip("No ResourceSlices found for driver gpu.nvidia.com - NVIDIA DRA driver not running")
-		}
-
 		for _, count := range gpusPerNode {
 			if count > maxGPUsPerNode {
 				maxGPUsPerNode = count
@@ -120,38 +121,42 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
+		// Wait for DRA feature gates to be enabled in Kueue config
 		Eventually(func() error {
 			configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
+			if !strings.Contains(configData, "DynamicResourceAllocation: true") {
+				return fmt.Errorf("DynamicResourceAllocation not enabled yet")
+			}
 			if !strings.Contains(configData, "DRAExtendedResources: true") {
 				return fmt.Errorf("DRAExtendedResources not enabled yet")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+	})
 
-		_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: erTestNamespace,
-				Labels: map[string]string{
-					testutils.OpenShiftManagedLabel: "true",
-				},
-			},
-		}, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+	AfterAll(func(ctx context.Context) {
+		if initialKueueInstance != nil {
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		}
+	})
 
+	It("should admit job with extended resource request and account DRA quota correctly", func(ctx context.Context) {
+		By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 		kueueClient := clients.UpstreamKueueClient
-		cleanupResourceFlavor, err = testutils.NewResourceFlavor().Create(ctx, kueueClient)
-		Expect(err).NotTo(HaveOccurred())
 
-		cq := testutils.NewClusterQueue()
-		cq.Name = erClusterQueueName
-		cq.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
+		resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupResourceFlavor)
+
+		cqWrapper := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
+		cqWrapper.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
 			CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(extendedResourceName)},
 			Flavors: []kueuev1beta2.FlavorQuotas{{
-				Name: "default",
+				Name: kueuev1beta2.ResourceFlavorReference(resourceFlavor.Name),
 				Resources: []kueuev1beta2.ResourceQuota{
 					{Name: "cpu", NominalQuota: resource.MustParse("100")},
 					{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
@@ -159,52 +164,42 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 				},
 			}},
 		}}
-		cleanupClusterQueue, err = cq.Create(ctx, kueueClient)
+		cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
 		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupCQ)
 
-		lq := testutils.NewLocalQueue(erTestNamespace, erTestQueue)
-		lq.Spec.ClusterQueue = kueuev1beta2.ClusterQueueReference(erClusterQueueName)
-		cleanupLocalQueue, err = lq.Create(ctx, kueueClient)
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: erTestNamespacePrefix,
+				Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+			},
+		}
+		cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
 		Expect(err).NotTo(HaveOccurred())
-	})
+		DeferCleanup(cleanupNs)
 
-	AfterAll(func(ctx context.Context) {
-		if cleanupLocalQueue != nil {
-			cleanupLocalQueue()
-		}
-		if cleanupClusterQueue != nil {
-			cleanupClusterQueue()
-		}
-		if cleanupResourceFlavor != nil {
-			cleanupResourceFlavor()
-		}
+		lq := testutils.NewLocalQueue(ns.Name, erLocalQueueName).WithClusterQueue(cq.Name)
+		_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupLQ)
 
-		kubeClient.CoreV1().Namespaces().Delete(ctx, erTestNamespace, metav1.DeleteOptions{})
-
-		if initialKueueInstance != nil {
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
-		}
-	})
-
-	It("should admit job with extended resource request and account DRA quota correctly", func(ctx context.Context) {
 		By("Creating Job with extended resource request nvidia.com/gpu")
-		builder := testutils.NewTestResourceBuilder(erTestNamespace, erTestQueue)
+		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job := builder.NewJob()
 		setDRAJobCPU(job)
 		job.Name = "er-basic-job"
-		job.Labels[testutils.QueueLabel] = erTestQueue
+		job.Labels[testutils.QueueLabel] = erLocalQueueName
 		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
 		job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
 			corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
 		}
-		createdJob, err := kubeClient.BatchV1().Jobs(erTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 		By("Verifying workload is admitted with correct quota under extendedResourceName")
-		kueueClient := clients.UpstreamKueueClient
 		Eventually(func(g Gomega) {
-			wlList, err := kueueClient.KueueV1beta2().Workloads(erTestNamespace).List(ctx, metav1.ListOptions{
+			wlList, err := kueueClient.KueueV1beta2().Workloads(ns.Name).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
 			})
 			g.Expect(err).NotTo(HaveOccurred())
@@ -221,17 +216,17 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By("Verifying job is unsuspended")
 		Eventually(func() bool {
-			return !testutils.IsJobSuspended(ctx, kubeClient, erTestNamespace, createdJob.Name)
+			return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 		By("Verifying job pod is running")
 		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, erTestNamespace, createdJob.Name)
+			return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 		By("Verifying extendedResourceClaimStatus is populated in pod status")
 		Eventually(func(g Gomega) {
-			pods, err := kubeClient.CoreV1().Pods(erTestNamespace).List(ctx, metav1.ListOptions{
+			pods, err := kubeClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", createdJob.Name),
 			})
 			g.Expect(err).NotTo(HaveOccurred())
@@ -245,98 +240,159 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By("Verifying auto-generated ResourceClaim has the extended resource annotation")
 		Eventually(func(g Gomega) {
-			pods, err := kubeClient.CoreV1().Pods(erTestNamespace).List(ctx, metav1.ListOptions{
+			pods, err := kubeClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", createdJob.Name),
 			})
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(pods.Items).NotTo(BeEmpty())
 
 			claimName := pods.Items[0].Status.ExtendedResourceClaimStatus.ResourceClaimName
-			claim, err := kubeClient.ResourceV1().ResourceClaims(erTestNamespace).Get(ctx, claimName, metav1.GetOptions{})
+			claim, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).Get(ctx, claimName, metav1.GetOptions{})
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(claim.Annotations).To(HaveKeyWithValue("resource.kubernetes.io/extended-resource-claim", "true"))
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 	})
 
 	It("should suspend job when extended resource quota is exceeded", func(ctx context.Context) {
+		By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
+		kueueClient := clients.UpstreamKueueClient
+
+		resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupResourceFlavor)
+
+		cqWrapper := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
+		cqWrapper.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
+			CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(extendedResourceName)},
+			Flavors: []kueuev1beta2.FlavorQuotas{{
+				Name: kueuev1beta2.ResourceFlavorReference(resourceFlavor.Name),
+				Resources: []kueuev1beta2.ResourceQuota{
+					{Name: "cpu", NominalQuota: resource.MustParse("100")},
+					{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
+					{Name: corev1.ResourceName(extendedResourceName), NominalQuota: *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)},
+				},
+			}},
+		}}
+		cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupCQ)
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: erTestNamespacePrefix,
+				Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+			},
+		}
+		cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupNs)
+
+		lq := testutils.NewLocalQueue(ns.Name, erLocalQueueName).WithClusterQueue(cq.Name)
+		_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupLQ)
+
 		By(fmt.Sprintf("Creating Job requesting %d GPUs via extended resources (quota is %d)", maxGPUsPerNode+1, maxGPUsPerNode))
-		builder := testutils.NewTestResourceBuilder(erTestNamespace, erTestQueue)
+		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job := builder.NewJob()
 		setDRAJobCPU(job)
 		job.Name = "er-exceed-job"
-		job.Labels[testutils.QueueLabel] = erTestQueue
+		job.Labels[testutils.QueueLabel] = erLocalQueueName
 		exceededCount := *resource.NewQuantity(int64(maxGPUsPerNode+1), resource.DecimalSI)
 		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = exceededCount
 		job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
 			corev1.ResourceName(extendedResourceName): exceededCount,
 		}
-		createdJob, err := kubeClient.BatchV1().Jobs(erTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 		By("Verifying job remains suspended")
 		Consistently(func() bool {
-			return testutils.IsJobSuspended(ctx, kubeClient, erTestNamespace, createdJob.Name)
+			return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
 		}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
 	})
 
 	It("should admit waiting job after extended resource quota is freed", func(ctx context.Context) {
-		By("Waiting for quota to be fully released from previous tests")
+		By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 		kueueClient := clients.UpstreamKueueClient
-		Eventually(func(g Gomega) {
-			cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, erClusterQueueName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			for _, flavor := range cq.Status.FlavorsReservation {
-				for _, res := range flavor.Resources {
-					if res.Name == corev1.ResourceName(extendedResourceName) {
-						g.Expect(res.Total.Cmp(resource.MustParse("0"))).To(Equal(0),
-							"%s quota should be 0 before test starts, got %s", extendedResourceName, res.Total.String())
-					}
-				}
-			}
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+		resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupResourceFlavor)
+
+		cqWrapper := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
+		cqWrapper.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
+			CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(extendedResourceName)},
+			Flavors: []kueuev1beta2.FlavorQuotas{{
+				Name: kueuev1beta2.ResourceFlavorReference(resourceFlavor.Name),
+				Resources: []kueuev1beta2.ResourceQuota{
+					{Name: "cpu", NominalQuota: resource.MustParse("100")},
+					{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
+					{Name: corev1.ResourceName(extendedResourceName), NominalQuota: *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)},
+				},
+			}},
+		}}
+		cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupCQ)
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: erTestNamespacePrefix,
+				Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+			},
+		}
+		cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupNs)
+
+		lq := testutils.NewLocalQueue(ns.Name, erLocalQueueName).WithClusterQueue(cq.Name)
+		_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupLQ)
 
 		By(fmt.Sprintf("Creating first job requesting all %d GPUs via extended resources (fills quota)", maxGPUsPerNode))
-		builder := testutils.NewTestResourceBuilder(erTestNamespace, erTestQueue)
+		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job1 := builder.NewJob()
 		setDRAJobCPU(job1)
 		job1.Name = "er-fill-job-1"
-		job1.Labels[testutils.QueueLabel] = erTestQueue
+		job1.Labels[testutils.QueueLabel] = erLocalQueueName
 		fillCount := *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)
 		job1.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = fillCount
 		job1.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
 			corev1.ResourceName(extendedResourceName): fillCount,
 		}
-		createdJob1, err := kubeClient.BatchV1().Jobs(erTestNamespace).Create(ctx, job1, metav1.CreateOptions{})
+		createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
 
 		By("Waiting for first job to be admitted")
 		Eventually(func() bool {
-			return !testutils.IsJobSuspended(ctx, kubeClient, erTestNamespace, createdJob1.Name)
+			return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob1.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 		By("Verifying first job pod is running")
 		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, erTestNamespace, createdJob1.Name)
+			return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob1.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 		By("Creating second job requesting 1 GPU via extended resources (quota full, should be suspended)")
 		job2 := builder.NewJob()
 		setDRAJobCPU(job2)
 		job2.Name = "er-fill-job-2"
-		job2.Labels[testutils.QueueLabel] = erTestQueue
+		job2.Labels[testutils.QueueLabel] = erLocalQueueName
 		job2.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
 		job2.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
 			corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
 		}
-		createdJob2, err := kubeClient.BatchV1().Jobs(erTestNamespace).Create(ctx, job2, metav1.CreateOptions{})
+		createdJob2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
 
 		By("Verifying second job is suspended (quota full)")
 		Consistently(func() bool {
-			return testutils.IsJobSuspended(ctx, kubeClient, erTestNamespace, createdJob2.Name)
+			return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob2.Name)
 		}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
 
 		By("Deleting first job to free quota")
@@ -344,53 +400,76 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By("Verifying second job is admitted after quota freed")
 		Eventually(func() bool {
-			return !testutils.IsJobSuspended(ctx, kubeClient, erTestNamespace, createdJob2.Name)
+			return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob2.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 		By("Verifying second job pod is running")
 		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, erTestNamespace, createdJob2.Name)
+			return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob2.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 	})
 
 	It("should verify ClusterQueue shows correct extended resource usage", func(ctx context.Context) {
-		By("Waiting for quota to be fully released from previous tests")
+		By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 		kueueClient := clients.UpstreamKueueClient
-		Eventually(func(g Gomega) {
-			cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, erClusterQueueName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			for _, flavor := range cq.Status.FlavorsReservation {
-				for _, res := range flavor.Resources {
-					if res.Name == corev1.ResourceName(extendedResourceName) {
-						g.Expect(res.Total.Cmp(resource.MustParse("0"))).To(Equal(0),
-							"%s quota should be 0 before test starts, got %s", extendedResourceName, res.Total.String())
-					}
-				}
-			}
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+		resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupResourceFlavor)
+
+		cqWrapper := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
+		cqWrapper.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
+			CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(extendedResourceName)},
+			Flavors: []kueuev1beta2.FlavorQuotas{{
+				Name: kueuev1beta2.ResourceFlavorReference(resourceFlavor.Name),
+				Resources: []kueuev1beta2.ResourceQuota{
+					{Name: "cpu", NominalQuota: resource.MustParse("100")},
+					{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
+					{Name: corev1.ResourceName(extendedResourceName), NominalQuota: *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)},
+				},
+			}},
+		}}
+		cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupCQ)
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: erTestNamespacePrefix,
+				Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+			},
+		}
+		cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupNs)
+
+		lq := testutils.NewLocalQueue(ns.Name, erLocalQueueName).WithClusterQueue(cq.Name)
+		_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(cleanupLQ)
 
 		By("Creating Job with 1 GPU via extended resource request")
-		builder := testutils.NewTestResourceBuilder(erTestNamespace, erTestQueue)
+		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job := builder.NewJob()
 		setDRAJobCPU(job)
 		job.Name = "er-usage-job"
-		job.Labels[testutils.QueueLabel] = erTestQueue
+		job.Labels[testutils.QueueLabel] = erLocalQueueName
 		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
 		job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
 			corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
 		}
-		createdJob, err := kubeClient.BatchV1().Jobs(erTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 		By("Verifying ClusterQueue shows extended resource reservation")
 		Eventually(func(g Gomega) {
-			cq, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, erClusterQueueName, metav1.GetOptions{})
+			cqObj, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
 			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(cq.Status.FlavorsReservation).NotTo(BeEmpty())
+			g.Expect(cqObj.Status.FlavorsReservation).NotTo(BeEmpty())
 
 			found := false
-			for _, flavor := range cq.Status.FlavorsReservation {
+			for _, flavor := range cqObj.Status.FlavorsReservation {
 				for _, res := range flavor.Resources {
 					if res.Name == corev1.ResourceName(extendedResourceName) {
 						g.Expect(res.Total.Cmp(resource.MustParse("1"))).To(Equal(0),
@@ -402,9 +481,14 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			g.Expect(found).To(BeTrue(), "resource %s not found in ClusterQueue reservation", extendedResourceName)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
+		By("Verifying job is unsuspended")
+		Eventually(func() bool {
+			return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
 		By("Verifying job pod is running")
 		Eventually(func() bool {
-			return testutils.IsJobPodRunning(ctx, kubeClient, erTestNamespace, createdJob.Name)
+			return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 	})
 
@@ -416,7 +500,6 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		})
 
 		It("should account both ER and RCT under same quota with deviceClassMappings taking precedence", func(ctx context.Context) {
-
 			By("Adding deviceClassMappings to enable DynamicResourceAllocation for RCT path")
 			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -441,15 +524,18 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
-			By("Creating ClusterQueue and LocalQueue for mixed test")
+			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
 
-			mixedCQ := testutils.NewClusterQueue()
-			mixedCQ.Name = erMixedClusterQueueName
-			mixedCQ.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupResourceFlavor)
+
+			cqWrapper := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
+			cqWrapper.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
 				CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(draLogicalResource), corev1.ResourceName(extendedResourceName)},
 				Flavors: []kueuev1beta2.FlavorQuotas{{
-					Name: "default",
+					Name: kueuev1beta2.ResourceFlavorReference(resourceFlavor.Name),
 					Resources: []kueuev1beta2.ResourceQuota{
 						{Name: "cpu", NominalQuota: resource.MustParse("100")},
 						{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
@@ -458,21 +544,30 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 					},
 				}},
 			}}
-			cleanupMixedCQ, err := mixedCQ.Create(ctx, kueueClient)
+			cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
 			Expect(err).NotTo(HaveOccurred())
-			defer cleanupMixedCQ()
+			DeferCleanup(cleanupCQ)
 
-			mixedLQ := testutils.NewLocalQueue(erTestNamespace, erMixedTestQueue)
-			mixedLQ.Spec.ClusterQueue = kueuev1beta2.ClusterQueueReference(erMixedClusterQueueName)
-			cleanupMixedLQ, err := mixedLQ.Create(ctx, kueueClient)
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: erTestNamespacePrefix,
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}
+			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
 			Expect(err).NotTo(HaveOccurred())
-			defer cleanupMixedLQ()
+			DeferCleanup(cleanupNs)
+
+			lq := testutils.NewLocalQueue(ns.Name, "er-mixed-queue").WithClusterQueue(cq.Name)
+			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQ)
 
 			By("Creating ResourceClaimTemplate for 1 GPU")
 			rct := &resourcev1.ResourceClaimTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "gpu-template-mixed",
-					Namespace: erTestNamespace,
+					Namespace: ns.Name,
 				},
 				Spec: resourcev1.ResourceClaimTemplateSpec{
 					Spec: resourcev1.ResourceClaimSpec{
@@ -490,16 +585,16 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 					},
 				},
 			}
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(erTestNamespace).Create(ctx, rct, metav1.CreateOptions{})
+			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer kubeClient.ResourceV1().ResourceClaimTemplates(erTestNamespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
+			defer kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Delete(ctx, rct.Name, metav1.DeleteOptions{})
 
 			By("Creating Job with both extended resource request and ResourceClaimTemplate")
-			builder := testutils.NewTestResourceBuilder(erTestNamespace, erMixedTestQueue)
+			builder := testutils.NewTestResourceBuilder(ns.Name, "er-mixed-queue")
 			job := builder.NewJob()
 			setDRAJobCPU(job)
 			job.Name = "er-mixed-job"
-			job.Labels[testutils.QueueLabel] = erMixedTestQueue
+			job.Labels[testutils.QueueLabel] = "er-mixed-queue"
 			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
 			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
 				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
@@ -510,13 +605,13 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{
 				{Name: "gpu"},
 			}
-			createdJob, err := kubeClient.BatchV1().Jobs(erTestNamespace).Create(ctx, job, metav1.CreateOptions{})
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying workload is admitted and deviceClassMappings name takes precedence")
 			Eventually(func(g Gomega) {
-				wlList, err := kueueClient.KueueV1beta2().Workloads(erTestNamespace).List(ctx, metav1.ListOptions{
+				wlList, err := kueueClient.KueueV1beta2().Workloads(ns.Name).List(ctx, metav1.ListOptions{
 					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
 				})
 				g.Expect(err).NotTo(HaveOccurred())
@@ -532,7 +627,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 					"both ER and RCT should be counted under %s", draLogicalResource)
 
 				// Verify ClusterQueue shows mapping name used, extended resource name stays at 0
-				cqObj, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, erMixedClusterQueueName, metav1.GetOptions{})
+				cqObj, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
 				g.Expect(err).NotTo(HaveOccurred())
 				for _, flavor := range cqObj.Status.FlavorsReservation {
 					for _, res := range flavor.Resources {
@@ -550,17 +645,17 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Verifying job is unsuspended")
 			Eventually(func() bool {
-				return !testutils.IsJobSuspended(ctx, kubeClient, erTestNamespace, createdJob.Name)
+				return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Verifying job pod is running")
 			Eventually(func() bool {
-				return testutils.IsJobPodRunning(ctx, kubeClient, erTestNamespace, createdJob.Name)
+				return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob.Name)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Verifying pod has both extendedResourceClaimStatus and resourceClaimStatuses")
 			Eventually(func(g Gomega) {
-				pods, err := kubeClient.CoreV1().Pods(erTestNamespace).List(ctx, metav1.ListOptions{
+				pods, err := kubeClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
 					LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", createdJob.Name),
 				})
 				g.Expect(err).NotTo(HaveOccurred())

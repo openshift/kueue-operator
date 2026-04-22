@@ -473,6 +473,7 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   DRAExtendedResources: true
+  DynamicResourceAllocation: true
 health:
   healthProbeBindAddress: :8081
 integrations:

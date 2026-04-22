@@ -195,7 +195,7 @@ func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegr
 	// are available on the cluster. On clusters without DRA support (OCP < 4.21),
 	// the feature gate is not enabled but the deviceClassMappings config is preserved
 	// so it takes effect automatically after a cluster upgrade.
-	if len(resources.DeviceClassMappings) > 0 && draSupported {
+	if (len(resources.DeviceClassMappings) > 0 && draSupported) || draExtendedResourceEnabled {
 		featureGates["DynamicResourceAllocation"] = true
 	}
 
