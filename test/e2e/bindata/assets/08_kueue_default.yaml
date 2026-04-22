@@ -11,6 +11,11 @@ spec:
   config:
     preemption:
       preemptionPolicy: FairSharing
+    resources:
+      deviceClassMappings:
+      - name: gpu
+        deviceClassNames:
+        - gpu.example.com
     integrations:
       frameworks:
       - BatchJob
