@@ -451,7 +451,6 @@ webhook:
 			wantErr: nil,
 		},
 		"dra extended resources enabled": {
-			draSupported:               true,
 			draExtendedResourceEnabled: true,
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
