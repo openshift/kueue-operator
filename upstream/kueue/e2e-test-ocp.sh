@@ -52,6 +52,9 @@ function ginkgo_label_filter() {
     certmanager)
       echo "!feature:prometheus"
       ;;
+    dra)
+      echo ""
+      ;;
     *)
       echo ""
       ;;
