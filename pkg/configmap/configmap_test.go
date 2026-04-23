@@ -29,12 +29,13 @@ import (
 
 func TestBuildConfigMap(t *testing.T) {
 	testCases := map[string]struct {
-		configuration kueue.KueueConfiguration
-		gvrToKind     map[string]string
-		draSupported  bool
-		tlsOpts       *configapi.TLSOptions
-		wantCfgMap    *corev1.ConfigMap
-		wantErr       error
+		configuration              kueue.KueueConfiguration
+		gvrToKind                  map[string]string
+		draSupported               bool
+		draExtendedResourceEnabled bool
+		tlsOpts                    *configapi.TLSOptions
+		wantCfgMap                 *corev1.ConfigMap
+		wantErr                    error
 	}{
 		"batch job example": {
 			configuration: kueue.KueueConfiguration{
@@ -442,6 +443,61 @@ resources:
     - gpu.example.com
     - gpu-large.example.com
     name: example.com/gpus
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"dra extended resources enabled": {
+			draExtendedResourceEnabled: true,
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  DRAExtendedResources: true
+  DynamicResourceAllocation: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
 webhook:
   port: 9443
 `,
@@ -982,7 +1038,7 @@ webhook:
 
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
-			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draSupported, tc.tlsOpts)
+			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draSupported, tc.draExtendedResourceEnabled, tc.tlsOpts)
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("Unexpected error: want=%v, got=%v", tc.wantErr, err)
 			}

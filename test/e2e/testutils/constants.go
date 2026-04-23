@@ -29,4 +29,5 @@ const (
 	DeletionPoll          = 5 * time.Second
 	ConsistentlyTimeout   = 5 * time.Second
 	ConsistentlyPoll      = 1 * time.Second
+	DeviceClassKind       = "DeviceClass"
 )

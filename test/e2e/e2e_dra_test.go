@@ -66,7 +66,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
 		if err == nil {
 			for _, apiResource := range apiResourceLists.APIResources {
-				if apiResource.Kind == "DeviceClass" {
+				if apiResource.Kind == testutils.DeviceClassKind {
 					draSupported = true
 					break
 				}
