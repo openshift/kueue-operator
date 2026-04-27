@@ -857,16 +857,11 @@ func IsJobPodRunning(ctx context.Context, kubeClient *kubernetes.Clientset, name
 }
 
 func IsJobSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, jobName string) bool {
-	job, err := kubeClient.BatchV1().Jobs(namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
+	job, err := kubeClient.BatchV1().Jobs(namespace).Get(ctx, jobName, metav1.GetOptions{})
 	if err != nil {
 		return false
 	}
-	for _, condition := range job.Status.Conditions {
-		if condition.Type == "Suspended" && condition.Status == "True" {
-			return true
-		}
-	}
-	return false
+	return job.Spec.Suspend != nil && *job.Spec.Suspend
 }
 
 func IsJobSetRunning(ctx context.Context, genericClient client.Client, jobSet *jobsetapi.JobSet) (bool, error) {
