@@ -2,7 +2,7 @@
 
 ## e2e.patch
 
-This patch sets up our e2e tests to skip waiting for operators as the namespace name is different and set up our namespaces.
+This patch sets up our e2e tests to skip waiting for operators as the namespace name is different and set up our namespaces. It also skips the configuration change for admission fair sharing as the configuration is managed in the Kueue instance.
 
 ## test_util_e2e.patch
 

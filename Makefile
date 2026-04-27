@@ -246,7 +246,7 @@ e2e-upstream-test: ginkgo
 	@echo "Running e2e tests on OpenShift cluster ($(shell oc whoami --show-server))"
 	mkdir -p "$(ARTIFACT_DIR)"
 	IMAGE_TAG=$(IMAGE_TAG) GINKGO_ARGS="$(GINKGO_ARGS)" \
-	ARTIFACT_DIR=$(ARTIFACT_DIR) E2E_TARGET_FOLDERS="$${E2E_TARGET_FOLDERS:-singlecluster certmanager}" \
+	ARTIFACT_DIR=$(ARTIFACT_DIR) E2E_TARGET_FOLDERS="$${E2E_TARGET_FOLDERS:-singlecluster certmanager customconfigs}" \
 	SKIP_DEPLOY=true \
 	./upstream/kueue/e2e-test-ocp.sh
 
