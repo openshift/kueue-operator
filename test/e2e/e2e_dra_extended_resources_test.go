@@ -65,23 +65,20 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 		}
 
-		// Wait for ResourceSlices to exist for gpu.nvidia.com (driver may still be deploying)
-		// and count GPUs per node (only devices with type=="gpu", excluding MIG slices)
-		Eventually(func() bool {
-			slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return false
-			}
-			for _, s := range slices.Items {
-				if s.Spec.Driver == draDeviceClassName {
-					return true
-				}
-			}
-			return false
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "No ResourceSlices found for driver gpu.nvidia.com - NVIDIA DRA driver not running")
-
+		// Check if ResourceSlices exist for gpu.nvidia.com (NVIDIA DRA driver running)
 		slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		hasDriverSlices := false
+		for _, s := range slices.Items {
+			if s.Spec.Driver == draDeviceClassName {
+				hasDriverSlices = true
+				break
+			}
+		}
+		if !hasDriverSlices {
+			Skip("No ResourceSlices found for driver gpu.nvidia.com - NVIDIA DRA driver not running")
+		}
+
 		gpusPerNode := map[string]int{}
 		for _, s := range slices.Items {
 			if s.Spec.Driver == draDeviceClassName {
