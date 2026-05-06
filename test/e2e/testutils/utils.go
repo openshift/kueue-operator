@@ -167,6 +167,17 @@ func (cqw *ClusterQueueWrapper) WithReclaimWithinCohort(policy kueuev1beta2.Pree
 	return cqw
 }
 
+// WithDRAResource adds a DRA resource to the first resource group's covered resources and quota.
+func (cqw *ClusterQueueWrapper) WithDRAResource(name, quota string) *ClusterQueueWrapper {
+	if len(cqw.Spec.ResourceGroups) > 0 && len(cqw.Spec.ResourceGroups[0].Flavors) > 0 {
+		resName := corev1.ResourceName(name)
+		cqw.Spec.ResourceGroups[0].CoveredResources = append(cqw.Spec.ResourceGroups[0].CoveredResources, resName)
+		cqw.Spec.ResourceGroups[0].Flavors[0].Resources = append(cqw.Spec.ResourceGroups[0].Flavors[0].Resources,
+			kueuev1beta2.ResourceQuota{Name: resName, NominalQuota: resource.MustParse(quota)})
+	}
+	return cqw
+}
+
 // WithBorrowingLimit sets the borrowing limit for a specific resource.
 // resourceName is the name of the resource (e.g., "cpu", "memory").
 // limit is the maximum amount that can be borrowed from the cohort.
@@ -846,7 +857,7 @@ func IsJobPodRunning(ctx context.Context, kubeClient *kubernetes.Clientset, name
 }
 
 func IsJobSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, jobName string) bool {
-	job, err := kubeClient.BatchV1().Jobs(namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
+	job, err := kubeClient.BatchV1().Jobs(namespace).Get(ctx, jobName, metav1.GetOptions{})
 	if err != nil {
 		return false
 	}
