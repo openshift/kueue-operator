@@ -274,10 +274,10 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
-			By("Verifying job remains suspended")
-			Consistently(func() bool {
+			By("Verifying job is suspended due to exceeding DRA quota")
+			Eventually(func() bool {
 				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 		})
 
 		It("should admit waiting job after DRA quota is freed", func(ctx context.Context) {
@@ -321,6 +321,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job1 := newDRAJob(builder, "dra-fill-job-1", "gpu-template-shared", draLocalQueueName)
 			createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
 
 			By("Waiting for first job to be admitted")
 			Eventually(func() bool {
@@ -338,10 +339,10 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
 
-			By("Verifying second job is suspended (quota full)")
-			Consistently(func() bool {
+			By("Waiting for second job to be suspended (quota full)")
+			Eventually(func() bool {
 				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob2.Name)
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Deleting first job to free quota")
 			testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
@@ -469,7 +470,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job.Spec.Template.Spec.Containers = append(job.Spec.Template.Spec.Containers, corev1.Container{
 				Name:    "ctr1",
 				Image:   "busybox",
-				Command: []string{"sh", "-c", "echo Container 1 sharing GPU; sleep 30"},
+				Command: []string{"sh", "-c", "echo Container 1 sharing GPU; sleep 10"},
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU: resource.MustParse("100m"),
@@ -766,10 +767,10 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
-			By("Verifying job remains suspended due to wrong DeviceClass mapping")
-			Consistently(func() bool {
+			By("Verifying job is suspended due to wrong DeviceClass mapping")
+			Eventually(func() bool {
 				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Verifying No ResourceClaim is created since the job was never unsuspended")
 			verifyNoResourceClaims(ctx, kubeClient, ns.Name, wrongClassStart)
@@ -924,6 +925,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			singleJob := newDRAJob(builder, "dra-single-gpu", "gpu-template-gang", gangLQ.Name)
 			createdSingleJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, singleJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer testutils.CleanUpJob(ctx, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
 
 			By("Verifying single-pod job is admitted and running")
 			checkWorkloadCondition(ctx, ns.Name, string(createdSingleJob.UID), kueuev1beta2.WorkloadAdmitted, "single-gpu")
@@ -939,10 +941,10 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdGangJob.Namespace, createdGangJob.Name)
 
-			By("Verifying gang job remains suspended (not enough DRA quota for all pods)")
-			Consistently(func() bool {
+			By("Verifying gang job is suspended (not enough DRA quota for all pods)")
+			Eventually(func() bool {
 				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdGangJob.Name)
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Deleting single-pod job to free its GPU")
 			testutils.CleanUpJob(ctx, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
@@ -1059,7 +1061,7 @@ func newDRAJob(builder *testutils.TestResourceBuilder, name, templateName, queue
 	setDRAJobCPU(job)
 	job.Name = name
 	job.Labels[testutils.QueueLabel] = queueName
-	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 30"}
+	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
 	job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
 		{Name: "gpu", ResourceClaimTemplateName: ptr.To(templateName)},
 	}

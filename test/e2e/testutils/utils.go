@@ -861,7 +861,12 @@ func IsJobSuspended(ctx context.Context, kubeClient *kubernetes.Clientset, names
 	if err != nil {
 		return false
 	}
-	return job.Spec.Suspend != nil && *job.Spec.Suspend
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == "Suspended" && condition.Status == "True" {
+			return true
+		}
+	}
+	return false
 }
 
 func IsJobSetRunning(ctx context.Context, genericClient client.Client, jobSet *jobsetapi.JobSet) (bool, error) {
