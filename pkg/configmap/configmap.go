@@ -187,15 +187,15 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(resources kueue.Resources, frameworks []kueue.KueueIntegration, draSupported bool, draExtendedResourceEnabled bool, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(frameworks []kueue.KueueIntegration, draSupported bool, draExtendedResourceEnabled bool, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
-	// when deviceClassMappings are configured and DRA APIs (resource.k8s.io/v1)
-	// are available on the cluster. On clusters without DRA support (OCP < 4.21),
+	// when DRA APIs (resource.k8s.io/v1) are available on the cluster (OCP 4.21+).
+	// On clusters without DRA support (OCP < 4.21),
 	// the feature gate is not enabled but the deviceClassMappings config is preserved
 	// so it takes effect automatically after a cluster upgrade.
-	if (len(resources.DeviceClassMappings) > 0 && draSupported) || draExtendedResourceEnabled {
+	if draSupported {
 		featureGates["DynamicResourceAllocation"] = true
 	}
 
@@ -326,7 +326,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Resources, kueueCfg.Integrations.Frameworks, draSupported, draExtendedResourceEnabled, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draSupported, draExtendedResourceEnabled, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil

@@ -331,19 +331,15 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		draAPIsAvailable = true
 	}
 
-	// DynamicResourceAllocation requires deviceClassMappings + DRA APIs.
+	// DynamicResourceAllocation is enabled when DRA APIs are available (OCP 4.21+).
 	// The deviceClassMappings config is preserved in the configmap so it takes effect
 	// automatically after a cluster upgrade, but the DRA feature gate is only enabled
 	// when the APIs are available.
-	c.draSupported = false
-	if len(kueue.Spec.Config.Resources.DeviceClassMappings) > 0 {
-		if draAPIsAvailable {
-			c.draSupported = true
-		} else {
-			klog.Warningf("DRA APIs (resource.k8s.io/v1) not available on this cluster. DRA requires Kubernetes 1.34+ (OCP 4.21+)")
-			c.eventRecorder.Eventf("DRAUnsupported", "DRA APIs not available, deviceClassMappings will not take effect until the cluster is upgraded")
-			missingDependencies = append(missingDependencies, "DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)")
-		}
+	c.draSupported = draAPIsAvailable
+	if len(kueue.Spec.Config.Resources.DeviceClassMappings) > 0 && !draAPIsAvailable {
+		klog.Warningf("DRA APIs (resource.k8s.io/v1) not available on this cluster. DRA requires Kubernetes 1.34+ (OCP 4.21+)")
+		c.eventRecorder.Eventf("DRAUnsupported", "DRA APIs not available, deviceClassMappings will not take effect until the cluster is upgraded")
+		missingDependencies = append(missingDependencies, "DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)")
 	}
 
 	// Check if the K8s DRAExtendedResource feature gate is enabled on the cluster.
