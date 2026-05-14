@@ -234,6 +234,11 @@ e2e-ci-test-dra: ginkgo
 	@echo "Running DRA e2e tests..."
 	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="dra" --junit-report=${ARTIFACT_DIR}/e2e-dra-junit.xml --no-color -v ./test/e2e/...
 
+.PHONY: e2e-ci-test-tas
+e2e-ci-test-tas: ginkgo
+	@echo "Running TAS e2e tests..."
+	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="tas" --junit-report=${ARTIFACT_DIR}/e2e-tas-junit.xml --no-color -v ./test/e2e/...
+
 .PHONY: e2e-ci-test-disruptive
 e2e-ci-test-disruptive: ginkgo
 	@echo "Running operator e2e tests disuptive..."
