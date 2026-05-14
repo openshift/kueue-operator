@@ -152,6 +152,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	AfterAll(func(ctx context.Context) {
 		if initialKueueInstance != nil {
+			initialKueueInstance.Spec.Config.Resources.DeviceClassMappings = nil
 			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		}
 	})
