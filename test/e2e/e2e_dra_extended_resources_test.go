@@ -37,6 +37,7 @@ const (
 	erTestNamespacePrefix = "kueue-dra-er-test-"
 	erLocalQueueName      = "er-queue"
 	extendedResourceName  = "nvidia.com/gpu"
+	gpuDeviceType         = "gpu"
 )
 
 var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extended-resources"), Ordered, func() {
@@ -88,7 +89,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 						// with value "gpu" for full GPU devices. MIG slices have different type values.
 						// See: device.attributes['gpu.nvidia.com'].type in DeviceClass CEL selectors.
 						if typeAttr, ok := d.Attributes["type"]; ok {
-							if typeAttr.StringValue != nil && *typeAttr.StringValue == "gpu" {
+							if typeAttr.StringValue != nil && *typeAttr.StringValue == gpuDeviceType {
 								gpusPerNode[*s.Spec.NodeName]++
 							}
 						}
@@ -116,9 +117,11 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		Expect(err).ToNot(HaveOccurred())
 		initialKueueInstance = kueueInstance.DeepCopy()
 
+		// Clear deviceClassMappings if set by a previous test suite
+		kueueInstance.Spec.Config.Resources.DeviceClassMappings = nil
 		applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
-		// Wait for DRA feature gates to be enabled in Kueue config
+		// Wait for DRA feature gates to be enabled and deviceClassMappings to be cleared
 		Eventually(func() error {
 			configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 			if err != nil {
@@ -130,6 +133,9 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			}
 			if !strings.Contains(configData, "DRAExtendedResources: true") {
 				return fmt.Errorf("DRAExtendedResources not enabled yet")
+			}
+			if strings.Contains(configData, draLogicalResource) {
+				return fmt.Errorf("deviceClassMappings still contains %s, waiting for config reconciliation", draLogicalResource)
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())

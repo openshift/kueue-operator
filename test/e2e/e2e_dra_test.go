@@ -97,7 +97,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			if s.Spec.Driver == draDeviceClassName {
 				for _, d := range s.Spec.Devices {
 					if typeAttr, ok := d.Attributes["type"]; ok {
-						if typeAttr.StringValue != nil && *typeAttr.StringValue == "gpu" {
+						if typeAttr.StringValue != nil && *typeAttr.StringValue == gpuDeviceType {
 							gpuCount++
 						}
 					}
@@ -332,6 +332,22 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Eventually(func() bool {
 				return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob1.Name)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Verifying ClusterQueue shows reservation before creating second job")
+			Eventually(func(g Gomega) {
+				cqObj, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cqObj.Status.FlavorsReservation).NotTo(BeEmpty())
+				found := false
+				for _, flavor := range cqObj.Status.FlavorsReservation {
+					for _, res := range flavor.Resources {
+						if res.Name == corev1.ResourceName(draLogicalResource) && res.Total.Cmp(resource.MustParse("1")) == 0 {
+							found = true
+						}
+					}
+				}
+				g.Expect(found).To(BeTrue(), "ClusterQueue should show 1 %s reserved before creating second job", draLogicalResource)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Creating second job referencing same shared template (quota full, should be suspended)")
 			job2 := newDRAJob(builder, "dra-fill-job-2", "gpu-template-shared", draLocalQueueName)
