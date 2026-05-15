@@ -52,7 +52,6 @@ func setDRAJobCPU(job *batchv1.Job) {
 
 var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered, func() {
 	var (
-		draSupported         bool
 		gpuCount             int
 		initialKueueInstance *ssv1.Kueue
 	)
@@ -63,6 +62,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	BeforeAll(func(ctx context.Context) {
 		// Check if DRA APIs are available
+		draSupported := false
 		apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
 		if err == nil {
 			for _, apiResource := range apiResourceLists.APIResources {
@@ -76,28 +76,25 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 		}
 
-		// Wait for ResourceSlices to exist for gpu.nvidia.com (driver may still be deploying)
-		// and count GPUs (only devices with type=="gpu", excluding MIG slices)
-		Eventually(func() bool {
-			slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return false
-			}
-			for _, s := range slices.Items {
-				if s.Spec.Driver == draDeviceClassName {
-					return true
-				}
-			}
-			return false
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "No ResourceSlices found for driver gpu.nvidia.com - NVIDIA DRA driver not running")
-
+		// Check if ResourceSlices exist for gpu.nvidia.com (NVIDIA DRA driver running)
 		slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		hasDriverSlices := false
+		for _, s := range slices.Items {
+			if s.Spec.Driver == draDeviceClassName {
+				hasDriverSlices = true
+				break
+			}
+		}
+		if !hasDriverSlices {
+			Skip("No ResourceSlices found for driver gpu.nvidia.com - NVIDIA DRA driver not running")
+		}
+
 		for _, s := range slices.Items {
 			if s.Spec.Driver == draDeviceClassName {
 				for _, d := range s.Spec.Devices {
 					if typeAttr, ok := d.Attributes["type"]; ok {
-						if typeAttr.StringValue != nil && *typeAttr.StringValue == "gpu" {
+						if typeAttr.StringValue != nil && *typeAttr.StringValue == gpuDeviceType {
 							gpuCount++
 						}
 					}
@@ -155,6 +152,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	AfterAll(func(ctx context.Context) {
 		if initialKueueInstance != nil {
+			initialKueueInstance.Spec.Config.Resources.DeviceClassMappings = nil
 			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		}
 	})
@@ -332,6 +330,22 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Eventually(func() bool {
 				return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob1.Name)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+			By("Verifying ClusterQueue shows reservation before creating second job")
+			Eventually(func(g Gomega) {
+				cqObj, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cqObj.Status.FlavorsReservation).NotTo(BeEmpty())
+				found := false
+				for _, flavor := range cqObj.Status.FlavorsReservation {
+					for _, res := range flavor.Resources {
+						if res.Name == corev1.ResourceName(draLogicalResource) && res.Total.Cmp(resource.MustParse("1")) == 0 {
+							found = true
+						}
+					}
+				}
+				g.Expect(found).To(BeTrue(), "ClusterQueue should show 1 %s reserved before creating second job", draLogicalResource)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Creating second job referencing same shared template (quota full, should be suspended)")
 			job2 := newDRAJob(builder, "dra-fill-job-2", "gpu-template-shared", draLocalQueueName)
