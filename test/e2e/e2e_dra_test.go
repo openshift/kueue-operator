@@ -1411,7 +1411,7 @@ func verifyNoResourceClaims(ctx context.Context, kubeClient *kubernetes.Clientse
 			}
 		}
 		g.Expect(filtered).To(BeEmpty(), "expected no ResourceClaims after %v in namespace %s", createdAfter.Time, namespace)
-	}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed())
+	}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed())
 }
 
 // newDRAJob creates a Job with DRA ResourceClaim configuration for the given template.
