@@ -135,43 +135,14 @@ const (
 	KueueIntegrationSparkApplication KueueIntegration = "SparkApplication"
 )
 
-// +kubebuilder:validation:Enum=Default;Custom
-type AdmissionFairSharingConfiguration string
-
-const (
-	AdmissionFairSharingConfigurationDefault AdmissionFairSharingConfiguration = "Default"
-	AdmissionFairSharingConfigurationCustom  AdmissionFairSharingConfiguration = "Custom"
-)
-
 // AdmissionFairSharing provides configuration of intervals
 // and resource weights for Admission Fair Sharing.
-// +kubebuilder:validation:XValidation:rule="has(self.configuration) && self.configuration == 'Custom' ? has(self.custom) : !has(self.custom)",message="custom is required when configuration is Custom, and forbidden otherwise"
-// +union
 type AdmissionFairSharing struct {
-	// configuration determines if admission fair sharing uses default or custom settings.
-	// The allowed values are Default and Custom.
-	// Default means admission fair sharing is enabled with kueue's defaults,
-	// which are subject to change over time.
-	// Custom means admission fair sharing is enabled with user-provided configuration
-	// in the custom field.
-	// +required
-	// +unionDiscriminator
-	Configuration AdmissionFairSharingConfiguration `json:"configuration,omitempty"`
-	// custom provides customized configuration for admission fair sharing.
-	// custom is required when configuration is Custom, and forbidden otherwise.
-	// When custom is specified, at least one of its fields must be set.
-	// +optional
-	Custom AdmissionFairSharingCustom `json:"custom,omitzero"`
-}
-
-// +kubebuilder:validation:MinProperties=1
-type AdmissionFairSharingCustom struct {
 	// usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
-	// When omitted, usage will be reset to 0 immediately.
 	// The value must be between 1 and 31536000 (one year in seconds).
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=31536000
-	// +optional
+	// +required
 	UsageHalfLifeTimeSeconds int32 `json:"usageHalfLifeTimeSeconds,omitempty"`
 
 	// usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
