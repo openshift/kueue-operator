@@ -993,11 +993,8 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 			savedAFSConfig = kueueInstance.Spec.Config.DeepCopy()
 			kueueInstance.Spec.Config.AdmissionFairSharing = ssv1.AdmissionFairSharing{
-				Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
-				Custom: ssv1.AdmissionFairSharingCustom{
-					UsageHalfLifeTimeSeconds:     120,
-					UsageSamplingIntervalSeconds: 1,
-				},
+				UsageHalfLifeTimeSeconds:     120,
+				UsageSamplingIntervalSeconds: 1,
 			}
 			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 		})
