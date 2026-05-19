@@ -93,7 +93,7 @@ function configure_kueue_for_folder() {
     customconfigs)
       echo "Patching cluster Kueue CR for customconfigs..."
       $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
-        '{"spec":{"config":{"admissionFairSharing":{"configuration":"Custom","custom":{"usageHalfLifeTimeSeconds":1,"usageSamplingIntervalSeconds":1}}}}}'
+        '{"spec":{"config":{"admissionFairSharing":{"usageHalfLifeTimeSeconds":1,"usageSamplingIntervalSeconds":1}}}}'
       # Let's wait for the reconciliation to complete. The test suite checks if kueue-controller-manager is available.
       $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
       ;;
