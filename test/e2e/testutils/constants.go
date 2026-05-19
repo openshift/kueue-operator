@@ -19,15 +19,17 @@ package testutils
 import "time"
 
 const (
-	OperatorReadyTime     = 3 * time.Minute
-	OperatorPoll          = 10 * time.Second
-	OperatorNamespace     = "openshift-kueue-operator"
-	OpenShiftManagedLabel = "kueue.openshift.io/managed"
-	QueueLabel            = "kueue.x-k8s.io/queue-name"
-	DefaultLocalQueueName = "default"
-	DeletionTime          = 3 * time.Minute
-	DeletionPoll          = 5 * time.Second
-	ConsistentlyTimeout   = 5 * time.Second
-	ConsistentlyPoll      = 1 * time.Second
-	DeviceClassKind       = "DeviceClass"
+	OperatorReadyTime       = 3 * time.Minute
+	OperatorPoll            = 10 * time.Second
+	OperatorNamespace       = "openshift-kueue-operator"
+	OpenShiftManagedLabel   = "kueue.openshift.io/managed"
+	QueueLabel              = "kueue.x-k8s.io/queue-name"
+	DefaultLocalQueueName   = "default"
+	DeletionTime            = 3 * time.Minute
+	DeletionPoll            = 5 * time.Second
+	ConsistentlyTimeout     = 5 * time.Second
+	ConsistentlyPoll        = 1 * time.Second
+	ConsistentlyLongTimeout = 15 * time.Second
+	ConsistentlyLongPoll    = 5 * time.Second
+	DeviceClassKind         = "DeviceClass"
 )

@@ -194,6 +194,14 @@ func (cqw *ClusterQueueWrapper) WithBorrowingLimit(resourceName corev1.ResourceN
 	return cqw
 }
 
+// WithAdmissionScope sets the admission scope for the ClusterQueue.
+func (cqw *ClusterQueueWrapper) WithAdmissionScope(mode kueuev1beta2.AdmissionMode) *ClusterQueueWrapper {
+	cqw.Spec.AdmissionScope = &kueuev1beta2.AdmissionScope{
+		AdmissionMode: mode,
+	}
+	return cqw
+}
+
 // Create creates the ClusterQueue in the cluster and returns cleanup function.
 func (cqw *ClusterQueueWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
 	_, cleanup, err := cqw.CreateWithObject(ctx, client)
@@ -274,6 +282,15 @@ func (lqw *LocalQueueWrapper) WithGenerateName() *LocalQueueWrapper {
 // WithClusterQueue sets the ClusterQueue name.
 func (lqw *LocalQueueWrapper) WithClusterQueue(clusterQueue string) *LocalQueueWrapper {
 	lqw.Spec.ClusterQueue = kueuev1beta2.ClusterQueueReference(clusterQueue)
+	return lqw
+}
+
+// WithFairSharingWeight sets the FairSharing weight for the LocalQueue.
+func (lqw *LocalQueueWrapper) WithFairSharingWeight(weight string) *LocalQueueWrapper {
+	w := resource.MustParse(weight)
+	lqw.Spec.FairSharing = &kueuev1beta2.FairSharing{
+		Weight: &w,
+	}
 	return lqw
 }
 
