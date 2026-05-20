@@ -1,5 +1,5 @@
 /*
-Copyright 2025.
+Copyright 2026.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -561,6 +561,124 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Consistently(func() bool {
 				return testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobHeavyPending.Name)
 			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "job-heavy-pending should remain suspended (higher CPU usage score)")
+		})
+	})
+	When("Job is created and deleted", func() {
+		const (
+			afsHalfLifeSeconds = 60
+			afsSamplingSeconds = 5
+		)
+		var (
+			ns        *corev1.Namespace
+			rf        *kueuev1beta2.ResourceFlavor
+			cq        *kueuev1beta2.ClusterQueue
+			lqA       *kueuev1beta2.LocalQueue
+			cleanupRF func()
+			cleanupCQ func()
+			cleanupLQ func()
+		)
+
+		BeforeAll(func(ctx context.Context) {
+			enableAdmissionFairSharing(ctx, afsHalfLifeSeconds, afsSamplingSeconds)
+		})
+
+		BeforeEach(func(ctx context.Context) {
+			By("Creating namespace")
+			createdNs, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "afs-test-",
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			ns = createdNs
+
+			By("Creating ResourceFlavor")
+			rf, cleanupRF, err = testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating ClusterQueue with UsageBasedAdmissionFairSharing")
+			cq, cleanupCQ, err = testutils.NewClusterQueue().
+				WithGenerateName().
+				WithFlavorName(rf.Name).
+				WithCPU("2").
+				WithMemory("200Mi").
+				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
+				CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating LocalQueue lq-a bound to the ClusterQueue")
+			lqA, cleanupLQ, err = testutils.NewLocalQueue(ns.Name, "lq-a").
+				WithClusterQueue(cq.Name).
+				CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func(ctx context.Context) {
+			if cleanupLQ != nil {
+				cleanupLQ()
+			}
+			deleteNamespace(ctx, ns)
+			if cleanupCQ != nil {
+				cleanupCQ()
+			}
+			if cleanupRF != nil {
+				cleanupRF()
+			}
+		})
+
+		It("should increase then decrease consumedResources", func(ctx context.Context) {
+			By("Step 1: Creating job1 on lq-a to saturate the 2-CPU ClusterQueue")
+			job1 := newLongRunningJob("job1", ns.Name, lqA.Name, "2", "100Mi")
+
+			_, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying job1 is admitted (unsuspended)")
+			Eventually(func(g Gomega) {
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job1.Name)).To(BeFalse())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"job %s was not admitted", job1.Name)
+
+			By("waiting until afsHalfLifeSeconds for CPU consumedResources to accumulate to a measurable baseline (≥900m)")
+			var usageBeforeDelete float64
+			Eventually(func(g Gomega) {
+				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqA.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(lq.Status.FairSharing).NotTo(BeNil())
+				g.Expect(lq.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil())
+				cpu := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceCPU]
+				g.Expect(cpu.AsApproximateFloat64()).Should(BeNumerically(">=", 0.9),
+					"consumedResources should reach ≥900m before being used as decay baseline")
+				usageBeforeDelete = cpu.AsApproximateFloat64()
+				GinkgoWriter.Printf("Result: consumedResources.cpu = %.3f cores\n", usageBeforeDelete)
+			}, afsHalfLifeSeconds*time.Second, afsSamplingSeconds*time.Second).
+				Should(Succeed(), "lq-a did not accumulate enough CPU usage within %s", afsHalfLifeSeconds)
+
+			By("Deleting job1 to stop usage accumulation")
+			err = kubeClient.BatchV1().Jobs(ns.Name).Delete(ctx, job1.Name, metav1.DeleteOptions{
+				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			lowerBound := usageBeforeDelete * 0.40
+			upperBound := usageBeforeDelete * 0.60
+			By("Waiting for afsHalfLifeSeconds for CPU consumedResources to reduce to ≈50%")
+			var current float64
+			Eventually(func(g Gomega) {
+				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqA.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(lq.Status.FairSharing).NotTo(BeNil())
+				g.Expect(lq.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil())
+				cpu := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceCPU]
+				current = cpu.AsApproximateFloat64()
+				g.Expect(current).Should(BeNumerically(">", lowerBound),
+					"consumedResources decayed too fast (floor %.3f cores)", lowerBound)
+				g.Expect(current).Should(BeNumerically("<", upperBound),
+					"consumedResources did not decay enough (ceiling %.3f cores)", upperBound)
+				GinkgoWriter.Printf("Result: consumedResources.cpu = %.3f cores\n", current)
+			}, afsHalfLifeSeconds*time.Second, afsSamplingSeconds*time.Second).Should(Succeed(),
+				"consumedResources did not decay to ~50%% of pre-delete value after one usageHalfLifeTimeSeconds")
 		})
 	})
 
