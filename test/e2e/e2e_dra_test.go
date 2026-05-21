@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -76,14 +77,20 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 		}
 
-		// Check if ResourceSlices exist for gpu.nvidia.com (NVIDIA DRA driver running)
-		slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		// Wait for ResourceSlices from gpu.nvidia.com (NVIDIA DRA driver may still be deploying)
+		var slices *resourcev1.ResourceSliceList
 		hasDriverSlices := false
-		for _, s := range slices.Items {
-			if s.Spec.Driver == draDeviceClassName {
-				hasDriverSlices = true
-				break
+		for i := 0; i < 6 && !hasDriverSlices; i++ {
+			if i > 0 {
+				time.Sleep(5 * time.Second)
+			}
+			slices, err = kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			for _, s := range slices.Items {
+				if s.Spec.Driver == draDeviceClassName {
+					hasDriverSlices = true
+					break
+				}
 			}
 		}
 		if !hasDriverSlices {
@@ -152,8 +159,10 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	AfterAll(func(ctx context.Context) {
 		if initialKueueInstance != nil {
+			// Clear deviceClassMappings rather than restoring originals to avoid
+			// contaminating the extended-resources suite which manages its own mappings.
 			initialKueueInstance.Spec.Config.Resources.DeviceClassMappings = nil
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			restoreKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		}
 	})
 
@@ -199,7 +208,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job := newDRAJob(builder, "dra-basic-job", "gpu-template-basic", draLocalQueueName)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying workload is admitted with correct DRA quota")
 			Eventually(func(g Gomega) {
@@ -270,7 +279,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job := newDRAJob(builder, "dra-exceed-job", "gpu-template-exceed", draLocalQueueName)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying job is suspended due to exceeding DRA quota")
 			Eventually(func() bool {
@@ -319,7 +328,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job1 := newDRAJob(builder, "dra-fill-job-1", "gpu-template-shared", draLocalQueueName)
 			createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob1.Namespace, createdJob1.Name)
 
 			By("Waiting for first job to be admitted")
 			Eventually(func() bool {
@@ -351,7 +360,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job2 := newDRAJob(builder, "dra-fill-job-2", "gpu-template-shared", draLocalQueueName)
 			createdJob2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob2.Namespace, createdJob2.Name)
 
 			By("Waiting for second job to be suspended (quota full)")
 			Eventually(func() bool {
@@ -413,7 +422,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job := newDRAJob(builder, "dra-usage-job", "gpu-template-usage", draLocalQueueName)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying ClusterQueue shows DRA resource reservation")
 			Eventually(func(g Gomega) {
@@ -483,7 +492,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job := newDRAJob(builder, "dra-shared-gpu-job", "gpu-template-shared-ctr", draLocalQueueName)
 			job.Spec.Template.Spec.Containers = append(job.Spec.Template.Spec.Containers, corev1.Container{
 				Name:    "ctr1",
-				Image:   "busybox",
+				Image:   testutils.GetContainerImageForWorkloads(),
 				Command: []string{"sh", "-c", "echo Container 1 sharing GPU; sleep 10"},
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
@@ -494,7 +503,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			})
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying workload is admitted with correct DRA quota (1 GPU shared between 2 containers)")
 			Eventually(func(g Gomega) {
@@ -747,18 +756,17 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			savedConfig := kueueInstance.Spec.Config.DeepCopy()
 			DeferCleanup(func(cleanupCtx context.Context) {
-				applyKueueConfig(cleanupCtx, *savedConfig, kubeClient)
+				restoreKueueConfig(cleanupCtx, *savedConfig, kubeClient)
 			})
 
 			By("Setting wrong DeviceClass name in deviceClassMappings")
-			wrongConfig := *savedConfig
-			wrongConfig.Resources.DeviceClassMappings = []ssv1.DeviceClassMapping{
+			kueueInstance.Spec.Config.Resources.DeviceClassMappings = []ssv1.DeviceClassMapping{
 				{
 					Name:             draLogicalResource,
 					DeviceClassNames: []ssv1.DeviceClassName{"nonexistent.nvidia.com"},
 				},
 			}
-			applyKueueConfig(ctx, wrongConfig, kubeClient)
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			By("Verifying ConfigMap has wrong DeviceClass name")
 			Eventually(func(g Gomega) {
@@ -779,7 +787,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			job := newDRAJob(builder, "dra-wrong-class", "gpu-template-wrong-class", draLocalQueueName)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying job is suspended due to wrong DeviceClass mapping")
 			Eventually(func() bool {
@@ -844,7 +852,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			lowJob.Spec.Template.Spec.PriorityClassName = lowPC.Name
 			createdLowJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, lowJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdLowJob.Namespace, createdLowJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdLowJob.Namespace, createdLowJob.Name)
 
 			By("Verifying low-priority job is admitted")
 			checkWorkloadCondition(ctx, ns.Name, string(createdLowJob.UID), kueuev1beta2.WorkloadAdmitted, "low-priority")
@@ -859,7 +867,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			highJob.Spec.Template.Spec.PriorityClassName = highPC.Name
 			createdHighJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, highJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdHighJob.Namespace, createdHighJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdHighJob.Namespace, createdHighJob.Name)
 
 			By("Verifying low-priority job is evicted")
 			checkWorkloadCondition(ctx, ns.Name, string(createdLowJob.UID), kueuev1beta2.WorkloadEvicted, "low-priority")
@@ -903,17 +911,16 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			savedConfig := kueueInstance.Spec.Config.DeepCopy()
 			DeferCleanup(func(cleanupCtx context.Context) {
-				applyKueueConfig(cleanupCtx, *savedConfig, kubeClient)
+				restoreKueueConfig(cleanupCtx, *savedConfig, kubeClient)
 			})
 
-			gangConfig := *savedConfig
-			gangConfig.GangScheduling = ssv1.GangScheduling{
+			kueueInstance.Spec.Config.GangScheduling = ssv1.GangScheduling{
 				Policy: ssv1.GangSchedulingPolicyByWorkload,
 				ByWorkload: &ssv1.ByWorkload{
 					Admission: ssv1.GangSchedulingWorkloadAdmissionSequential,
 				},
 			}
-			applyKueueConfig(ctx, gangConfig, kubeClient)
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
 			By("Creating ClusterQueue with 2 GPU DRA quota")
 			gangCQ, cleanupCQ, err := testutils.NewClusterQueue().
@@ -939,7 +946,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			singleJob := newDRAJob(builder, "dra-single-gpu", "gpu-template-gang", gangLQ.Name)
 			createdSingleJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, singleJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
 
 			By("Verifying single-pod job is admitted and running")
 			checkWorkloadCondition(ctx, ns.Name, string(createdSingleJob.UID), kueuev1beta2.WorkloadAdmitted, "single-gpu")
@@ -953,7 +960,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			gangJob.Spec.Completions = ptr.To(int32(2))
 			createdGangJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, gangJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdGangJob.Namespace, createdGangJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdGangJob.Namespace, createdGangJob.Name)
 
 			By("Verifying gang job is suspended (not enough DRA quota for all pods)")
 			Eventually(func() bool {
@@ -976,8 +983,346 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		})
 	})
 
+	When("admission fair sharing tracks DRA resources", func() {
+		var savedAFSConfig *ssv1.KueueConfiguration
+
+		BeforeAll(func(ctx context.Context) {
+			By("Enabling AFS with custom settings for all AFS tests")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			savedAFSConfig = kueueInstance.Spec.Config.DeepCopy()
+			kueueInstance.Spec.Config.AdmissionFairSharing = ssv1.AdmissionFairSharing{
+				UsageHalfLifeTimeSeconds:     120,
+				UsageSamplingIntervalSeconds: 1,
+			}
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+		})
+
+		AfterAll(func(ctx context.Context) {
+			By("Restoring Kueue config after AFS tests")
+			if savedAFSConfig != nil {
+				restoreKueueConfig(ctx, *savedAFSConfig, kubeClient)
+			}
+		})
+
+		It("should include DRA GPU in consumedResources for the GPU-using LocalQueue", func(ctx context.Context) {
+			if gpuCount < 2 {
+				Skip(fmt.Sprintf("AFS test requires at least 2 GPUs, found %d", gpuCount))
+			}
+			kueueClient := clients.UpstreamKueueClient
+
+			By("Creating ResourceFlavor, ClusterQueue with AFS, Namespace and two LocalQueues")
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupResourceFlavor)
+
+			cqWrapper := testutils.NewClusterQueue().
+				WithGenerateName().
+				WithFlavorName(resourceFlavor.Name).
+				WithCPU("1").
+				WithMemory("4Gi").
+				WithDRAResource(draLogicalResource, "2")
+			cqWrapper.Spec.AdmissionScope = &kueuev1beta2.AdmissionScope{
+				AdmissionMode: kueuev1beta2.UsageBasedAdmissionFairSharing,
+			}
+			cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: draTestNamespacePrefix,
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}
+			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupNs)
+
+			lqGPU, cleanupLQGPU, err := testutils.NewLocalQueue(ns.Name, "lq-gpu").WithClusterQueue(cq.Name).CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQGPU)
+
+			lqCPU, cleanupLQCPU, err := testutils.NewLocalQueue(ns.Name, "lq-cpu").WithClusterQueue(cq.Name).CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQCPU)
+
+			By("Creating ResourceClaimTemplate for 1 GPU")
+			rct := newDRAResourceClaimTemplate("gpu-template-afs", ns.Name, 1)
+			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Submitting GPU+CPU DRA jobs to lq-gpu")
+			builder := testutils.NewTestResourceBuilder(ns.Name, lqGPU.Name)
+			jobGPU1 := newDRAJob(builder, "job-gpu-afs-1", "gpu-template-afs", lqGPU.Name)
+			createdJobGPU1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU1.Namespace, createdJobGPU1.Name)
+
+			jobGPU2 := newDRAJob(builder, "job-gpu-afs-2", "gpu-template-afs", lqGPU.Name)
+			createdJobGPU2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU2.Namespace, createdJobGPU2.Name)
+
+			By("Submitting CPU-only job to lq-cpu")
+			cpuBuilder := testutils.NewTestResourceBuilder(ns.Name, lqCPU.Name)
+			jobCPU := cpuBuilder.NewJob()
+			setDRAJobCPU(jobCPU)
+			jobCPU.Name = "job-cpu-afs"
+			jobCPU.Labels[testutils.QueueLabel] = lqCPU.Name
+			jobCPU.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
+			createdJobCPU, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobCPU, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobCPU.Namespace, createdJobCPU.Name)
+
+			By("Waiting for all jobs to be running")
+			for _, jobName := range []string{createdJobGPU1.Name, createdJobGPU2.Name, createdJobCPU.Name} {
+				Eventually(func() bool {
+					return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, jobName)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(),
+					"job %s pod should be running", jobName)
+			}
+
+			By("Verifying ResourceClaims are allocated for GPU jobs")
+			Eventually(func(g Gomega) {
+				claims, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).List(ctx, metav1.ListOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				var allocatedCount int
+				for _, c := range claims.Items {
+					if c.Status.Allocation != nil && len(c.Status.ReservedFor) > 0 {
+						allocatedCount++
+					}
+				}
+				g.Expect(allocatedCount).To(Equal(2), "expected 2 allocated ResourceClaims, got %d", allocatedCount)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying lq-gpu consumedResources includes non-zero nvidia-gpu")
+			Eventually(func(g Gomega) {
+				lq, err := kueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqGPU.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(lq.Status.FairSharing).NotTo(BeNil(), "lq-gpu fairSharing status should be populated")
+				g.Expect(lq.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil(),
+					"lq-gpu admissionFairSharingStatus should be populated")
+				consumed := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources
+				gpuUsage := consumed[corev1.ResourceName(draLogicalResource)]
+				g.Expect(gpuUsage.IsZero()).To(BeFalse(),
+					"lq-gpu consumedResources should include non-zero %s, got %s", draLogicalResource, gpuUsage.String())
+			}, 60*time.Second, 2*time.Second).Should(Succeed())
+
+			By("Verifying lq-cpu consumedResources has zero nvidia-gpu usage")
+			Eventually(func(g Gomega) {
+				lq, err := kueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqCPU.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(lq.Status.FairSharing).NotTo(BeNil(), "lq-cpu fairSharing status should be populated")
+				g.Expect(lq.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil(),
+					"lq-cpu admissionFairSharingStatus should be populated")
+				consumed := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources
+				gpuUsage := consumed[corev1.ResourceName(draLogicalResource)]
+				g.Expect(gpuUsage.IsZero()).To(BeTrue(),
+					"lq-cpu consumedResources should have zero %s usage, got %s", draLogicalResource, gpuUsage.String())
+			}, 60*time.Second, 2*time.Second).Should(Succeed())
+		})
+
+		It("should deprioritize GPU-heavy queue in admission ordering", func(ctx context.Context) {
+			if gpuCount < 2 {
+				Skip(fmt.Sprintf("AFS ordering test requires at least 2 GPUs, found %d", gpuCount))
+			}
+			kueueClient := clients.UpstreamKueueClient
+
+			By("Creating ResourceFlavor, ClusterQueue with AFS, Namespace and two LocalQueues")
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupResourceFlavor)
+
+			cqWrapper := testutils.NewClusterQueue().
+				WithGenerateName().
+				WithFlavorName(resourceFlavor.Name).
+				WithCPU("1").
+				WithMemory("4Gi").
+				WithDRAResource(draLogicalResource, "2")
+			cqWrapper.Spec.AdmissionScope = &kueuev1beta2.AdmissionScope{
+				AdmissionMode: kueuev1beta2.UsageBasedAdmissionFairSharing,
+			}
+			cq, cleanupCQ, err := cqWrapper.CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: draTestNamespacePrefix,
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}
+			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupNs)
+
+			lqGPU, cleanupLQGPU, err := testutils.NewLocalQueue(ns.Name, "lq-gpu").WithClusterQueue(cq.Name).CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQGPU)
+
+			lqCPU, cleanupLQCPU, err := testutils.NewLocalQueue(ns.Name, "lq-cpu").WithClusterQueue(cq.Name).CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQCPU)
+
+			By("Creating ResourceClaimTemplate for 1 GPU")
+			rct := newDRAResourceClaimTemplate("gpu-template-afs-order", ns.Name, 1)
+			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Submitting GPU+CPU DRA jobs to lq-gpu to build usage history")
+			builder := testutils.NewTestResourceBuilder(ns.Name, lqGPU.Name)
+			jobGPU1 := newDRAJob(builder, "job-gpu-order-1", "gpu-template-afs-order", lqGPU.Name)
+			createdJobGPU1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU1.Namespace, createdJobGPU1.Name)
+
+			jobGPU2 := newDRAJob(builder, "job-gpu-order-2", "gpu-template-afs-order", lqGPU.Name)
+			createdJobGPU2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU2.Namespace, createdJobGPU2.Name)
+
+			By("Submitting CPU-only job to lq-cpu to build usage history")
+			cpuBuilder := testutils.NewTestResourceBuilder(ns.Name, lqCPU.Name)
+			jobCPU := cpuBuilder.NewJob()
+			setDRAJobCPU(jobCPU)
+			jobCPU.Name = "job-cpu-order"
+			jobCPU.Labels[testutils.QueueLabel] = lqCPU.Name
+			jobCPU.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
+			createdJobCPU, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobCPU, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobCPU.Namespace, createdJobCPU.Name)
+
+			By("Waiting for all jobs to be running")
+			for _, jobName := range []string{createdJobGPU1.Name, createdJobGPU2.Name, createdJobCPU.Name} {
+				Eventually(func() bool {
+					return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, jobName)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(),
+					"job %s pod should be running", jobName)
+			}
+
+			By("Verifying ResourceClaims are allocated for GPU jobs")
+			Eventually(func(g Gomega) {
+				claims, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).List(ctx, metav1.ListOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				var allocatedCount int
+				for _, c := range claims.Items {
+					if c.Status.Allocation != nil && len(c.Status.ReservedFor) > 0 {
+						allocatedCount++
+					}
+				}
+				g.Expect(allocatedCount).To(Equal(2), "expected 2 allocated ResourceClaims, got %d", allocatedCount)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Waiting for all initial jobs to complete")
+			for _, uid := range []string{string(createdJobGPU1.UID), string(createdJobGPU2.UID), string(createdJobCPU.UID)} {
+				checkWorkloadCondition(ctx, ns.Name, uid, kueuev1beta2.WorkloadFinished, "initial")
+			}
+
+			By("Verifying lq-gpu usage still persists after completion (half-life decay)")
+			Eventually(func(g Gomega) {
+				lq, err := kueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqGPU.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(lq.Status.FairSharing).NotTo(BeNil(), "lq-gpu fairSharing status should be populated")
+				g.Expect(lq.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil(),
+					"lq-gpu admissionFairSharingStatus should be populated")
+				consumed := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources
+				gpuUsage := consumed[corev1.ResourceName(draLogicalResource)]
+				g.Expect(gpuUsage.IsZero()).To(BeFalse(),
+					"lq-gpu consumedResources should still include non-zero %s after completion, got %s",
+					draLogicalResource, gpuUsage.String())
+			}, 30*time.Second, 2*time.Second).Should(Succeed())
+
+			By("Creating placeholder job on lq-gpu to fill CPU quota")
+			placeholderBuilder := testutils.NewTestResourceBuilder(ns.Name, lqGPU.Name)
+			jobPlaceholder := placeholderBuilder.NewJob()
+			jobPlaceholder.Name = "job-placeholder"
+			jobPlaceholder.Labels[testutils.QueueLabel] = lqGPU.Name
+			jobPlaceholder.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep infinity"}
+			jobPlaceholder.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			jobPlaceholder.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			createdPlaceholder, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobPlaceholder, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdPlaceholder.Namespace, createdPlaceholder.Name)
+
+			Eventually(func() bool {
+				return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdPlaceholder.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(),
+				"placeholder job should be admitted")
+
+			By("Creating both contender jobs while CPU quota is full (both should stay suspended)")
+			gpuCompeteBuilder := testutils.NewTestResourceBuilder(ns.Name, lqGPU.Name)
+			jobGPUCompete := gpuCompeteBuilder.NewJob()
+			jobGPUCompete.Name = "job-gpu-compete"
+			jobGPUCompete.Labels[testutils.QueueLabel] = lqGPU.Name
+			jobGPUCompete.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep infinity"}
+			jobGPUCompete.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			jobGPUCompete.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			createdJobGPUCompete, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPUCompete, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPUCompete.Namespace, createdJobGPUCompete.Name)
+
+			jobCPUCompete := cpuBuilder.NewJob()
+			jobCPUCompete.Name = "job-cpu-compete"
+			jobCPUCompete.Labels[testutils.QueueLabel] = lqCPU.Name
+			jobCPUCompete.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep infinity"}
+			jobCPUCompete.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			jobCPUCompete.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			createdJobCPUCompete, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobCPUCompete, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobCPUCompete.Namespace, createdJobCPUCompete.Name)
+
+			By("Verifying both contender jobs are suspended")
+			Consistently(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobCPUCompete.Name) &&
+					testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobGPUCompete.Name)
+			}, 10*time.Second, 2*time.Second).Should(BeTrue(),
+				"both contender jobs should remain suspended while placeholder holds CPU quota")
+
+			By("Deleting placeholder job to free CPU quota for one contender")
+			foreground := metav1.DeletePropagationForeground
+			err = kubeClient.BatchV1().Jobs(ns.Name).Delete(ctx, createdPlaceholder.Name, metav1.DeleteOptions{
+				PropagationPolicy: &foreground,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying lq-cpu job wins admission (lower AFS usage)")
+			Eventually(func() bool {
+				return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobCPUCompete.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(),
+				"job-cpu-compete (lq-cpu, lower usage) should be admitted first")
+
+			By("Verifying lq-gpu job remains suspended (higher AFS usage due to GPU history)")
+			Consistently(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobGPUCompete.Name)
+			}, 15*time.Second, 2*time.Second).Should(BeTrue(),
+				"job-gpu-compete (lq-gpu, higher total usage including GPUs) should remain suspended")
+		})
+	})
+
 })
 
+// newDRAResourceClaimTemplate creates a ResourceClaimTemplate that requests the given number of GPUs
+// from the gpu.nvidia.com DeviceClass.
 func newDRAResourceClaimTemplate(name, namespace string, gpuCount int64) *resourcev1.ResourceClaimTemplate {
 	return &resourcev1.ResourceClaimTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1081,6 +1426,51 @@ func newDRAJob(builder *testutils.TestResourceBuilder, name, templateName, queue
 	}
 	job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{{Name: "gpu"}}
 	return job
+}
+
+// restoreKueueConfig restores a Kueue CR config with retry on resourceVersion conflicts.
+// This function re-fetches the CR on each attempt to get a fresh resourceVersion.
+func restoreKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClient *kubernetes.Clientset) {
+	kueueClientset := clients.KueueClient
+
+	initialDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to fetch kueue-controller-manager deployment before restore")
+	initialResourceVersion := initialDeployment.ResourceVersion
+
+	By("Restoring Kueue config (with conflict retry)")
+	Eventually(func() error {
+		instance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to fetch Kueue instance: %w", err)
+		}
+		instance.Spec.Config = config
+		_, err = kueueClientset.KueueV1().Kueues().Update(ctx, instance, metav1.UpdateOptions{})
+		return err
+	}, 30*time.Second, 2*time.Second).Should(Succeed(), "Failed to restore Kueue config")
+
+	By("Waiting for kueue-controller-manager deployment to be updated after config restore")
+	Eventually(func() error {
+		dep, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to fetch manager deployment: %w", err)
+		}
+		if dep.ResourceVersion == initialResourceVersion {
+			return fmt.Errorf("deployment resource version has not changed yet (still %s)", initialResourceVersion)
+		}
+		return nil
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager deployment resource version did not change after restore")
+
+	By("Waiting for kueue-controller-manager to be ready after config restore")
+	Eventually(func() error {
+		dep, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to fetch manager deployment: %w", err)
+		}
+		if dep.Status.ReadyReplicas != dep.Status.Replicas {
+			return fmt.Errorf("deployment not ready: %d/%d replicas ready", dep.Status.ReadyReplicas, dep.Status.Replicas)
+		}
+		return nil
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager not ready after config restore")
 }
 
 // adds DRA ResourceClaim references and reduces CPU request on a PodSpec.
