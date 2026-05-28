@@ -61,7 +61,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 					},
 				},
 			}
-			applyKueueConfig(ctx, newConfig, kubeClient)
+			testutils.ApplyKueueConfig(ctx, newConfig, clients)
 
 			By("Waiting for Kueue configuration to be applied")
 			Eventually(func(g Gomega) {
@@ -75,7 +75,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 
 		AfterAll(func(ctx context.Context) {
 			By("Restoring initial Kueue configuration")
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should apply all-or-nothing admission for workloads", func(ctx context.Context) {
@@ -101,7 +101,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
+				testutils.DeleteNamespace(ctx, kubeClient, namespace)
 			})
 			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
@@ -113,7 +113,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			DeferCleanup(cleanupJob1)
 
 			By("Verifying first job workload is created and admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job1.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespace.Name, string(job1.UID))
 
 			By("Creating a gang job (parallelism=2) that exceeds remaining quota")
 			cleanupJob2, job2, err := createJobGang(ctx, "job-gang", namespace.Name, localQueue.Name, "150m", "128Mi", 2)
@@ -150,7 +150,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "First job should complete")
 
 			By("Verifying the second gang job is now admitted after quota is freed (all pods admitted together)")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job2.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespace.Name, string(job2.UID))
 
 		})
 
@@ -179,7 +179,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
+				testutils.DeleteNamespace(ctx, kubeClient, namespace)
 			})
 
 			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -192,7 +192,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			DeferCleanup(cleanupJob1)
 
 			By("Verifying first gang job workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
 
 			By("Creating the second gang job (parallelism=2) while first gang job pods are not yet ready")
 			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-sequential-2", namespace.Name, localQueue.Name, "100m", "100Mi", 2)
@@ -228,7 +228,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "First gang job pods should complete")
 
 			By("Verifying second gang job is now admitted after first gang job pods became ready")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob2.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespace.Name, string(createdJob2.UID))
 		})
 	})
 
@@ -253,7 +253,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 					},
 				},
 			}
-			applyKueueConfig(ctx, newConfig, kubeClient)
+			testutils.ApplyKueueConfig(ctx, newConfig, clients)
 
 			By("Waiting for Kueue configuration to be applied")
 			Eventually(func(g Gomega) {
@@ -267,7 +267,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 
 		AfterAll(func(ctx context.Context) {
 			By("Restoring initial Kueue configuration")
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should admit workloads in parallel without waiting for pods to be ready", func(ctx context.Context) {
@@ -294,7 +294,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
+				testutils.DeleteNamespace(ctx, kubeClient, namespace)
 			})
 
 			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -307,7 +307,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			DeferCleanup(cleanupJob1)
 
 			By("Verifying first gang job workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
 
 			By("Creating the second gang job (parallelism=2) while first gang job pods are not yet ready")
 			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-parallel-2", namespace.Name, localQueue.Name, "100m", "100Mi", 2)
@@ -315,7 +315,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			DeferCleanup(cleanupJob2)
 
 			By("Verifying second gang job is admitted immediately despite first gang job pods not being ready (parallel admission)")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob2.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespace.Name, string(createdJob2.UID))
 
 			By("Verifying both gang jobs are admitted together without waiting for pod readiness")
 			workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).List(ctx, metav1.ListOptions{})

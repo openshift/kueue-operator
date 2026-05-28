@@ -91,7 +91,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		})
 		AfterAll(func(ctx context.Context) {
 			cleanupLocalQueue()
-			deleteNamespace(ctx, ns)
+			testutils.DeleteNamespace(ctx, kubeClient, ns)
 			cleanupClusterQueue()
 			cleanupResourceFlavor()
 		})
@@ -203,7 +203,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceA)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceA)
 			})
 
 			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueueA.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -220,7 +220,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceB)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceB)
 			})
 			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueueB.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
@@ -260,7 +260,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Creating testing data")
 			cleanupJobBlockerA, jobBlockerA, err := createCustomJob(ctx, "job-blocker", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
 			DeferCleanup(cleanupJobBlockerA)
 			cleanupJobHighA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority job")
@@ -273,7 +273,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			DeferCleanup(cleanupJobLowA)
 			cleanupJobBlockerB, jobBlockerB, err := createCustomJob(ctx, "job-blocker-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
 			DeferCleanup(cleanupJobBlockerB)
 			cleanupJobHighB, jobHighB, err := createCustomJob(ctx, "job-high-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
@@ -332,10 +332,10 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(clusterPendingWorkloadsB.Items[0].Priority).To(Equal(int32(100)), "First workload should have high priority (100)")
 
 			By("All workloads should have been created")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobHighA.UID))
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobMediumA.UID))
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobLowA.UID))
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobHighB.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(jobHighA.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(jobMediumA.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(jobLowA.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceB.Name, string(jobHighB.UID))
 
 			By("Verifying pending workloads lists are empty")
 			Eventually(func() error {
@@ -396,7 +396,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceA)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceA)
 			})
 
 			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -414,7 +414,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceB)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceB)
 			})
 
 			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -453,14 +453,14 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Creating testing data")
 			cleanupJobBlockerA, jobBlockerA, err := createCustomJob(ctx, "job-blocker", namespaceA.Name, localQueueA.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(jobBlockerA.UID))
 			DeferCleanup(cleanupJobBlockerA)
 			cleanupJobLowA, jobHighA, err := createCustomJob(ctx, "job-high-a", namespaceA.Name, localQueueA.Name, lowPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create high priority job")
 			DeferCleanup(cleanupJobLowA)
 			cleanupJobBlockerB, jobBlockerB, err := createCustomJob(ctx, "job-blocker-b", namespaceB.Name, localQueueB.Name, highPriorityClass.Name, "2", "1Gi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create blocker job")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceB.Name, string(jobBlockerB.UID))
 			DeferCleanup(cleanupJobBlockerB)
 			cleanupJobLowB, jobLowB, err := createCustomJob(ctx, "job-low-b", namespaceB.Name, localQueueB.Name, lowPriorityClass.Name, "1", "512Mi")
 			Expect(err).NotTo(HaveOccurred(), "Failed to create low priority job")
@@ -558,8 +558,8 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "Expected a Forbidden error when user from namespaceA tries to access LocalQueue in namespaceB")
 
 			By("All workloads should have been created")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(jobHighA.UID))
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(jobLowB.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(jobHighA.UID))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceB.Name, string(jobLowB.UID))
 
 			By("Verifying pending workloads lists are empty")
 			Eventually(func() error {
@@ -603,7 +603,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
+				testutils.DeleteNamespace(ctx, kubeClient, namespace)
 			})
 
 			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -708,7 +708,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceA)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceA)
 			})
 
 			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -725,7 +725,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceB)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceB)
 			})
 
 			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -787,7 +787,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			})
 			blockerLWS.Name = "lws-blocker-a"
 			Expect(genericClient.Create(ctx, blockerLWS)).To(Succeed(), "Failed to create blocker LWS")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(blockerLWS.GetUID()))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(blockerLWS.GetUID()))
 
 			By("Waiting for blocker LWS pods to be created")
 			Eventually(func() error {
@@ -902,7 +902,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Blocker LWS pods were not deleted")
 
 			By("Verifying high priority workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceB.Name, string(highLWS.GetUID()))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceB.Name, string(highLWS.GetUID()))
 
 			By("Verifying high priority LWS pods are running after admission")
 			Eventually(func() error {
@@ -924,7 +924,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "High priority LWS pods should be running after admission")
 
 			By("Verifying medium priority workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(mediumLWS.GetUID()))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(mediumLWS.GetUID()))
 
 			By("Verifying medium priority LWS pods are running after admission")
 			Eventually(func() error {
@@ -987,7 +987,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, testutils.DeletionTime, testutils.DeletionPoll).Should(Succeed(), "Medium priority LWS pods were not deleted")
 
 			By("Verifying low priority workload is admitted")
-			verifyWorkloadCreated(clients.UpstreamKueueClient, namespaceA.Name, string(lowLWS.GetUID()))
+			testutils.VerifyWorkloadCreated(ctx, clients.UpstreamKueueClient, namespaceA.Name, string(lowLWS.GetUID()))
 
 			By("Verifying low priority LWS pods are running after admission")
 			Eventually(func() error {
@@ -1039,7 +1039,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
+				testutils.DeleteNamespace(ctx, kubeClient, namespace)
 			})
 
 			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)

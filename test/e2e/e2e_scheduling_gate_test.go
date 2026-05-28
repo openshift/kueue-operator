@@ -66,7 +66,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 				LabelPolicy: ssv1.LabelPolicyQueueName,
 			},
 		}
-		applyKueueConfig(ctx, newConfig, kubeClient)
+		testutils.ApplyKueueConfig(ctx, newConfig, clients)
 
 		// Create namespace with managed label
 		By(fmt.Sprintf("Creating namespace %s with managed label", testNamespace))
@@ -96,7 +96,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 		By("Cleaning up test resources")
 
 		// Delete namespace
-		deleteNamespaceForSchedulingGateTest(ctx, &corev1.Namespace{
+		testutils.DeleteNamespace(ctx, kubeClient, &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
 			},
@@ -123,7 +123,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 				},
 			},
 		}
-		applyKueueConfig(ctx, defaultConfig, kubeClient)
+		testutils.ApplyKueueConfig(ctx, defaultConfig, clients)
 	})
 
 	When("workloads are submitted to a non-existent LocalQueue", func() {
@@ -352,10 +352,3 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 		})
 	})
 })
-
-func deleteNamespaceForSchedulingGateTest(ctx context.Context, namespace *corev1.Namespace) {
-	By(fmt.Sprintf("Deleting namespace %s", namespace.Name))
-	err := kubeClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	testutils.WaitForAllPodsInNamespaceDeleted(ctx, clients.GenericClient, namespace)
-}

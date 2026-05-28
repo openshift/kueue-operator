@@ -31,11 +31,11 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 )

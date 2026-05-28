@@ -76,5 +76,5 @@ var _ = BeforeSuite(func() {
 
 	// Deploy the Kueue operand once for all tests
 	By("Deploying Kueue operand for all test suites")
-	Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
+	Expect(testutils.DeployOperand(clients)).To(Succeed(), "operand deployment should not fail")
 })
