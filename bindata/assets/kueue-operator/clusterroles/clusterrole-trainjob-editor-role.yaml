@@ -8,6 +8,7 @@ metadata:
     control-plane: controller-manager
     rbac.kueue.x-k8s.io/batch-admin: "true"
     rbac.kueue.x-k8s.io/batch-user: "true"
+    rbac.kueue.x-k8s.io/role: trainjob-editor
   name: kueue-trainjob-editor-role
 rules:
 - apiGroups:
