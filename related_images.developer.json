@@ -1,7 +1,7 @@
 [
   {
     "name": "operator",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator-main@sha256:a60bfcaa72301a472c477587c87c651db85635f2276cb9aaaf469662eddc13a4 "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operator-main@sha256:118145a9d807f2f2064016934960354fa38d3c40eadf4a3329fb86a87c02beb1 "
   },
   {
     "name": "must-gather",
