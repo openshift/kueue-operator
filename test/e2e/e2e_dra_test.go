@@ -685,7 +685,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			testutils.AddDRAClaims(&ss.Spec.Template.Spec, "gpu-template-workload-types")
 			createdSS, err := kubeClient.AppsV1().StatefulSets(ns.Name).Create(ctx, ss, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpObject(ctx, genericClient, createdSS)
+			DeferCleanup(testutils.CleanUpObject, genericClient, createdSS)
 
 			By("Waiting for StatefulSet pod to be created and workload to be admitted")
 			testutils.WaitForPodWorkloadAdmitted(ctx, kubeClient, kueueClient, ns.Name, "app=test-statefulset")

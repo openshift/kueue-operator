@@ -152,7 +152,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 			deploy := builder.NewDeployment()
 			createdDeploy, err := kubeClient.AppsV1().Deployments(testNamespace).Create(ctx, deploy, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpObject(ctx, genericClient, createdDeploy)
+			DeferCleanup(testutils.CleanUpObject, genericClient, createdDeploy)
 
 			By("Waiting for deployment pods to be created")
 			var deploymentPods []corev1.Pod
@@ -219,7 +219,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 			ss := builder.NewStatefulSet()
 			createdSS, err := kubeClient.AppsV1().StatefulSets(testNamespace).Create(ctx, ss, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpObject(ctx, genericClient, createdSS)
+			DeferCleanup(testutils.CleanUpObject, genericClient, createdSS)
 
 			By("Waiting for statefulset pods to be created")
 			var ssPods []corev1.Pod
@@ -289,7 +289,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 				Size:              2,
 			})
 			Expect(genericClient.Create(ctx, lws)).To(Succeed(), "Failed to create LeaderWorkerSet")
-			defer testutils.CleanUpObject(ctx, genericClient, lws)
+			DeferCleanup(testutils.CleanUpObject, genericClient, lws)
 
 			By("Waiting for LeaderWorkerSet pods to be created")
 			var lwsPods []corev1.Pod

@@ -198,7 +198,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}
 		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+		DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 		By("Verifying workload is admitted with correct quota under extendedResourceName")
 		Eventually(func(g Gomega) {
@@ -308,7 +308,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}
 		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+		DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 		By("Verifying job remains suspended")
 		Consistently(func() bool {
@@ -368,7 +368,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}
 		createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
+		DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob1.Namespace, createdJob1.Name)
 
 		By("Waiting for first job to be admitted")
 		Eventually(func() bool {
@@ -391,7 +391,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}
 		createdJob2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
+		DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob2.Namespace, createdJob2.Name)
 
 		By("Verifying second job is suspended (quota full)")
 		Consistently(func() bool {
@@ -463,7 +463,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}
 		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+		DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 		By("Verifying ClusterQueue shows extended resource reservation")
 		Eventually(func(g Gomega) {
@@ -610,7 +610,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			}
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("Verifying workload is admitted and deviceClassMappings name takes precedence")
 			Eventually(func(g Gomega) {
