@@ -49,7 +49,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance = kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = kueueoperatorv1.LabelPolicyNone
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 			createClusterQueueAndResourceFlavor(ctx)
 
 			managedNs, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
@@ -91,7 +91,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 				testutils.WaitForAllPodsInNamespaceDeleted(ctx, clients.GenericClient, unmanagedNs)
 			}
 			deleteClusterQueueAndResourceFlavor(ctx, nsKueueClient)
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		JustAfterEach(func(ctx context.Context) {
@@ -130,7 +130,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying workload is created for the job in managed namespace")
-			verifyWorkloadCreated(nsKueueClient, managedNs.Name, string(createdJob.UID))
+			testutils.VerifyWorkloadCreated(ctx, nsKueueClient, managedNs.Name, string(createdJob.UID))
 		})
 
 		It("should not reconcile a job with queue-name in unlabeled namespace", func(ctx context.Context) {

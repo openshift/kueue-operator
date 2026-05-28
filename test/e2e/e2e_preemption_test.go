@@ -48,12 +48,12 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 
 			By("Updating Kueue configuration to use FairSharing preemption")
 			kueueInstance.Spec.Config.Preemption.PreemptionPolicy = ssv1.PreemptionStrategyFairsharing
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 		})
 
 		AfterAll(func(ctx context.Context) {
 			By("Restoring initial Kueue configuration")
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should preempt workloads", func(ctx context.Context) {
@@ -87,7 +87,7 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceA)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceA)
 			})
 			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueueA.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue A")
@@ -116,7 +116,7 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceB)
+				testutils.DeleteNamespace(ctx, kubeClient, namespaceB)
 			})
 			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueueB.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue B")

@@ -21,10 +21,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,7 +32,6 @@ import (
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -42,7 +39,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -404,7 +400,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 					},
 				},
 			}
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 			apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
 			if err == nil {
@@ -418,7 +414,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 		})
 
 		AfterAll(func(ctx context.Context) {
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("verify DRA feature gate is enabled when DRA APIs are available", func() {
@@ -560,12 +556,12 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 
 		AfterAll(func(ctx context.Context) {
 			cleanupLocalQueue()
-			deleteNamespace(ctx, &corev1.Namespace{
+			testutils.DeleteNamespace(ctx, kubeClient, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNamespaceWithLabel,
 				},
 			})
-			deleteNamespace(ctx, &corev1.Namespace{
+			testutils.DeleteNamespace(ctx, kubeClient, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNamespaceWithoutLabel,
 				},
@@ -589,7 +585,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 			// Test labeled namespace
 			By("creating job in labeled namespace")
@@ -599,7 +595,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
-			fetchWorkload(kueueClient, testNamespaceWithLabel, string(createdJob.UID))
+			testutils.FetchWorkload(ctx, kueueClient,testNamespaceWithLabel, string(createdJob.UID))
 
 			// Verify job did not start (Kueue interference)
 			Eventually(func() *batchv1.JobStatus {
@@ -619,7 +615,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return &job.Status
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(HaveField("Active", BeNumerically(">=", 1)), "Job not started in unlabeled namespace")
 
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should manage jobs only in labeled namespaces", func() {
@@ -637,7 +633,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
-			verifyWorkloadCreated(kueueClient, testNamespaceWithLabel, string(createdJob.UID))
+			testutils.VerifyWorkloadCreated(ctx, kueueClient,testNamespaceWithLabel, string(createdJob.UID))
 
 			By("creating job in labeled namespace not managed by Kueue")
 			jobWithoutQueue := builderWithLabel.NewJobWithoutQueue()
@@ -677,7 +673,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpObject(ctx, genericClient, createdPod)
 
-			verifyWorkloadCreated(kueueClient, testNamespaceWithLabel, string(createdPod.UID))
+			testutils.VerifyWorkloadCreated(ctx, kueueClient,testNamespaceWithLabel, string(createdPod.UID))
 
 			By("creating pod in labeled namespace not managed by Kueue")
 			podWithoutQueue := builderWithLabel.NewPodWithoutQueue()
@@ -728,7 +724,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
-			verifyWorkloadCreated(kueueClient, testNamespaceWithLabel, string(deploymentPod.UID))
+			testutils.VerifyWorkloadCreated(ctx, kueueClient,testNamespaceWithLabel, string(deploymentPod.UID))
 
 			By("verifying deployment pods are available")
 			Eventually(func() int32 {
@@ -785,7 +781,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
-			workload := verifyWorkloadCreated(kueueClient, testNamespaceWithLabel, string(ssPod.UID))
+			workload := testutils.VerifyWorkloadCreated(ctx, kueueClient,testNamespaceWithLabel, string(ssPod.UID))
 			defer testutils.CleanUpWorkload(ctx, kueueClient, testNamespaceWithLabel, workload)
 
 			By("verifying statefulset pods are running")
@@ -825,7 +821,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = "None"
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 			jobsetInUnlabeledNamespace := builderWithoutLabel.NewJobSetWithoutQueue()
 			jobsetInLabeledNamespace := builderWithLabel.NewJobSetWithoutQueue()
@@ -852,7 +848,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			defer testutils.CleanUpObject(ctx, genericClient, jobsetInLabeledNamespace)
 
 			By("verifying workload is created")
-			fetchWorkload(kueueClient, testNamespaceWithLabel, string(jobsetInLabeledNamespace.UID))
+			testutils.FetchWorkload(ctx, kueueClient,testNamespaceWithLabel, string(jobsetInLabeledNamespace.UID))
 
 			By("verifying jobset did not start in labeled namespace")
 			Eventually(func() error {
@@ -870,7 +866,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Incorrect jobset status in labeled namespace")
 
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should manage LeaderWorkerSet without queue name in labeled namespace when labelPolicy=None", func() {
@@ -881,7 +877,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 			By("creating LeaderWorkerSet without queue name in labeled namespace")
 			lwsWithoutQueue := builderWithLabel.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
@@ -942,7 +938,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Pod %s should be in SchedulingGated state", pod.Name)
 			}
 
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should not manage LeaderWorkerSet without queue name in unlabeled namespace when labelPolicy=None", func() {
@@ -953,7 +949,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance := kueueInstance.DeepCopy()
 			kueueInstance.Spec.Config.WorkloadManagement.LabelPolicy = ssv1.LabelPolicyNone
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 			By("creating LeaderWorkerSet without queue name in unlabeled namespace")
 			lwsWithoutQueue := builderWithoutLabel.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
@@ -1001,7 +997,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "LeaderWorkerSet pods should be running in unlabeled namespace")
 
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 		It("should expose metrics endpoint with TLS", func() {
 			ctx := context.TODO()
@@ -1444,182 +1440,6 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 	})
 })
 
-func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClient *kubernetes.Clientset) {
-	kueueClientset := clients.KueueClient
-	By("Feching Kueue Instance")
-	kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-	Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-
-	// Check if the config is actually changing
-	configChanged := !reflect.DeepEqual(kueueInstance.Spec.Config, config)
-
-	// Get the current resource version of kueue-controller-manager before updating config
-	initialDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-	Expect(err).ToNot(HaveOccurred(), "Failed to fetch kueue-controller-manager deployment")
-	initialResourceVersion := initialDeployment.ResourceVersion
-
-	kueueInstance.Spec.Config = config
-	By("Updating Kueue config")
-	_, err = kueueClientset.KueueV1().Kueues().Update(ctx, kueueInstance, metav1.UpdateOptions{})
-	Expect(err).ToNot(HaveOccurred(), "Failed to update Kueue config")
-
-	// Only wait for deployment update if the config actually changed
-	if configChanged {
-		// Wait for the deployment resource version to change
-		By(fmt.Sprintf("Waiting for kueue-controller-manager resource version to change from %s", initialResourceVersion))
-		Eventually(func() error {
-			managerDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-			if err != nil {
-				return fmt.Errorf("Unable to fetch manager deployment: %v", err)
-			}
-			if managerDeployment.ResourceVersion == initialResourceVersion {
-				return fmt.Errorf("deployment resource version has not changed yet (still %s)", initialResourceVersion)
-			}
-			return nil
-		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager deployment resource version did not change")
-	} else {
-		By("Skipping deployment update wait - config unchanged")
-	}
-
-	Eventually(func() error {
-		managerDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("Unable to fetch manager deployment: %v", err)
-		}
-		By(fmt.Sprintf("Checking if deployment replicas: %v matches amount of ready replicas: %v", managerDeployment.Status.Replicas, managerDeployment.Status.ReadyReplicas))
-		if managerDeployment.Status.ReadyReplicas == managerDeployment.Status.Replicas {
-			return nil
-		}
-		return fmt.Errorf("deployment is not ready")
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-controller-manager deployment failed to be ready")
-
-	// Wait for webhook configurations to be created/updated
-	By("Waiting for webhook configurations to exist")
-	Eventually(func() error {
-		_, err := kClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, "kueue-mutating-webhook-configuration", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("mutating webhook configuration not found: %w", err)
-		}
-		_, err = kClient.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(ctx, "kueue-validating-webhook-configuration", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("validating webhook configuration not found: %w", err)
-		}
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook configurations not found")
-
-	waitForWebhookReady(ctx, kClient)
-
-	// After redeployment, CRD conversion webhooks may be temporarily unreachable
-	// causing the API server to return 404 for kueue resource types. Wait until
-	// the CRDs are actually servable before returning.
-	By("Verifying kueue CRDs are servable")
-	Eventually(func() error {
-		_, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().List(ctx, metav1.ListOptions{Limit: 1})
-		return err
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue CRDs not servable after reconfiguration")
-}
-
-// waitForWebhookReady waits for the webhook to be ready by attempting to create a test job
-func waitForWebhookReady(ctx context.Context, kubeClient *kubernetes.Clientset) {
-	By("Waiting for webhook to handle requests successfully")
-
-	// Track consecutive successes to ensure webhook is stable
-	consecutiveSuccesses := 0
-	requiredSuccesses := 3
-
-	Eventually(func() error {
-		// First, verify webhook service endpoints exist and are not empty
-		endpointSlices, err := kubeClient.DiscoveryV1().EndpointSlices(testutils.OperatorNamespace).List(
-			ctx,
-			metav1.ListOptions{
-				LabelSelector: "kubernetes.io/service-name=kueue-webhook-service",
-			},
-		)
-		if err != nil {
-			consecutiveSuccesses = 0
-			return fmt.Errorf("webhook service endpointslices not found: %w", err)
-		}
-
-		// Check if there are at least 2 ready endpoints
-		readyEndpointCount := 0
-		for _, slice := range endpointSlices.Items {
-			for _, endpoint := range slice.Endpoints {
-				if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
-					readyEndpointCount++
-				}
-			}
-		}
-		if readyEndpointCount < 2 {
-			consecutiveSuccesses = 0
-			return fmt.Errorf("webhook service has %d ready endpoints, need 2", readyEndpointCount)
-		}
-
-		// Create a test job to verify webhook responds
-		testJob := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "webhook-test-",
-				Namespace:    testutils.OperatorNamespace,
-			},
-			Spec: batchv1.JobSpec{
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						RestartPolicy: corev1.RestartPolicyNever,
-						Containers: []corev1.Container{
-							{
-								Name:    "test",
-								Image:   "busybox",
-								Command: []string{"true"},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		// Try to create the job - if webhook responds (success or rejection), it's ready
-		job, err := kubeClient.BatchV1().Jobs(testutils.OperatorNamespace).Create(ctx, testJob, metav1.CreateOptions{})
-		if err == nil {
-			// Webhook responded successfully - clean up the test job
-			klog.Infof("Webhook test successful, cleaning up test job: %s", job.Name)
-			_ = kubeClient.BatchV1().Jobs(testutils.OperatorNamespace).Delete(ctx, job.Name, metav1.DeleteOptions{
-				PropagationPolicy: func() *metav1.DeletionPropagation {
-					p := metav1.DeletePropagationBackground
-					return &p
-				}(),
-			})
-			consecutiveSuccesses++
-			if consecutiveSuccesses >= requiredSuccesses {
-				klog.Infof("Webhook stable after %d consecutive successes", consecutiveSuccesses)
-				return nil
-			}
-			klog.Infof("Webhook success %d/%d", consecutiveSuccesses, requiredSuccesses)
-			return fmt.Errorf("waiting for webhook stability (%d/%d successes)", consecutiveSuccesses, requiredSuccesses)
-		}
-
-		// Reset counter on any error
-		consecutiveSuccesses = 0
-
-		// If error is a webhook timeout/connection error, webhook is not ready
-		if strings.Contains(err.Error(), "failed calling webhook") ||
-			strings.Contains(err.Error(), "failed to call webhook") ||
-			strings.Contains(err.Error(), "context deadline exceeded") ||
-			strings.Contains(err.Error(), "connection refused") {
-			klog.Infof("Webhook not ready yet: %v", err)
-			return fmt.Errorf("webhook not responding: %w", err)
-		}
-
-		// Any other error (validation, etc.) means webhook is responding
-		klog.Infof("Webhook is responding (returned error: %v)", err)
-		consecutiveSuccesses++
-		if consecutiveSuccesses >= requiredSuccesses {
-			klog.Infof("Webhook stable after %d consecutive successes", consecutiveSuccesses)
-			return nil
-		}
-		klog.Infof("Webhook success %d/%d", consecutiveSuccesses, requiredSuccesses)
-		return fmt.Errorf("waiting for webhook stability (%d/%d successes)", consecutiveSuccesses, requiredSuccesses)
-	}, testutils.OperatorReadyTime, 3*time.Second).Should(Succeed(), "webhook failed to respond to requests")
-}
-
 func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValue, framework string) {
 	ctx := context.TODO()
 	// avoid matching on two of same names like job and jobset.
@@ -1670,180 +1490,6 @@ func validateWebhookConfig(kubeClient *kubernetes.Clientset, labelKey, labelValu
 	mwh, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, "kueue-mutating-webhook-configuration", metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	mutatingWebhook(mwh)
-}
-
-func fetchWorkload(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) {
-	ctx := context.TODO()
-	Eventually(func() error {
-		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", uid),
-		})
-		if err != nil {
-			return err
-		}
-		if len(workloads.Items) == 0 {
-			return fmt.Errorf("no workload found")
-		}
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
-}
-
-func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace, uid string) string {
-	ctx := context.TODO()
-	By(fmt.Sprintf("verifying workload created in namespace %s and uid %s", namespace, uid))
-	// Verify that a Workload with the expected label is created and admitted
-	var workload *kueuev1beta2.Workload
-	Eventually(func() error {
-		workloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", uid),
-		})
-		if err != nil {
-			return err
-		}
-		if len(workloads.Items) > 0 {
-			workload = &workloads.Items[0]
-			return nil
-		}
-
-		// If not found by job-uid label, look for workloads by ownerReference (for StatefulSets)
-		allWorkloads, err := kueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-
-		for _, wl := range allWorkloads.Items {
-			for _, ownerRef := range wl.OwnerReferences {
-				if ownerRef.UID == types.UID(uid) {
-					workload = &wl
-
-					return nil
-				}
-			}
-		}
-
-		return fmt.Errorf("no workload found in namespace %s with uid %s", namespace, uid)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
-
-	Eventually(func() error {
-		updatedWorkload, err := kueueClient.KueueV1beta2().Workloads(namespace).Get(ctx, workload.Name, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		// Accept workloads that are either admitted or finished (which means they were admitted and completed)
-		if apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta2.WorkloadAdmitted) ||
-			apimeta.IsStatusConditionTrue(updatedWorkload.Status.Conditions, kueuev1beta2.WorkloadFinished) {
-			return nil
-		}
-		return fmt.Errorf("workload %s/%s not admitted or finished", namespace, workload.Name)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
-	return workload.Name
-}
-
-func deployOperand() error {
-	ssClient := clients.KueueClient
-
-	ctx, cancelFnc := context.WithCancel(context.TODO())
-	defer cancelFnc()
-
-	Eventually(func() error {
-		klog.Infof("Creating Kueue instance")
-		requiredSS := testutils.NewKueueDefault()
-		_, err := ssClient.KueueV1().Kueues().Create(ctx, requiredSS.GetKueue(), metav1.CreateOptions{})
-		if err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue instance should be deployed")
-
-	Eventually(func() error {
-		ctx := context.TODO()
-		podItems, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			klog.Errorf("Unable to list pods: %v", err)
-			return nil
-		}
-		for _, pod := range podItems.Items {
-			if !strings.HasPrefix(pod.Name, "kueue-controller-manager") {
-				continue
-			}
-			klog.Infof("Checking pod: %v, phase: %v, deletionTS: %v\n", pod.Name, pod.Status.Phase, pod.GetDeletionTimestamp())
-			if pod.Status.Phase == corev1.PodRunning && pod.GetDeletionTimestamp() == nil && pod.Status.ContainerStatuses[0].Ready {
-				return nil
-			}
-		}
-		return fmt.Errorf("pod is not ready")
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue pod failed to be ready")
-
-	// Wait for all Kueue CRDs to be registered
-	By("Waiting for all Kueue CRDs to be registered")
-	requiredCRDs := []string{
-		"clusterqueues.kueue.x-k8s.io",
-		"cohorts.kueue.x-k8s.io",
-		"localqueues.kueue.x-k8s.io",
-		"multikueueconfigs.kueue.x-k8s.io",
-		"provisioningrequestconfigs.kueue.x-k8s.io",
-		"resourceflavors.kueue.x-k8s.io",
-		"topologies.kueue.x-k8s.io",
-		"workloadpriorityclasses.kueue.x-k8s.io",
-		"workloads.kueue.x-k8s.io",
-	}
-
-	Eventually(func() error {
-		ctx := context.TODO()
-		crdList, err := clients.APIExtClient.CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list CRDs: %w", err)
-		}
-
-		// Create a map of found CRDs
-		foundCRDs := make(map[string]bool)
-		for _, crd := range crdList.Items {
-			foundCRDs[crd.Name] = true
-		}
-
-		// Check all required CRDs are present
-		var missingCRDs []string
-		for _, requiredCRD := range requiredCRDs {
-			if !foundCRDs[requiredCRD] {
-				missingCRDs = append(missingCRDs, requiredCRD)
-			}
-		}
-
-		if len(missingCRDs) > 0 {
-			return fmt.Errorf("missing Kueue CRDs: %v", missingCRDs)
-		}
-
-		// Verify all CRDs are established (ready to accept requests)
-		for _, requiredCRD := range requiredCRDs {
-			crd, err := clients.APIExtClient.CustomResourceDefinitions().Get(ctx, requiredCRD, metav1.GetOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to get CRD %s: %w", requiredCRD, err)
-			}
-
-			// Check if CRD is established
-			established := false
-			for _, condition := range crd.Status.Conditions {
-				if condition.Type == apiextensionsv1.Established && condition.Status == apiextensionsv1.ConditionTrue {
-					established = true
-					break
-				}
-			}
-
-			if !established {
-				return fmt.Errorf("CRD %s is not established yet", requiredCRD)
-			}
-		}
-
-		klog.Infof("All %d Kueue CRDs are registered and established", len(requiredCRDs))
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue CRDs failed to be registered")
-
-	waitForWebhookReady(ctx, kubeClient)
-
-	return nil
 }
 
 func Kexecute(ctx context.Context, restConfig *rest.Config, kubeClient kubernetes.Interface, namespace, podName, containerName string, command []string) ([]byte, []byte, error) {

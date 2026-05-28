@@ -71,7 +71,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		Expect(err).NotTo(HaveOccurred())
 		hasDriverSlices := false
 		for _, s := range slices.Items {
-			if s.Spec.Driver == draDeviceClassName {
+			if s.Spec.Driver == testutils.DRADeviceClassName {
 				hasDriverSlices = true
 				break
 			}
@@ -82,7 +82,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		gpusPerNode := map[string]int{}
 		for _, s := range slices.Items {
-			if s.Spec.Driver == draDeviceClassName {
+			if s.Spec.Driver == testutils.DRADeviceClassName {
 				if s.Spec.NodeName != nil {
 					for _, d := range s.Spec.Devices {
 						// The NVIDIA DRA driver uses the bare "type" attribute key (not fully qualified)
@@ -107,7 +107,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}
 
 		// Check if DeviceClass has extendedResourceName set (K8s DRAExtendedResource gate enabled)
-		dc, err := kubeClient.ResourceV1().DeviceClasses().Get(ctx, draDeviceClassName, metav1.GetOptions{})
+		dc, err := kubeClient.ResourceV1().DeviceClasses().Get(ctx, testutils.DRADeviceClassName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		if dc.Spec.ExtendedResourceName == nil || *dc.Spec.ExtendedResourceName == "" {
 			Skip("DeviceClass gpu.nvidia.com does not have extendedResourceName set - DRAExtendedResource feature gate not enabled")
@@ -119,7 +119,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		// Clear deviceClassMappings if set by a previous test suite
 		kueueInstance.Spec.Config.Resources.DeviceClassMappings = nil
-		applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+		testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 		// Wait for DRA feature gates to be enabled and deviceClassMappings to be cleared
 		Eventually(func() error {
@@ -134,8 +134,8 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			if !strings.Contains(configData, "DRAExtendedResources: true") {
 				return fmt.Errorf("DRAExtendedResources not enabled yet")
 			}
-			if strings.Contains(configData, draLogicalResource) {
-				return fmt.Errorf("deviceClassMappings still contains %s, waiting for config reconciliation", draLogicalResource)
+			if strings.Contains(configData, testutils.DRALogicalResource) {
+				return fmt.Errorf("deviceClassMappings still contains %s, waiting for config reconciliation", testutils.DRALogicalResource)
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
@@ -143,7 +143,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 	AfterAll(func(ctx context.Context) {
 		if initialKueueInstance != nil {
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		}
 	})
 
@@ -189,7 +189,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		By("Creating Job with extended resource request nvidia.com/gpu")
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job := builder.NewJob()
-		setDRAJobCPU(job)
+		testutils.SetDRAJobCPU(job)
 		job.Name = "er-basic-job"
 		job.Labels[testutils.QueueLabel] = erLocalQueueName
 		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
@@ -298,7 +298,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		By(fmt.Sprintf("Creating Job requesting %d GPUs via extended resources (quota is %d)", maxGPUsPerNode+1, maxGPUsPerNode))
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job := builder.NewJob()
-		setDRAJobCPU(job)
+		testutils.SetDRAJobCPU(job)
 		job.Name = "er-exceed-job"
 		job.Labels[testutils.QueueLabel] = erLocalQueueName
 		exceededCount := *resource.NewQuantity(int64(maxGPUsPerNode+1), resource.DecimalSI)
@@ -358,7 +358,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		By(fmt.Sprintf("Creating first job requesting all %d GPUs via extended resources (fills quota)", maxGPUsPerNode))
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job1 := builder.NewJob()
-		setDRAJobCPU(job1)
+		testutils.SetDRAJobCPU(job1)
 		job1.Name = "er-fill-job-1"
 		job1.Labels[testutils.QueueLabel] = erLocalQueueName
 		fillCount := *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)
@@ -382,7 +382,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By("Creating second job requesting 1 GPU via extended resources (quota full, should be suspended)")
 		job2 := builder.NewJob()
-		setDRAJobCPU(job2)
+		testutils.SetDRAJobCPU(job2)
 		job2.Name = "er-fill-job-2"
 		job2.Labels[testutils.QueueLabel] = erLocalQueueName
 		job2.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
@@ -454,7 +454,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		By("Creating Job with 1 GPU via extended resource request")
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 		job := builder.NewJob()
-		setDRAJobCPU(job)
+		testutils.SetDRAJobCPU(job)
 		job.Name = "er-usage-job"
 		job.Labels[testutils.QueueLabel] = erLocalQueueName
 		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
@@ -509,11 +509,11 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			kueueInstance.Spec.Config.Resources.DeviceClassMappings = []ssv1.DeviceClassMapping{
 				{
-					Name:             draLogicalResource,
-					DeviceClassNames: []ssv1.DeviceClassName{draDeviceClassName},
+					Name:             testutils.DRALogicalResource,
+					DeviceClassNames: []ssv1.DeviceClassName{testutils.DRADeviceClassName},
 				},
 			}
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 
 			Eventually(func() error {
 				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
@@ -536,13 +536,13 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			cqWrapper := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
 			cqWrapper.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
-				CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(draLogicalResource), corev1.ResourceName(extendedResourceName)},
+				CoveredResources: []corev1.ResourceName{"cpu", "memory", corev1.ResourceName(testutils.DRALogicalResource), corev1.ResourceName(extendedResourceName)},
 				Flavors: []kueuev1beta2.FlavorQuotas{{
 					Name: kueuev1beta2.ResourceFlavorReference(resourceFlavor.Name),
 					Resources: []kueuev1beta2.ResourceQuota{
 						{Name: "cpu", NominalQuota: resource.MustParse("100")},
 						{Name: "memory", NominalQuota: resource.MustParse("100Gi")},
-						{Name: corev1.ResourceName(draLogicalResource), NominalQuota: *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)},
+						{Name: corev1.ResourceName(testutils.DRALogicalResource), NominalQuota: *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)},
 						{Name: corev1.ResourceName(extendedResourceName), NominalQuota: *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)},
 					},
 				}},
@@ -579,7 +579,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 								{
 									Name: "gpu-req",
 									Exactly: &resourcev1.ExactDeviceRequest{
-										DeviceClassName: draDeviceClassName,
+										DeviceClassName: testutils.DRADeviceClassName,
 										Count:           1,
 									},
 								},
@@ -595,7 +595,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			By("Creating Job with both extended resource request and ResourceClaimTemplate")
 			builder := testutils.NewTestResourceBuilder(ns.Name, "er-mixed-queue")
 			job := builder.NewJob()
-			setDRAJobCPU(job)
+			testutils.SetDRAJobCPU(job)
 			job.Name = "er-mixed-job"
 			job.Labels[testutils.QueueLabel] = "er-mixed-queue"
 			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
@@ -625,22 +625,22 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 				g.Expect(wl.Status.Admission.PodSetAssignments).To(HaveLen(1))
 
 				assignment := wl.Status.Admission.PodSetAssignments[0]
-				g.Expect(assignment.ResourceUsage).To(HaveKey(corev1.ResourceName(draLogicalResource)))
-				g.Expect(assignment.ResourceUsage[corev1.ResourceName(draLogicalResource)]).To(Equal(resource.MustParse("2")),
-					"both ER and RCT should be counted under %s", draLogicalResource)
+				g.Expect(assignment.ResourceUsage).To(HaveKey(corev1.ResourceName(testutils.DRALogicalResource)))
+				g.Expect(assignment.ResourceUsage[corev1.ResourceName(testutils.DRALogicalResource)]).To(Equal(resource.MustParse("2")),
+					"both ER and RCT should be counted under %s", testutils.DRALogicalResource)
 
 				// Verify ClusterQueue shows mapping name used, extended resource name stays at 0
 				cqObj, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
 				g.Expect(err).NotTo(HaveOccurred())
 				for _, flavor := range cqObj.Status.FlavorsReservation {
 					for _, res := range flavor.Resources {
-						if res.Name == corev1.ResourceName(draLogicalResource) {
+						if res.Name == corev1.ResourceName(testutils.DRALogicalResource) {
 							g.Expect(res.Total.Cmp(resource.MustParse("2"))).To(Equal(0),
-								"%s should show 2 reserved (ER + RCT converged), got %s", draLogicalResource, res.Total.String())
+								"%s should show 2 reserved (ER + RCT converged), got %s", testutils.DRALogicalResource, res.Total.String())
 						}
 						if res.Name == corev1.ResourceName(extendedResourceName) {
 							g.Expect(res.Total.Cmp(resource.MustParse("0"))).To(Equal(0),
-								"%s should show 0 (mapped to %s), got %s", extendedResourceName, draLogicalResource, res.Total.String())
+								"%s should show 0 (mapped to %s), got %s", extendedResourceName, testutils.DRALogicalResource, res.Total.String())
 						}
 					}
 				}
