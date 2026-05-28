@@ -43,7 +43,7 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		isHyperShift         bool
 	)
 
-	BeforeAll(func() {
+	BeforeAll(func(ctx context.Context) {
 		var err error
 		configClient, err = configclientv1.NewForConfig(clients.RestConfig)
 		Expect(err).NotTo(HaveOccurred(), "failed to create OpenShift config client")
@@ -52,22 +52,21 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to detect HyperShift cluster")
 
 		// Save the original TLS profile so we can restore it after tests
-		apiServer, err := configClient.APIServers().Get(context.TODO(), "cluster", metav1.GetOptions{})
+		apiServer, err := configClient.APIServers().Get(ctx, "cluster", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), "failed to get APIServer CR")
 		originalTLSProfile = apiServer.Spec.TLSSecurityProfile
 
 		// Capture current ConfigMap state
 		configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
-			context.TODO(), "kueue-manager-config", metav1.GetOptions{})
+			ctx, "kueue-manager-config", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred(), "failed to get kueue-manager-config ConfigMap")
 		initialConfigMapData = configMap.Data["controller_manager_config.yaml"]
 	})
 
-	AfterAll(func() {
+	AfterAll(func(ctx context.Context) {
 		if isHyperShift {
 			return
 		}
-		ctx := context.TODO()
 		By("Restoring original TLS security profile")
 		err := updateAPIServerTLSProfile(ctx, configClient, originalTLSProfile)
 		Expect(err).NotTo(HaveOccurred(), "failed to restore original TLS profile")
