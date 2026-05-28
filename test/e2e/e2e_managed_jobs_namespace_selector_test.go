@@ -103,7 +103,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			job := unmanagedBuilder.NewJobWithoutQueue()
 			createdJob, err := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying no workload is created for the job in unmanaged namespace")
 			Consistently(func() error {
@@ -127,7 +127,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			job := managedBuilder.NewJobWithoutQueue()
 			createdJob, err := kubeClient.BatchV1().Jobs(managedNs.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying workload is created for the job in managed namespace")
 			testutils.VerifyWorkloadCreated(ctx, nsKueueClient, managedNs.Name, string(createdJob.UID))
@@ -139,7 +139,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			job.Labels = map[string]string{testutils.QueueLabel: testutils.DefaultLocalQueueName}
 			createdJob, err := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying job is not suspended and runs normally")
 			Eventually(func(g Gomega) {
@@ -210,7 +210,7 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			job.Labels = map[string]string{testutils.QueueLabel: "test-queue"}
 			createdJob, err := kubeClient.BatchV1().Jobs(unmanagedNs.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying no workload is created for the job in unmanaged namespace")
 			Consistently(func() error {

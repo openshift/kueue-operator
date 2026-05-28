@@ -1074,7 +1074,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
 			jobset := builder.NewJobSet()
 			Expect(genericClient.Create(ctx, jobset)).To(Succeed(), "Failed to create jobset")
-			defer testutils.CleanUpObject(ctx, genericClient, jobset)
+			DeferCleanup(testutils.CleanUpObject, genericClient, jobset)
 
 			By("Verifying all pending workloads are created")
 			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespace.Name, jobset.GetUID())

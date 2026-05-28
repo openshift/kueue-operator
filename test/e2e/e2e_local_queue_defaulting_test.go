@@ -104,7 +104,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 				Size:              0,
 			})
 			Expect(genericClient.Create(ctx, lwsWithoutQueue)).To(Succeed(), "Failed to create LeaderWorkerSet")
-			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
+			DeferCleanup(testutils.CleanUpObject, genericClient, lwsWithoutQueue)
 
 			By("verifying LeaderWorkerSet has queue label added")
 			Eventually(func() map[string]string {
@@ -269,7 +269,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 			By("Creating JobSet without queue name")
 			jobSetWithoutQueue := builder.NewJobSetWithoutQueue()
 			Expect(genericClient.Create(ctx, jobSetWithoutQueue)).Should(Succeed())
-			defer testutils.CleanUpObject(ctx, genericClient, jobSetWithoutQueue)
+			DeferCleanup(testutils.CleanUpObject, genericClient, jobSetWithoutQueue)
 			Expect(jobSetWithoutQueue.Labels).To(HaveKeyWithValue(testutils.QueueLabel, testutils.DefaultLocalQueueName))
 			By("verifying jobset did start in labeled namespace")
 			Eventually(func() error {
