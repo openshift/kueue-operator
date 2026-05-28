@@ -150,7 +150,7 @@ var _ = Describe("LocalQueueDefaulting", Label("local-queue-default"), Ordered, 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdJob.Labels).To(HaveKeyWithValue(testutils.QueueLabel, secondQueueName))
 
-			testutils.VerifyWorkloadCreated(ctx, kueueClient,ns.Name, string(createdPod.UID))
+			testutils.VerifyWorkloadCreated(ctx, kueueClient, ns.Name, string(createdJob.UID))
 
 			By("creating pod in other local queue")
 			pod = builder.NewPodWithoutQueue()

@@ -68,6 +68,7 @@ func TestE2E(t *testing.T) {
 var _ = BeforeSuite(func() {
 	log.SetLogger(zap.New(zap.UseDevMode(true)))
 	clients = testutils.NewTestClients()
+	testutils.InitClients(clients)
 	kubeClient = clients.KubeClient
 	genericClient = clients.GenericClient
 

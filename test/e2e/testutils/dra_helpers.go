@@ -49,7 +49,10 @@ const (
 // SetDRAJobCPU reduces CPU request for DRA test jobs to fit on GPU nodes
 // where NVIDIA operator daemonsets consume most of the CPU budget.
 func SetDRAJobCPU(job *batchv1.Job) {
-	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+	Expect(job.Spec.Template.Spec.Containers).NotTo(BeEmpty(), "job must have at least one container")
+	c := &job.Spec.Template.Spec.Containers[0]
+	Expect(c.Resources.Requests).NotTo(BeNil(), "container resource requests must be initialized by the builder")
+	c.Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
 }
 
 // NewDRAResourceClaimTemplate creates a ResourceClaimTemplate that requests
@@ -83,6 +86,7 @@ func NewDRAJob(builder *TestResourceBuilder, name, templateName, queueName strin
 	job := builder.NewJob()
 	SetDRAJobCPU(job)
 	job.Name = name
+	Expect(job.Labels).NotTo(BeNil(), "job labels must be initialized by the builder")
 	job.Labels[QueueLabel] = queueName
 	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
 	job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
@@ -94,8 +98,11 @@ func NewDRAJob(builder *TestResourceBuilder, name, templateName, queueName strin
 
 // AddDRAClaims adds DRA ResourceClaim references and reduces CPU request on a PodSpec.
 func AddDRAClaims(spec *corev1.PodSpec, templateName string) {
-	spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
-	spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{{Name: "gpu-claim"}}
+	Expect(spec.Containers).NotTo(BeEmpty(), "pod spec must have at least one container")
+	c := &spec.Containers[0]
+	Expect(c.Resources.Requests).NotTo(BeNil(), "container resource requests must be initialized by the builder")
+	c.Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+	c.Resources.Claims = []corev1.ResourceClaim{{Name: "gpu-claim"}}
 	spec.ResourceClaims = []corev1.PodResourceClaim{
 		{Name: "gpu-claim", ResourceClaimTemplateName: ptr.To(templateName)},
 	}

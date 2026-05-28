@@ -184,12 +184,14 @@ func WaitForWebhookReady(ctx context.Context, kubeClient *kubernetes.Clientset) 
 		job, err := kubeClient.BatchV1().Jobs(OperatorNamespace).Create(ctx, testJob, metav1.CreateOptions{})
 		if err == nil {
 			klog.Infof("Webhook test successful, cleaning up test job: %s", job.Name)
-			_ = kubeClient.BatchV1().Jobs(OperatorNamespace).Delete(ctx, job.Name, metav1.DeleteOptions{
+			if delErr := kubeClient.BatchV1().Jobs(OperatorNamespace).Delete(ctx, job.Name, metav1.DeleteOptions{
 				PropagationPolicy: func() *metav1.DeletionPropagation {
 					p := metav1.DeletePropagationBackground
 					return &p
 				}(),
-			})
+			}); delErr != nil && !apierrors.IsNotFound(delErr) {
+				klog.Warningf("Failed to delete webhook probe job %s: %v", job.Name, delErr)
+			}
 			consecutiveSuccesses++
 			if consecutiveSuccesses >= WebhookRequiredSuccesses {
 				klog.Infof("Webhook stable after %d consecutive successes", consecutiveSuccesses)
