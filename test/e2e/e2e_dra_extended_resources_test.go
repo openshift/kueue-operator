@@ -29,6 +29,7 @@ import (
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
@@ -303,11 +304,17 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
-		By("Verifying job remains suspended")
+		By("Verifying job is suspended")
 		Eventually(func(g Gomega) {
 			suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
-			g.Expect(suspended).To(BeTrue(), "job %s/%s should remain suspended", ns.Name, createdJob.Name)
+			g.Expect(suspended).To(BeTrue(), "job %s/%s should be suspended", ns.Name, createdJob.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+		By("Verifying job remains suspended")
+		Consistently(func(g Gomega) {
+			suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+			g.Expect(suspended).To(BeTrue(), "job %s/%s should remain suspended", ns.Name, createdJob.Name)
+		}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed())
 	})
 
 	It("should admit waiting job after extended resource quota is freed", func(ctx context.Context) {
@@ -382,8 +389,14 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		By("Verifying second job is suspended (quota full)")
 		Eventually(func(g Gomega) {
 			suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob2.Name)
-			g.Expect(suspended).To(BeTrue(), "job %s/%s should remain suspended", ns.Name, createdJob2.Name)
+			g.Expect(suspended).To(BeTrue(), "job %s/%s should be suspended", ns.Name, createdJob2.Name)
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+		By("Verifying second job remains suspended")
+		Consistently(func(g Gomega) {
+			suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob2.Name)
+			g.Expect(suspended).To(BeTrue(), "job %s/%s should remain suspended", ns.Name, createdJob2.Name)
+		}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed())
 
 		By("Deleting first job to free quota")
 		testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
@@ -793,21 +806,28 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 					LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", createdHighJob.Name),
 				})
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(pods.Items).NotTo(BeEmpty())
+				g.Expect(pods.Items).NotTo(BeEmpty(), "no pods found for job %s", createdHighJob.Name)
 
-				var foundValid bool
+				podUID := pods.Items[0].UID
 				claims, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).List(ctx, metav1.ListOptions{})
 				g.Expect(err).NotTo(HaveOccurred())
-				for _, claim := range claims.Items {
-					if claim.Status.Allocation != nil && len(claim.Status.ReservedFor) > 0 {
-						g.Expect(claim.Annotations).To(HaveKeyWithValue("resource.kubernetes.io/extended-resource-claim", "true"))
-						g.Expect(claim.Spec.Devices.Requests).NotTo(BeEmpty())
-						g.Expect(claim.Spec.Devices.Requests[0].Exactly).NotTo(BeNil())
-						g.Expect(claim.Spec.Devices.Requests[0].Exactly.DeviceClassName).To(Equal(draDeviceClassName))
-						foundValid = true
+
+				var claim *resourcev1.ResourceClaim
+				for i := range claims.Items {
+					for _, ref := range claims.Items[i].OwnerReferences {
+						if ref.UID == podUID {
+							claim = &claims.Items[i]
+							break
+						}
 					}
 				}
-				g.Expect(foundValid).To(BeTrue(), "no valid allocated/reserved ResourceClaim found for high-priority job")
+				g.Expect(claim).NotTo(BeNil(), "no ResourceClaim found owned by pod %s", pods.Items[0].Name)
+				g.Expect(claim.Status.Allocation).NotTo(BeNil(), "ResourceClaim not allocated")
+				g.Expect(claim.Status.ReservedFor).NotTo(BeEmpty(), "ResourceClaim not reserved")
+				g.Expect(claim.Annotations).To(HaveKeyWithValue("resource.kubernetes.io/extended-resource-claim", "true"))
+				g.Expect(claim.Spec.Devices.Requests).NotTo(BeEmpty())
+				g.Expect(claim.Spec.Devices.Requests[0].Exactly).NotTo(BeNil())
+				g.Expect(claim.Spec.Devices.Requests[0].Exactly.DeviceClassName).To(Equal(draDeviceClassName))
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Waiting for high-priority job to complete")
@@ -824,20 +844,37 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Verifying re-admitted low-priority ER ResourceClaim has correct properties")
 			Eventually(func(g Gomega) {
+				pods, err := kubeClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", createdLowJob.Name),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).NotTo(BeEmpty(), "no pods found for job %s", createdLowJob.Name)
+
+				podUIDs := make(map[types.UID]string, len(pods.Items))
+				for _, p := range pods.Items {
+					podUIDs[p.UID] = p.Name
+				}
+
 				claims, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).List(ctx, metav1.ListOptions{})
 				g.Expect(err).NotTo(HaveOccurred())
 
-				var foundValid bool
-				for _, claim := range claims.Items {
-					if claim.Status.Allocation != nil && len(claim.Status.ReservedFor) > 0 {
-						g.Expect(claim.Annotations).To(HaveKeyWithValue("resource.kubernetes.io/extended-resource-claim", "true"))
-						g.Expect(claim.Spec.Devices.Requests).NotTo(BeEmpty())
-						g.Expect(claim.Spec.Devices.Requests[0].Exactly).NotTo(BeNil())
-						g.Expect(claim.Spec.Devices.Requests[0].Exactly.DeviceClassName).To(Equal(draDeviceClassName))
-						foundValid = true
+				var claim *resourcev1.ResourceClaim
+				for i := range claims.Items {
+					for _, ref := range claims.Items[i].OwnerReferences {
+						if _, ok := podUIDs[ref.UID]; ok {
+							if claims.Items[i].Status.Allocation != nil {
+								claim = &claims.Items[i]
+								break
+							}
+						}
 					}
 				}
-				g.Expect(foundValid).To(BeTrue(), "no valid allocated/reserved ResourceClaim found for re-admitted low-priority job")
+				g.Expect(claim).NotTo(BeNil(), "no allocated ResourceClaim found owned by any pod of job %s", createdLowJob.Name)
+				g.Expect(claim.Status.ReservedFor).NotTo(BeEmpty(), "ResourceClaim not reserved")
+				g.Expect(claim.Annotations).To(HaveKeyWithValue("resource.kubernetes.io/extended-resource-claim", "true"))
+				g.Expect(claim.Spec.Devices.Requests).NotTo(BeEmpty())
+				g.Expect(claim.Spec.Devices.Requests[0].Exactly).NotTo(BeNil())
+				g.Expect(claim.Spec.Devices.Requests[0].Exactly.DeviceClassName).To(Equal(draDeviceClassName))
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Waiting for low-priority job to complete")
@@ -939,8 +976,14 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			By("Verifying gang job is suspended (not enough ER quota for all pods)")
 			Eventually(func(g Gomega) {
 				suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdGangJob.Name)
-				g.Expect(suspended).To(BeTrue(), "gang job %s/%s should remain suspended", ns.Name, createdGangJob.Name)
+				g.Expect(suspended).To(BeTrue(), "gang job %s/%s should be suspended", ns.Name, createdGangJob.Name)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying gang job remains suspended")
+			Consistently(func(g Gomega) {
+				suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdGangJob.Name)
+				g.Expect(suspended).To(BeTrue(), "gang job %s/%s should remain suspended", ns.Name, createdGangJob.Name)
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed())
 
 			By("Deleting single-pod job to free its GPU")
 			testutils.CleanUpJob(ctx, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
