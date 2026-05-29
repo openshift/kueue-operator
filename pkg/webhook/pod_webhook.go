@@ -231,7 +231,7 @@ func defaultLabelSelector() *metav1.LabelSelector {
 			{
 				Key:      kueueManagedLabel,
 				Operator: metav1.LabelSelectorOpIn,
-				Values:   []string{"true"},
+				Values:   []string{"true"}, //nolint:goconst
 			},
 		},
 	}

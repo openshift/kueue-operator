@@ -20,6 +20,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	annotationAllowNominalConcurrencySharesUpdate = "kueue.openshift.io/allow-nominal-concurrency-shares-update"
+	annotationValueTrue                           = "true"
+)
+
 // TODO: move to library-go
 var (
 	flowcontrolScheme                = runtime.NewScheme()
@@ -109,7 +114,7 @@ func ApplyPriorityLevelConfiguration(ctx context.Context, getter flowcontrolclie
 		return current, false, nil
 	}
 
-	if current.Annotations != nil && current.Annotations["kueue.openshift.io/allow-nominal-concurrency-shares-update"] == "true" {
+	if current.Annotations != nil && current.Annotations[annotationAllowNominalConcurrencySharesUpdate] == annotationValueTrue {
 		nominalConcurrencyShares := *current.Spec.Limited.NominalConcurrencyShares
 		if (nominalConcurrencyShares >= *want.Spec.Limited.NominalConcurrencyShares && nominalConcurrencyShares <= 5) || nominalConcurrencyShares == 0 {
 			return current, false, nil

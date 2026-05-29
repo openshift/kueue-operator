@@ -36,6 +36,9 @@ linters:
       - linters:
           - staticcheck
         path: test/e2e/*
+      - linters:
+          - goconst
+        path: (.*_test\.go|test/.*)
     paths:
       - third_party$
       - builtin$

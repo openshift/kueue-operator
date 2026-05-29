@@ -44,7 +44,7 @@ func stripStatusTransform(obj interface{}) (interface{}, error) {
 	v := reflect.ValueOf(obj)
 
 	// Handle pointer types
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 

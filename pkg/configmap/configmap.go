@@ -32,6 +32,8 @@ import (
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 )
 
+const controllerManagerConfigYaml = "controller_manager_config.yaml"
+
 func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
 	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draSupported, draExtendedResourceEnabled, tlsOpts)
 	if err != nil {
@@ -46,7 +48,7 @@ func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKi
 			Name:      "kueue-manager-config",
 			Namespace: namespace,
 		},
-		Data: map[string]string{"controller_manager_config.yaml": string(cfg)},
+		Data: map[string]string{controllerManagerConfigYaml: string(cfg)},
 	}
 	return cfgMap, nil
 }
@@ -83,7 +85,7 @@ func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
 	conversionMap[string(kueue.KueueIntegrationTrainJob)] = "trainer.kubeflow.org/trainjob"
 	conversionMap[string(kueue.KueueIntegrationSparkApplication)] = "sparkoperator.k8s.io/sparkapplication"
 
-	ret := []string{}
+	ret := make([]string, 0, len(kueuelist))
 	for _, val := range kueuelist {
 		ret = append(ret, conversionMap[string(val)])
 	}
@@ -91,7 +93,7 @@ func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
 }
 
 func buildExternalFrameworkList(kueuelist []kueue.ExternalFramework) []string {
-	ret := []string{}
+	ret := make([]string, 0, len(kueuelist))
 	for _, val := range kueuelist {
 		ret = append(ret, fmt.Sprintf("%s.%s.%s", val.Resource, val.Version, val.Group))
 	}
@@ -99,7 +101,7 @@ func buildExternalFrameworkList(kueuelist []kueue.ExternalFramework) []string {
 }
 
 func buildLabelKeysCopy(labelKeys []kueue.LabelKeys) []string {
-	ret := []string{}
+	ret := make([]string, 0, len(labelKeys))
 	for _, val := range labelKeys {
 		ret = append(ret, val.Key)
 	}
@@ -116,7 +118,7 @@ func mapOperatorMultiKueueToKueue(multiKueue *kueue.MultiKueue, gvrToKind map[st
 }
 
 func buildMultiKueueExternalFrameworkList(kueuelist []kueue.ExternalFramework, gvrToKind map[string]string) []configapi.MultiKueueExternalFramework {
-	ret := []configapi.MultiKueueExternalFramework{}
+	ret := make([]configapi.MultiKueueExternalFramework, 0, len(kueuelist))
 	for _, val := range kueuelist {
 		kind := val.Resource
 		if k, ok := gvrToKind[fmt.Sprintf("%s/%s/%s", val.Group, val.Version, val.Resource)]; ok {

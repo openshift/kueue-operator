@@ -45,7 +45,7 @@ func TestBuildConfigMap(t *testing.T) {
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -103,7 +103,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -164,7 +164,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -220,7 +220,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -281,7 +281,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -339,7 +339,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -401,7 +401,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -462,7 +462,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -517,7 +517,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -579,7 +579,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -649,7 +649,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -721,7 +721,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -787,7 +787,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -856,7 +856,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -921,7 +921,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -976,7 +976,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -1029,7 +1029,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -1082,7 +1082,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -1135,7 +1135,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `apiVersion: config.kueue.x-k8s.io/v1beta2
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100
   qps: 50
@@ -1197,7 +1197,7 @@ webhook:
 			},
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
-					"controller_manager_config.yaml": `admissionFairSharing:
+					controllerManagerConfigYaml: `admissionFairSharing:
   resourceWeights:
     cpu: 0.5
     memory: 2
@@ -1254,7 +1254,7 @@ webhook:
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("Unexpected error: want=%v, got=%v", tc.wantErr, err)
 			}
-			if diff := cmp.Diff(got.Data["controller_manager_config.yaml"], tc.wantCfgMap.Data["controller_manager_config.yaml"]); len(diff) != 0 {
+			if diff := cmp.Diff(got.Data[controllerManagerConfigYaml], tc.wantCfgMap.Data[controllerManagerConfigYaml]); len(diff) != 0 {
 				t.Errorf("Unexpected buckets (-want,+got):\n%s", diff)
 			}
 		})

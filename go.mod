@@ -1,6 +1,6 @@
 module github.com/openshift/kueue-operator
 
-go 1.25.0
+go 1.26.0
 
 replace sigs.k8s.io/controller-tools => github.com/openshift/controller-tools v0.12.1-0.20250402141027-24f590ca0886
 
