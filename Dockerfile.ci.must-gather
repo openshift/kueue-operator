@@ -4,7 +4,7 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.19
 
 COPY --from=cli-image /usr/bin/oc /usr/bin/oc
 
-RUN dnf install -y rsync tar && dnf clean all
+RUN dnf install -y rsync tar lsof && dnf clean all
 
 COPY must-gather/collection-scripts/gather /usr/bin/gather
 COPY must-gather/collection-scripts/gather-kueue /usr/bin/gather-kueue
