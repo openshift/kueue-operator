@@ -55,7 +55,7 @@ function ginkgo_label_filter() {
     dra)
       echo ""
       ;;
-    customconfigs)
+    sequential)
       echo "feature:admissionfairsharing"
       ;;
     *)
@@ -90,8 +90,8 @@ allow_privileged_access
 function configure_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
-    customconfigs)
-      echo "Patching cluster Kueue CR for customconfigs..."
+    sequential)
+      echo "Patching cluster Kueue CR for sequential (admissionFairSharing)..."
       $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
         '{"spec":{"config":{"admissionFairSharing":{"usageHalfLifeTimeSeconds":1,"usageSamplingIntervalSeconds":1}}}}'
       # Let's wait for the reconciliation to complete. The test suite checks if kueue-controller-manager is available.
@@ -103,7 +103,7 @@ function configure_kueue_for_folder() {
 function restore_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
-    customconfigs)
+    sequential)
       echo "Removing admissionFairSharing from cluster Kueue CR..."
       $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
         '[{"op":"remove","path":"/spec/config/admissionFairSharing"}]'
