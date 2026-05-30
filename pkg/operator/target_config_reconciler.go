@@ -78,6 +78,22 @@ import (
 const (
 	KueueConfigMap = "kueue-manager-config"
 	KueueFinalizer = "kueue.openshift.io/finalizer"
+
+	groupCertManager                = "cert-manager.io"
+	kindIssuer                      = "Issuer"
+	certManagerAPIVersion           = "cert-manager.io/v1"
+	kueueAPIVersion                 = "kueue.openshift.io/v1"
+	kindKueue                       = "Kueue"
+	secretMetricsServerCert         = "metrics-server-cert"
+	certMetricsCerts                = "metrics-certs"
+	secretKueueVisibilityServerCert = "kueue-visibility-server-cert"
+	appLabelName                    = "app.kubernetes.io/name"
+	appLabelComponent               = "app.kubernetes.io/component"
+	appComponentController          = "controller"
+	appNameKueue                    = "kueue"
+	keyCaCrt                        = "ca.crt"
+	keyTlsCrt                       = "tls.crt"
+	keyTlsKey                       = "tls.key"
 )
 
 type TargetConfigReconciler struct {
@@ -163,7 +179,7 @@ func NewTargetConfigReconciler(
 		openshiftConfigClient:      openshiftConfigClient,
 	}
 
-	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: "kueue"}))
+	_, err := operatorClientInformer.Informer().AddEventHandler(c.eventHandler(queueItem{kind: appNameKueue}))
 	if err != nil {
 		return nil, err
 	}
@@ -269,9 +285,9 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	found, err := c.isResourceRegisteredCached(schema.GroupVersionKind{
-		Group:   "cert-manager.io",
+		Group:   groupCertManager,
 		Version: "v1",
-		Kind:    "Issuer",
+		Kind:    kindIssuer,
 	})
 	if err != nil {
 		klog.Errorf("unable to check cert-manager is installed: %v", err)
@@ -374,8 +390,8 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	ownerReference := metav1.OwnerReference{
-		APIVersion: "kueue.openshift.io/v1",
-		Kind:       "Kueue",
+		APIVersion: kueueAPIVersion,
+		Kind:       kindKueue,
 		Name:       kueue.Name,
 		UID:        kueue.UID,
 	}
@@ -449,8 +465,8 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 				fmt.Sprintf("kueue-controller-manager-metrics-service.%s.svc.cluster.local", c.operatorNamespace),
 			},
 			commonName:      "kueue-metrics",
-			secretName:      "metrics-server-cert",
-			certificateName: "metrics-certs",
+			secretName:      secretMetricsServerCert,
+			certificateName: certMetricsCerts,
 		},
 		{
 			dnsNames: []interface{}{
@@ -458,8 +474,8 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 				fmt.Sprintf("kueue-visibility-server.%s.svc.cluster.local", c.operatorNamespace),
 			},
 			commonName:      "kueue-visibility-server",
-			secretName:      "kueue-visibility-server-cert",
-			certificateName: "kueue-visibility-server-cert",
+			secretName:      secretKueueVisibilityServerCert,
+			certificateName: secretKueueVisibilityServerCert,
 		},
 	}
 
@@ -484,13 +500,13 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		return err
 	}
 
-	err = cert.WaitForCertificateReady(ctx, c.dynamicClient, c.operatorNamespace, "metrics-certs", 2*time.Minute)
+	err = cert.WaitForCertificateReady(ctx, c.dynamicClient, c.operatorNamespace, certMetricsCerts, 2*time.Minute)
 	if err != nil {
 		klog.Warningf("Metrics certificate not ready yet: %v - will retry on next reconciliation", err)
 		return err
 	}
 
-	err = cert.WaitForCertificateReady(ctx, c.dynamicClient, c.operatorNamespace, "kueue-visibility-server-cert", 2*time.Minute)
+	err = cert.WaitForCertificateReady(ctx, c.dynamicClient, c.operatorNamespace, secretKueueVisibilityServerCert, 2*time.Minute)
 	if err != nil {
 		klog.Warningf("Kueue Visibility certificate not ready yet: %v - will retry on next reconciliation", err)
 		return err
@@ -1065,17 +1081,17 @@ func (c *TargetConfigReconciler) cleanUpResources(ctx context.Context) error {
 		klog.Infof("Successfully deleted Secret: %s/%s", c.operatorNamespace, "kueue-webhook-server-cert")
 	}
 
-	klog.Infof("Deleting Secret: %s/%s", c.operatorNamespace, "metrics-server-cert")
+	klog.Infof("Deleting Secret: %s/%s", c.operatorNamespace, secretMetricsServerCert)
 	err = retry.OnError(retry.DefaultBackoff, errors.IsTooManyRequests, func() error {
 		return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			return c.kubeClient.CoreV1().Secrets(c.operatorNamespace).Delete(ctx, "metrics-server-cert", metav1.DeleteOptions{})
+			return c.kubeClient.CoreV1().Secrets(c.operatorNamespace).Delete(ctx, secretMetricsServerCert, metav1.DeleteOptions{})
 		})
 	})
 	if err != nil {
-		klog.Errorf("Failed to delete Secret %s/%s: %v", c.operatorNamespace, "metrics-server-cert", err)
+		klog.Errorf("Failed to delete Secret %s/%s: %v", c.operatorNamespace, secretMetricsServerCert, err)
 		errorList = append(errorList, err)
 	} else {
-		klog.Infof("Successfully deleted Secret: %s/%s", c.operatorNamespace, "metrics-server-cert")
+		klog.Infof("Successfully deleted Secret: %s/%s", c.operatorNamespace, secretMetricsServerCert)
 	}
 
 	if len(errorList) > 0 {
@@ -1162,7 +1178,7 @@ func (c *TargetConfigReconciler) cleanUpCertificatesAndIssuers(ctx context.Conte
 
 	for _, resource := range certManagerCRDs {
 		gvr := schema.GroupVersionResource{
-			Group:    "cert-manager.io",
+			Group:    groupCertManager,
 			Version:  "v1",
 			Resource: resource,
 		}
@@ -1708,9 +1724,9 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ctx context
 	clusterRole := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"app.kubernetes.io/component": "controller",
-				"app.kubernetes.io/name":      "kueue",
-				"control-plane":               "controller-manager",
+				appLabelComponent: appComponentController,
+				appLabelName:      appNameKueue,
+				"control-plane":   "controller-manager",
 			},
 			Name: "kueue-openshift-roles",
 		},
@@ -1790,10 +1806,10 @@ func (c *TargetConfigReconciler) manageDeployment(ctx context.Context, kueueoper
 
 	// Add metrics certificate volume.
 	metricsCertVolume := v1.Volume{
-		Name: "metrics-certs",
+		Name: certMetricsCerts,
 		VolumeSource: v1.VolumeSource{
 			Secret: &v1.SecretVolumeSource{
-				SecretName: "metrics-server-cert",
+				SecretName: secretMetricsServerCert,
 			},
 		},
 	}
@@ -1803,20 +1819,20 @@ func (c *TargetConfigReconciler) manageDeployment(ctx context.Context, kueueoper
 			required.Spec.Template.Spec.Volumes[i].EmptyDir = nil
 			required.Spec.Template.Spec.Volumes[i].VolumeSource = v1.VolumeSource{
 				Secret: &v1.SecretVolumeSource{
-					SecretName: "kueue-visibility-server-cert",
+					SecretName: secretKueueVisibilityServerCert,
 					Optional:   ptr.To(false),
 					Items: []v1.KeyToPath{
 						{
-							Key:  "ca.crt",
-							Path: "ca.crt",
+							Key:  keyCaCrt,
+							Path: keyCaCrt,
 						},
 						{
-							Key:  "tls.crt",
-							Path: "tls.crt",
+							Key:  keyTlsCrt,
+							Path: keyTlsCrt,
 						},
 						{
-							Key:  "tls.key",
-							Path: "tls.key",
+							Key:  keyTlsKey,
+							Path: keyTlsKey,
 						},
 					},
 				},
@@ -1828,7 +1844,7 @@ func (c *TargetConfigReconciler) manageDeployment(ctx context.Context, kueueoper
 
 	// Add volume mount to the container.
 	metricsCertVolumeMount := v1.VolumeMount{
-		Name:      "metrics-certs",
+		Name:      certMetricsCerts,
 		MountPath: "/etc/kueue/metrics/certs",
 		ReadOnly:  true,
 	}
@@ -1857,8 +1873,8 @@ func (c *TargetConfigReconciler) manageDeployment(ctx context.Context, kueueoper
 					PodAffinityTerm: v1.PodAffinityTerm{
 						LabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
-								"control-plane":          "controller-manager",
-								"app.kubernetes.io/name": "kueue",
+								"control-plane": "controller-manager",
+								appLabelName:    appNameKueue,
 							},
 						},
 						TopologyKey: "kubernetes.io/hostname",
@@ -1925,22 +1941,23 @@ func (c *TargetConfigReconciler) manageDeployment(ctx context.Context, kueueoper
 	return deploy, updated, err
 }
 
+//nolint:goconst
 func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueuev1.Kueue) (*unstructured.Unstructured, bool, error) {
 	gvr := schema.GroupVersionResource{
-		Group:    "cert-manager.io",
+		Group:    groupCertManager,
 		Version:  "v1",
 		Resource: "issuers",
 	}
 
 	required := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "cert-manager.io/v1",
-			"kind":       "Issuer",
+			"apiVersion": certManagerAPIVersion,
+			"kind":       kindIssuer,
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion":         "kueue.openshift.io/v1",
-						"kind":               "Kueue",
+						"apiVersion":         kueueAPIVersion,
+						"kind":               kindKueue,
 						"name":               kueue.Name,
 						"uid":                string(kueue.UID),
 						"controller":         false,
@@ -1959,21 +1976,22 @@ func (c *TargetConfigReconciler) manageIssuerCR(ctx context.Context, kueue *kueu
 	return resourceapply.ApplyUnstructuredResourceImproved(ctx, c.dynamicClient, c.eventRecorder, required, c.resourceCache, gvr, nil, nil)
 }
 
+//nolint:goconst
 func (c *TargetConfigReconciler) manageCertificateCR(ctx context.Context, kueue *kueuev1.Kueue, dnsNames []interface{}, commonName, secretName, certificateName string) (*unstructured.Unstructured, bool, error) {
 	gvr := schema.GroupVersionResource{
-		Group:    "cert-manager.io",
+		Group:    groupCertManager,
 		Version:  "v1",
 		Resource: "certificates",
 	}
 	required := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "cert-manager.io/v1",
+			"apiVersion": certManagerAPIVersion,
 			"kind":       "Certificate",
 			"metadata": map[string]interface{}{
 				"ownerReferences": []interface{}{
 					map[string]interface{}{
-						"apiVersion":         "kueue.openshift.io/v1",
-						"kind":               "Kueue",
+						"apiVersion":         kueueAPIVersion,
+						"kind":               kindKueue,
 						"name":               kueue.Name,
 						"uid":                string(kueue.UID),
 						"controller":         false,
@@ -1986,7 +2004,7 @@ func (c *TargetConfigReconciler) manageCertificateCR(ctx context.Context, kueue 
 			"spec": map[string]interface{}{
 				"dnsNames": dnsNames,
 				"issuerRef": map[string]interface{}{
-					"kind": "Issuer",
+					"kind": kindIssuer,
 					"name": "selfsigned",
 				},
 				"secretName": secretName,
@@ -2024,7 +2042,7 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 			Selector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app.kubernetes.io/component": "metrics-service",
-					"app.kubernetes.io/name":      "kueue",
+					appLabelName:                  appNameKueue,
 				},
 			},
 			Endpoints: []monitoringv1.Endpoint{
@@ -2040,24 +2058,24 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 							CA: monitoringv1.SecretOrConfigMap{
 								Secret: &v1.SecretKeySelector{
 									LocalObjectReference: v1.LocalObjectReference{
-										Name: "metrics-server-cert",
+										Name: secretMetricsServerCert,
 									},
-									Key: "ca.crt",
+									Key: keyCaCrt,
 								},
 							},
 							Cert: monitoringv1.SecretOrConfigMap{
 								Secret: &v1.SecretKeySelector{
 									LocalObjectReference: v1.LocalObjectReference{
-										Name: "metrics-server-cert",
+										Name: secretMetricsServerCert,
 									},
-									Key: "tls.crt",
+									Key: keyTlsCrt,
 								},
 							},
 							KeySecret: &v1.SecretKeySelector{
 								LocalObjectReference: v1.LocalObjectReference{
-									Name: "metrics-server-cert",
+									Name: secretMetricsServerCert,
 								},
-								Key: "tls.key",
+								Key: keyTlsKey,
 							},
 							ServerName: ptr.To("kueue-controller-manager-metrics-service.openshift-kueue-operator.svc"),
 						},
