@@ -2,6 +2,102 @@
 lockfileVersion: 1
 lockfileVendor: redhat
 arches:
+- arch: aarch64
+  packages:
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/aarch64/appstream/os/Packages/o/oniguruma-6.9.6-1.el9.5.aarch64.rpm
+    repoid: ubi-9-for-aarch64-appstream-rpms
+    size: 222582
+    checksum: sha256:bc2305dad655ddb94f966158112efd6cefa6824d5aa2e80f63881f16cee74598
+    name: oniguruma
+    evr: 6.9.6-1.el9.5
+    sourcerpm: oniguruma-6.9.6-1.el9.5.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/aarch64/baseos/os/Packages/j/jq-1.6-19.el9_8.2.aarch64.rpm
+    repoid: ubi-9-for-aarch64-baseos-rpms
+    size: 191195
+    checksum: sha256:633aaf3e87b19d4a591bd9f47cd81fde8ec49629d3f58932addfc8a134b7949d
+    name: jq
+    evr: 1.6-19.el9_8.2
+    sourcerpm: jq-1.6-19.el9_8.2.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/aarch64/baseos/os/Packages/l/libtirpc-1.3.3-9.el9.aarch64.rpm
+    repoid: ubi-9-for-aarch64-baseos-rpms
+    size: 98735
+    checksum: sha256:591a92387f21db11cb3607f566f95e1f4afe581428eec00f99539925560e1913
+    name: libtirpc
+    evr: 1.3.3-9.el9
+    sourcerpm: libtirpc-1.3.3-9.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/aarch64/baseos/os/Packages/l/lsof-4.94.0-3.el9.aarch64.rpm
+    repoid: ubi-9-for-aarch64-baseos-rpms
+    size: 243934
+    checksum: sha256:419064d28db9011664b1ecf8800c196455eaff9338783a7f1e1801036a708326
+    name: lsof
+    evr: 4.94.0-3.el9
+    sourcerpm: lsof-4.94.0-3.el9.src.rpm
+  source: []
+  module_metadata: []
+- arch: ppc64le
+  packages:
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/ppc64le/appstream/os/Packages/o/oniguruma-6.9.6-1.el9.5.ppc64le.rpm
+    repoid: ubi-9-for-ppc64le-appstream-rpms
+    size: 246370
+    checksum: sha256:0b700ed36523819c0dd5066cf5835c7ffb3691dbc13657e3f49acc71635fd6a6
+    name: oniguruma
+    evr: 6.9.6-1.el9.5
+    sourcerpm: oniguruma-6.9.6-1.el9.5.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/ppc64le/baseos/os/Packages/j/jq-1.6-19.el9_8.2.ppc64le.rpm
+    repoid: ubi-9-for-ppc64le-baseos-rpms
+    size: 210467
+    checksum: sha256:bd22f9b12aaae090e7d6d6a94eae6cd2a0de75b1f983696066b5c8691075012e
+    name: jq
+    evr: 1.6-19.el9_8.2
+    sourcerpm: jq-1.6-19.el9_8.2.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/ppc64le/baseos/os/Packages/l/libtirpc-1.3.3-9.el9.ppc64le.rpm
+    repoid: ubi-9-for-ppc64le-baseos-rpms
+    size: 112487
+    checksum: sha256:a2bfcdaf2d192dcae021e69c61a5783060ca3e247a0d4fd049336fa3bbd9033a
+    name: libtirpc
+    evr: 1.3.3-9.el9
+    sourcerpm: libtirpc-1.3.3-9.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/ppc64le/baseos/os/Packages/l/lsof-4.94.0-3.el9.ppc64le.rpm
+    repoid: ubi-9-for-ppc64le-baseos-rpms
+    size: 256814
+    checksum: sha256:65766acec9ff3e6c9a49b0b181a630ea19179f3042ae52e36f45d4680e1ec33c
+    name: lsof
+    evr: 4.94.0-3.el9
+    sourcerpm: lsof-4.94.0-3.el9.src.rpm
+  source: []
+  module_metadata: []
+- arch: s390x
+  packages:
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/s390x/appstream/os/Packages/o/oniguruma-6.9.6-1.el9.5.s390x.rpm
+    repoid: ubi-9-for-s390x-appstream-rpms
+    size: 225810
+    checksum: sha256:02fab0b52c89158bd45ccc575ccc9186f196fc514eccd66ebfc72c6b0a08849f
+    name: oniguruma
+    evr: 6.9.6-1.el9.5
+    sourcerpm: oniguruma-6.9.6-1.el9.5.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/s390x/baseos/os/Packages/j/jq-1.6-19.el9_8.2.s390x.rpm
+    repoid: ubi-9-for-s390x-baseos-rpms
+    size: 206781
+    checksum: sha256:0d4d0ea445c687665a70906d2ed4c5e959fc8cd82f7e961d19317881ce26851e
+    name: jq
+    evr: 1.6-19.el9_8.2
+    sourcerpm: jq-1.6-19.el9_8.2.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/s390x/baseos/os/Packages/l/libtirpc-1.3.3-9.el9.s390x.rpm
+    repoid: ubi-9-for-s390x-baseos-rpms
+    size: 96807
+    checksum: sha256:15e22f029018e50dbd098b5c7fcfbd004aa19abe4952b092ee2858b9d33534e3
+    name: libtirpc
+    evr: 1.3.3-9.el9
+    sourcerpm: libtirpc-1.3.3-9.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/s390x/baseos/os/Packages/l/lsof-4.94.0-3.el9.s390x.rpm
+    repoid: ubi-9-for-s390x-baseos-rpms
+    size: 244516
+    checksum: sha256:d076484d3f7dac6d1c387cd93f816ef438e22be5e24217a219301e14638a3b49
+    name: lsof
+    evr: 4.94.0-3.el9
+    sourcerpm: lsof-4.94.0-3.el9.src.rpm
+  source: []
+  module_metadata: []
 - arch: x86_64
   packages:
   - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os/Packages/o/oniguruma-6.9.6-1.el9.5.x86_64.rpm
@@ -11,12 +107,26 @@ arches:
     name: oniguruma
     evr: 6.9.6-1.el9.5
     sourcerpm: oniguruma-6.9.6-1.el9.5.src.rpm
-  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/j/jq-1.6-19.el9_7.0.2.x86_64.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/j/jq-1.6-19.el9_8.2.x86_64.rpm
     repoid: ubi-9-for-x86_64-baseos-rpms
-    size: 197456
-    checksum: sha256:c6516f674a43c89c2a54bcffa7b8e1d65c553042d6aed94ccc08c443ed1efdfa
+    size: 197453
+    checksum: sha256:9793a39a4746a09ba89c3d9ccc70150ac6c878286deee26d7e3aabede4666417
     name: jq
-    evr: 1.6-19.el9_7.0.2
-    sourcerpm: jq-1.6-19.el9_7.0.2.src.rpm
+    evr: 1.6-19.el9_8.2
+    sourcerpm: jq-1.6-19.el9_8.2.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/l/libtirpc-1.3.3-9.el9.x86_64.rpm
+    repoid: ubi-9-for-x86_64-baseos-rpms
+    size: 98934
+    checksum: sha256:f82cd69dc3aac881d5b574930c7d274687054cb5b03d3a8e3affa7bbcd5950b1
+    name: libtirpc
+    evr: 1.3.3-9.el9
+    sourcerpm: libtirpc-1.3.3-9.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/l/lsof-4.94.0-3.el9.x86_64.rpm
+    repoid: ubi-9-for-x86_64-baseos-rpms
+    size: 247056
+    checksum: sha256:6554821f69cd7fcdbb1567a6f46a6f32dacc73bedb796555def5ce176dd9a915
+    name: lsof
+    evr: 4.94.0-3.el9
+    sourcerpm: lsof-4.94.0-3.el9.src.rpm
   source: []
   module_metadata: []

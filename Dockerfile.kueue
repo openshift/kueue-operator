@@ -10,6 +10,7 @@ WORKDIR /workspace/upstream/kueue
 RUN ./build.sh
 
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:5b74fce9d6e629942a0c6dc0f546c193e70d7f974d999a48c948c53dd3d36362
+RUN microdnf install -y lsof && microdnf clean all && rm -rf /var/cache/{dnf,yum}
 WORKDIR /
 COPY --from=build /workspace/upstream/kueue/src/bin/manager /
 USER 65532:65532
