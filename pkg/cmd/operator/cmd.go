@@ -10,9 +10,11 @@ import (
 )
 
 func NewOperator() *cobra.Command {
-	cmd := controllercmd.
-		NewControllerCommandConfig("openshift-kueue-operator", version.Get(), operator.RunOperator, clock.RealClock{}).
-		NewCommand()
+	config := controllercmd.
+		NewControllerCommandConfig("openshift-kueue-operator", version.Get(), operator.RunOperator, clock.RealClock{})
+	config.DisableServing = true
+
+	cmd := config.NewCommand()
 	cmd.Use = "operator"
 	cmd.Short = "Start the Cluster Kueue Operator"
 
