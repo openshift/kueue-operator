@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2026-05-19T01:59:43Z"
+    createdAt: "2026-05-29T20:16:51Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -279,9 +279,6 @@ spec:
                 image: registry.redhat.io/kueue/kueue-rhel9-operator:latest
                 imagePullPolicy: Always
                 name: openshift-kueue-operator
-                ports:
-                - containerPort: 60000
-                  name: metrics
                 resources: {}
                 securityContext:
                   allowPrivilegeEscalation: false

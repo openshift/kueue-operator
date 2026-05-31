@@ -31,9 +31,6 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: "/tmp"
-          ports:
-            - containerPort: 60000
-              name: metrics
           command:
             - kueue-operator
           args:
