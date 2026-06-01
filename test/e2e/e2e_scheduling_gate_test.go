@@ -211,7 +211,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 					}
 				}
 				return true
-			}, "30s", "5s").Should(BeTrue(), "Pods should remain scheduling gated")
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "Pods should remain scheduling gated")
 		})
 
 		It("should keep StatefulSet pods scheduling gated when submitted to non-existent queue", func(ctx context.Context) {
@@ -278,7 +278,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 					}
 				}
 				return true
-			}, "30s", "5s").Should(BeTrue(), "Pods should remain scheduling gated")
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "Pods should remain scheduling gated")
 		})
 
 		It("should keep LeaderWorkerSet pods scheduling gated when submitted to non-existent queue", func(ctx context.Context) {
@@ -348,7 +348,7 @@ var _ = Describe("Scheduling Gate", Label("scheduling-gate"), Ordered, func() {
 					}
 				}
 				return true
-			}, "30s", "5s").Should(BeTrue(), "Pods should remain scheduling gated")
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "Pods should remain scheduling gated")
 		})
 	})
 })
