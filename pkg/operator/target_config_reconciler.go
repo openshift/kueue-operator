@@ -119,7 +119,6 @@ type TargetConfigReconciler struct {
 	openshiftConfigClient      configclient.Interface
 	configInformer             dynamicinformer.DynamicSharedInformerFactory
 	isOpenShift                bool
-	draSupported               bool
 	draExtendedResourceEnabled bool
 }
 
@@ -347,11 +346,10 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		draAPIsAvailable = true
 	}
 
-	// DynamicResourceAllocation is enabled when DRA APIs are available (OCP 4.21+).
-	// The deviceClassMappings config is preserved in the configmap so it takes effect
-	// automatically after a cluster upgrade, but the DRA feature gate is only enabled
-	// when the APIs are available.
-	c.draSupported = draAPIsAvailable
+	// KueueDRAIntegration is Beta in Kueue 0.18+ and enabled by default.
+	// DRA requires resource.k8s.io/v1 APIs (OCP 4.21+). On older clusters,
+	// deviceClassMappings are preserved in the configmap but won't take effect
+	// until the cluster is upgraded and the DRA APIs become available.
 	if len(kueue.Spec.Config.Resources.DeviceClassMappings) > 0 && !draAPIsAvailable {
 		klog.Warningf("DRA APIs (resource.k8s.io/v1) not available on this cluster. DRA requires Kubernetes 1.34+ (OCP 4.21+)")
 		c.eventRecorder.Eventf("DRAUnsupported", "DRA APIs not available, deviceClassMappings will not take effect until the cluster is upgraded")
@@ -361,8 +359,8 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	// Check if the K8s DRAExtendedResource feature gate is enabled on the cluster.
 	// This is an alpha K8s feature gate not yet in openshift/api, so it can only be
 	// enabled via CustomNoUpgrade. We check spec.customNoUpgrade.enabled on the
-	// FeatureGate CR to determine if kueue's DRAExtendedResources gate should be enabled.
-	// Unlike DynamicResourceAllocation, this does not require deviceClassMappings.
+	// FeatureGate CR to determine if kueue's KueueDRAIntegrationExtendedResource
+	// gate should be enabled. This does not require deviceClassMappings.
 	if c.isOpenShift && draAPIsAvailable {
 		fg, err := c.openshiftConfigClient.ConfigV1().FeatureGates().Get(ctx, "cluster", metav1.GetOptions{})
 		if err != nil {
@@ -371,7 +369,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			c.draExtendedResourceEnabled = false
 			if fg.Spec.FeatureSet == configv1.CustomNoUpgrade && fg.Spec.CustomNoUpgrade != nil {
 				for _, gate := range fg.Spec.CustomNoUpgrade.Enabled {
-					// K8s uses singular "DRAExtendedResource", kueue uses plural "DRAExtendedResources"
+					// K8s gate is "DRAExtendedResource", kueue gate is "KueueDRAIntegrationExtendedResource"
 					if string(gate) == "DRAExtendedResource" {
 						c.draExtendedResourceEnabled = true
 						break
@@ -1324,7 +1322,7 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 }
 
 func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string, tlsOpts *kueueconfigapi.TLSOptions) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draSupported, c.draExtendedResourceEnabled, tlsOpts)
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draExtendedResourceEnabled, tlsOpts)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr

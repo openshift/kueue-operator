@@ -34,8 +34,8 @@ import (
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
-	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draSupported, draExtendedResourceEnabled, tlsOpts)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
+	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draExtendedResourceEnabled, tlsOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -189,24 +189,17 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draSupported bool, draExtendedResourceEnabled bool, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceEnabled bool, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
-	// DynamicResourceAllocation is Alpha in Kueue, so we explicitly enable it
-	// when DRA APIs (resource.k8s.io/v1) are available on the cluster (OCP 4.21+).
-	// On clusters without DRA support (OCP < 4.21),
-	// the feature gate is not enabled but the deviceClassMappings config is preserved
-	// so it takes effect automatically after a cluster upgrade.
-	if draSupported {
-		featureGates["DynamicResourceAllocation"] = true
-	}
+	// KueueDRAIntegration is Beta in Kueue 0.18+ and enabled by default.
 
-	// DRAExtendedResources is Alpha in Kueue. Enable it when the K8s
+	// KueueDRAIntegrationExtendedResource is Alpha in Kueue. Enable it when the K8s
 	// DRAExtendedResource feature gate is enabled on the cluster. This allows
 	// workloads to request DRA devices using standard extended resource syntax
 	// (e.g., nvidia.com/gpu: 1) when a DeviceClass has extendedResourceName set.
 	if draExtendedResourceEnabled {
-		featureGates["DRAExtendedResources"] = true
+		featureGates["KueueDRAIntegrationExtendedResource"] = true
 	}
 
 	// SparkApplicationIntegration is Alpha in Kueue, so we explicitly enable it
@@ -268,7 +261,7 @@ func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) 
 	return result, nil
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draSupported bool, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
 	admissionFairSharing, err := buildAdmissionFairSharing(kueueCfg.AdmissionFairSharing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
@@ -324,7 +317,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draSupported, draExtendedResourceEnabled, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draExtendedResourceEnabled, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil

@@ -421,7 +421,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
 		})
 
-		It("verify DRA feature gate is enabled when DRA APIs are available", func() {
+		It("verify no DRA degraded condition when DRA APIs are available", func() {
 			if !draSupported {
 				Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 			}
@@ -435,14 +435,19 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				if !strings.Contains(configData, "deviceClassMappings") {
 					return fmt.Errorf("deviceClassMappings not found in configmap")
 				}
-				if !strings.Contains(configData, "DynamicResourceAllocation: true") {
-					return fmt.Errorf("DynamicResourceAllocation feature gate not enabled")
-				}
 				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "DRA feature gate should be enabled on supported cluster")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "deviceClassMappings should be present on supported cluster")
+
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			for _, condition := range kueueInstance.Status.Conditions {
+				if condition.Type == operatorv1.OperatorStatusTypeDegraded && condition.Status == operatorv1.ConditionTrue {
+					Expect(condition.Message).NotTo(ContainSubstring("DRA"), "should not have DRA degraded condition on supported cluster")
+				}
+			}
 		})
 
-		It("verify DRA feature gate is not enabled when DRA APIs are unavailable", func() {
+		It("verify deviceClassMappings are preserved and degraded condition is set when DRA APIs are unavailable", func() {
 			if draSupported {
 				Skip("DRA APIs (resource.k8s.io/v1) available on this cluster")
 			}
@@ -456,11 +461,8 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				if !strings.Contains(configData, "deviceClassMappings") {
 					return fmt.Errorf("deviceClassMappings not found in configmap - config should be preserved")
 				}
-				if strings.Contains(configData, "DynamicResourceAllocation") {
-					return fmt.Errorf("DynamicResourceAllocation feature gate should not be set on unsupported cluster")
-				}
 				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "DRA feature gate should not be enabled on unsupported cluster")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "deviceClassMappings should be preserved on unsupported cluster")
 
 			Eventually(func() error {
 				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
