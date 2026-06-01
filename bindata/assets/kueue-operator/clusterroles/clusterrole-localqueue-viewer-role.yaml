@@ -11,6 +11,7 @@ metadata:
     rbac.authorization.k8s.io/aggregate-to-view: "true"
     rbac.kueue.x-k8s.io/batch-admin: "true"
     rbac.kueue.x-k8s.io/batch-user: "true"
+    rbac.kueue.x-k8s.io/role: localqueue-viewer
   name: kueue-localqueue-viewer-role
 rules:
 - apiGroups:

@@ -11,15 +11,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - limitranges
   - namespaces
   - nodes
@@ -130,6 +121,15 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+  - watch
 - apiGroups:
   - flowcontrol.apiserver.k8s.io
   resources:
@@ -352,6 +352,7 @@ rules:
   - deviceclasses
   - resourceclaims
   - resourceclaimtemplates
+  - resourceslices
   verbs:
   - get
   - list

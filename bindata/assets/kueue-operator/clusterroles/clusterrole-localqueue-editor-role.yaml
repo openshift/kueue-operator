@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: kueue
     control-plane: controller-manager
     rbac.kueue.x-k8s.io/batch-admin: "true"
+    rbac.kueue.x-k8s.io/role: localqueue-editor
   name: kueue-localqueue-editor-role
 rules:
 - apiGroups:

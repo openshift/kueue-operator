@@ -11,6 +11,7 @@ metadata:
     rbac.authorization.k8s.io/aggregate-to-view: "true"
     rbac.kueue.x-k8s.io/batch-admin: "true"
     rbac.kueue.x-k8s.io/batch-user: "true"
+    rbac.kueue.x-k8s.io/role: pending-workloads-lq-viewer
   name: kueue-pending-workloads-lq-viewer-role
 rules:
 - apiGroups:
