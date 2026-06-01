@@ -128,11 +128,8 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "DynamicResourceAllocation: true") {
-				return fmt.Errorf("DynamicResourceAllocation not enabled yet")
-			}
-			if !strings.Contains(configData, "DRAExtendedResources: true") {
-				return fmt.Errorf("DRAExtendedResources not enabled yet")
+			if !strings.Contains(configData, "KueueDRAIntegrationExtendedResource: true") {
+				return fmt.Errorf("KueueDRAIntegrationExtendedResource not enabled yet")
 			}
 			if strings.Contains(configData, draLogicalResource) {
 				return fmt.Errorf("deviceClassMappings still contains %s, waiting for config reconciliation", draLogicalResource)
@@ -503,7 +500,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		})
 
 		It("should account both ER and RCT under same quota with deviceClassMappings taking precedence", func(ctx context.Context) {
-			By("Adding deviceClassMappings to enable DynamicResourceAllocation for RCT path")
+			By("Adding deviceClassMappings for RCT path")
 			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
@@ -521,8 +518,8 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 					return err
 				}
 				configData := configMap.Data["controller_manager_config.yaml"]
-				if !strings.Contains(configData, "DynamicResourceAllocation: true") {
-					return fmt.Errorf("DynamicResourceAllocation not enabled yet")
+				if !strings.Contains(configData, draLogicalResource) {
+					return fmt.Errorf("deviceClassMappings not applied yet")
 				}
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())

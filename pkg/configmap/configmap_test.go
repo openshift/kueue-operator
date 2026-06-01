@@ -31,7 +31,6 @@ func TestBuildConfigMap(t *testing.T) {
 	testCases := map[string]struct {
 		configuration              kueue.KueueConfiguration
 		gvrToKind                  map[string]string
-		draSupported               bool
 		draExtendedResourceEnabled bool
 		tlsOpts                    *configapi.TLSOptions
 		wantCfgMap                 *corev1.ConfigMap
@@ -115,8 +114,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -385,7 +382,6 @@ webhook:
 			wantErr: nil,
 		},
 		"dra with device class mappings": {
-			draSupported: true,
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
@@ -413,8 +409,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  DynamicResourceAllocation: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -453,7 +447,6 @@ webhook:
 			wantErr: nil,
 		},
 		"dra extended resources enabled": {
-			draSupported:               true,
 			draExtendedResourceEnabled: true,
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
@@ -475,8 +468,7 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  DRAExtendedResources: true
-  DynamicResourceAllocation: true
+  KueueDRAIntegrationExtendedResource: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -508,8 +500,7 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"dra supported without device class mappings": {
-			draSupported: true,
+		"dra without device class mappings": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
@@ -529,8 +520,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  DynamicResourceAllocation: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -562,8 +551,7 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"dra with device class mappings on unsupported cluster": {
-			draSupported: false,
+		"dra with device class mappings on cluster without DRA APIs": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
@@ -988,8 +976,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1041,8 +1027,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1094,8 +1078,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1148,7 +1130,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  ElasticJobsViaWorkloadSlices: true
   SparkApplicationIntegration: true
 health:
   healthProbeBindAddress: :8081
@@ -1250,7 +1231,7 @@ webhook:
 
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
-			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draSupported, tc.draExtendedResourceEnabled, tc.tlsOpts)
+			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draExtendedResourceEnabled, tc.tlsOpts)
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("Unexpected error: want=%v, got=%v", tc.wantErr, err)
 			}
