@@ -68,6 +68,7 @@ func TestE2E(t *testing.T) {
 var _ = BeforeSuite(func() {
 	log.SetLogger(zap.New(zap.UseDevMode(true)))
 	clients = testutils.NewTestClients()
+	testutils.InitClients(clients)
 	kubeClient = clients.KubeClient
 	genericClient = clients.GenericClient
 
@@ -76,5 +77,5 @@ var _ = BeforeSuite(func() {
 
 	// Deploy the Kueue operand once for all tests
 	By("Deploying Kueue operand for all test suites")
-	Expect(deployOperand()).To(Succeed(), "operand deployment should not fail")
+	Expect(testutils.DeployOperand(clients)).To(Succeed(), "operand deployment should not fail")
 })

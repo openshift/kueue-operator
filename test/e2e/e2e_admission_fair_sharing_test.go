@@ -574,7 +574,7 @@ func enableAdmissionFairSharing(ctx context.Context, halfLifeSeconds, samplingSe
 
 	DeferCleanup(func(ctx context.Context) {
 		By("Restoring initial Kueue configuration")
-		applyKueueConfig(ctx, savedConfig, kubeClient)
+		testutils.ApplyKueueConfig(ctx, savedConfig, clients)
 	})
 
 	By("Configuring Kueue with AdmissionFairSharing enabled")
@@ -584,7 +584,7 @@ func enableAdmissionFairSharing(ctx context.Context, halfLifeSeconds, samplingSe
 		UsageSamplingIntervalSeconds: samplingSeconds,
 		ResourceWeights:              resourceWeights,
 	}
-	applyKueueConfig(ctx, desiredConfig, kubeClient)
+	testutils.ApplyKueueConfig(ctx, desiredConfig, clients)
 
 	expectedHalfLife := (time.Duration(halfLifeSeconds) * time.Second).String()
 	expectedSampling := (time.Duration(samplingSeconds) * time.Second).String()

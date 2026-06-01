@@ -32,11 +32,6 @@ import (
 )
 
 var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
-	var (
-		labelKey   = testutils.OpenShiftManagedLabel
-		labelValue = trueLabelValue
-	)
-
 	When("Preemption is Fair Sharing", func() {
 		var initialKueueInstance *ssv1.Kueue
 
@@ -48,79 +43,45 @@ var _ = Describe("Preemption", Label("preemption"), Ordered, func() {
 
 			By("Updating Kueue configuration to use FairSharing preemption")
 			kueueInstance.Spec.Config.Preemption.PreemptionPolicy = ssv1.PreemptionStrategyFairsharing
-			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, kueueInstance.Spec.Config, clients)
 		})
 
 		AfterAll(func(ctx context.Context) {
 			By("Restoring initial Kueue configuration")
-			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			testutils.ApplyKueueConfig(ctx, initialKueueInstance.Spec.Config, clients)
 		})
 
 		It("should preempt workloads", func(ctx context.Context) {
 			By("Creating Resource Flavor")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
+			rf := testutils.MustCreateResourceFlavor(ctx)
 
 			By("Creating ClusterQueue, Namespace and LocalQueue for A")
 			cohortName := "fair-sharing-cohort"
-			clusterQueueA, cleanupClusterQueueA, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithCPU("250m").
-				WithMemory("256Mi").
-				WithFlavorName(resourceFlavor.Name).
-				WithCohort(cohortName).
-				WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
-				WithReclaimWithinCohort(kueuev1beta2.PreemptionPolicyLowerPriority).
-				WithBorrowingLimit(corev1.ResourceCPU, "250m").
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue A")
-			DeferCleanup(cleanupClusterQueueA)
+			clusterQueueA := testutils.MustCreateClusterQueue(ctx, rf.Name,
+				testutils.NewClusterQueue().
+					WithCPU("250m").
+					WithMemory("256Mi").
+					WithCohort(cohortName).
+					WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
+					WithReclaimWithinCohort(kueuev1beta2.PreemptionPolicyLowerPriority).
+					WithBorrowingLimit(corev1.ResourceCPU, "250m"),
+			)
 
-			namespaceA, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "preemption-a-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceA)
-			})
-			localQueueA, cleanupLocalQueueA, err := testutils.NewLocalQueue(namespaceA.Name, "local-queue-a").WithClusterQueue(clusterQueueA.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue A")
-			DeferCleanup(cleanupLocalQueueA)
+			namespaceA := testutils.MustCreateManagedNamespace(ctx, "preemption-a-")
+			localQueueA := testutils.MustCreateLocalQueue(ctx, namespaceA.Name, "local-queue-a", clusterQueueA.Name, nil)
 
 			By("Creating ClusterQueue, Namespace and LocalQueue for B")
-			clusterQueueB, cleanupClusterQueueB, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithCPU("250m").
-				WithMemory("256Mi").
-				WithFlavorName(resourceFlavor.Name).
-				WithCohort(cohortName).
-				WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
-				WithReclaimWithinCohort(kueuev1beta2.PreemptionPolicyAny).
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue B")
-			DeferCleanup(cleanupClusterQueueB)
+			clusterQueueB := testutils.MustCreateClusterQueue(ctx, rf.Name,
+				testutils.NewClusterQueue().
+					WithCPU("250m").
+					WithMemory("256Mi").
+					WithCohort(cohortName).
+					WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
+					WithReclaimWithinCohort(kueuev1beta2.PreemptionPolicyAny),
+			)
 
-			namespaceB, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "preemption-b-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespaceB)
-			})
-			localQueueB, cleanupLocalQueueB, err := testutils.NewLocalQueue(namespaceB.Name, "local-queue-b").WithClusterQueue(clusterQueueB.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue B")
-			DeferCleanup(cleanupLocalQueueB)
+			namespaceB := testutils.MustCreateManagedNamespace(ctx, "preemption-b-")
+			localQueueB := testutils.MustCreateLocalQueue(ctx, namespaceB.Name, "local-queue-b", clusterQueueB.Name, nil)
 
 			By("Creating a job on A that borrows resources from the cohort")
 			cleanupBorrowingJob, borrowingJob, err := createCustomJob(ctx, "borrowing-job", namespaceA.Name, localQueueA.Name, "", "500m", "128Mi")
