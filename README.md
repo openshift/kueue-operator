@@ -182,6 +182,34 @@ hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
 
 This command processes the manifests from the submodule and prepares them for use by the operator.
 
+## RPM Lockfile Management
+
+The project uses RPM lockfiles in the `konflux/` directory to ensure reproducible hermetic builds. These lockfiles specify exact RPM versions and checksums for all dependencies across multiple architectures.
+
+### Updating RPM Lockfiles
+
+To regenerate the RPM lockfile after modifying `konflux/rpms.in.yaml`:
+
+```sh
+podman run --rm \
+  -v $HOME/.docker:/root/.docker \
+  -v "$(pwd):/source:Z" \
+  registry.ci.openshift.org/ocp/builder:rhel-9-enterprise-base-multi-openshift-4.19 bash -c "
+cd /source && \
+dnf install -y pip skopeo jq && \
+pip install --user 'https://github.com/konflux-ci/rpm-lockfile-prototype/archive/refs/tags/\$(curl -s https://api.github.com/repos/konflux-ci/rpm-lockfile-prototype/releases/latest | jq -r .tag_name).tar.gz' && \
+/root/.local/bin/rpm-lockfile-prototype -f Dockerfile.ci.kueue konflux/rpms.in.yaml
+"
+```
+
+This command:
+- Uses the OpenShift enterprise base image with multi-architecture support
+- Downloads the latest `rpm-lockfile-prototype` tool
+- Generates `konflux/rpms.lock.yaml` with exact versions and checksums for all architectures (x86_64, aarch64, ppc64le, s390x)
+- Uses `Dockerfile.ci.kueue` as the base to determine available RPM repositories
+
+After regenerating, commit both `konflux/rpms.in.yaml` and `konflux/rpms.lock.yaml`.
+
 ## Manifest Synchronization
 
 The `hack/sync_manifests.py` script is used to synchronize Kueue manifests from upstream releases or local development builds into the operator's bindata directory. This script handles the downloading, processing, and organization of Kueue manifests for operator deployment.
