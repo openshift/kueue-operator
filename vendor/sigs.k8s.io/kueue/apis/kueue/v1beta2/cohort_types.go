@@ -84,14 +84,10 @@ type CohortStatus struct {
 // +genclient:nonNamespaced
 // +kubebuilder:storageversion
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:scope=Cluster,shortName={co}
 // +kubebuilder:subresource:status
 
 // Cohort defines the Cohorts API.
-//
-// Hierarchical Cohorts (any Cohort which has a parent) are compatible
-// with Fair Sharing as of v0.11. Using these features together in
-// V0.9 and V0.10 is unsupported, and results in undefined behavior.
 type Cohort struct {
 	metav1.TypeMeta `json:",inline"`
 	// metadata is the metadata of the Cohort.
