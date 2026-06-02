@@ -20,12 +20,15 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	configv1alpha1 "k8s.io/component-base/config/v1alpha1"
 )
 
 // +k8s:defaulter-gen=true
+// The deepcopy-gen marker is required to generate API reference documentation by genref.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 
 // Configuration is the Schema for the kueueconfigurations API
@@ -105,6 +108,10 @@ type Configuration struct {
 	// of Kueue-managed objects. A nil value disables all automatic deletions.
 	// +optional
 	ObjectRetentionPolicies *ObjectRetentionPolicies `json:"objectRetentionPolicies,omitempty"`
+
+	// VisibilityServer configures the visibility server.
+	// +optional
+	VisibilityServer *VisibilityServerConfiguration `json:"visibilityServer,omitempty"`
 }
 
 type ControllerManager struct {
@@ -176,6 +183,51 @@ type ControllerMetrics struct {
 	// metrics will be reported.
 	// +optional
 	EnableClusterQueueResources bool `json:"enableClusterQueueResources,omitempty"`
+
+	// CustomLabels is a list of entries whose values will be added as extra
+	// Prometheus labels on ClusterQueue, LocalQueue, and Cohort metrics.
+	// Requires the CustomMetricLabels feature gate.
+	// +optional
+	// +kubebuilder:validation:MaxItems=8
+	CustomLabels []ControllerMetricsCustomLabel `json:"customLabels,omitempty"`
+
+	// LocalQueueMetrics is a configuration that provides LocalQueue metrics options.
+	// +optional
+	LocalQueueMetrics *LocalQueueMetrics `json:"localQueueMetrics,omitempty"`
+}
+
+// ControllerMetricsCustomLabel defines a Kubernetes label or annotation to promote
+// as a Prometheus metric label with a "custom_" prefix.
+type ControllerMetricsCustomLabel struct {
+	// Name is used as a suffix to build the Prometheus label: Kueue
+	// automatically prepends "custom_" (e.g., name: "team" becomes label "custom_team").
+	// Must follow Prometheus label naming conventions: [a-zA-Z_][a-zA-Z0-9_]*.
+	Name string `json:"name"`
+
+	// SourceLabelKey is the Kubernetes label key to read the value from.
+	// Must be a valid Kubernetes qualified name.
+	// Mutually exclusive with SourceAnnotationKey.
+	// If neither is specified, defaults to Name.
+	// +optional
+	SourceLabelKey string `json:"sourceLabelKey,omitempty"`
+
+	// SourceAnnotationKey is the Kubernetes annotation key to read the value from.
+	// Must be a valid Kubernetes qualified name.
+	// Mutually exclusive with SourceLabelKey.
+	// +optional
+	SourceAnnotationKey string `json:"sourceAnnotationKey,omitempty"`
+}
+
+// LocalQueueMetrics defines the configuration options for local queue metrics.
+// If left empty, then metrics will expose for all local queues across namespaces.
+type LocalQueueMetrics struct {
+	// Enable is a knob to allow metrics to be exposed for local queues. Defaults to true.
+	// +optional
+	Enable bool `json:"enable,omitempty"`
+
+	// LocalQueueSelector can be used to choose the local queues that need metrics to be collected.
+	// +optional
+	LocalQueueSelector *metav1.LabelSelector `json:"localQueueSelector,omitempty"`
 }
 
 // ControllerHealth defines the health configs.
@@ -425,6 +477,7 @@ type Integrations struct {
 	//  - "batch/job"
 	//  - "kubeflow.org/mpijob"
 	//  - "ray.io/rayjob"
+	//  - "ray.io/rayservice"
 	//  - "ray.io/raycluster"
 	//  - "jobset.x-k8s.io/jobset"
 	//  - "kubeflow.org/paddlejob"
@@ -434,6 +487,7 @@ type Integrations struct {
 	//  - "kubeflow.org/jaxjob"
 	//  - "trainer.kubeflow.org/trainjob"
 	//  - "workload.codeflare.dev/appwrapper"
+	//  - "sparkoperator.k8s.io/sparkapplication"
 	//  - "pod"
 	//  - "deployment"
 	//  - "statefulset"
@@ -455,7 +509,26 @@ type Integrations struct {
 	LabelKeysToCopy []string `json:"labelKeysToCopy,omitempty"`
 }
 
+// QuotaCheckStrategy determines how Kueue checks resources against quota
+// during admission.
+type QuotaCheckStrategy string
+
+const (
+	// QuotaCheckBlockUndeclared means all resources defined in the workload are checked against quota,
+	// except those matching ExcludeResourcePrefixes.
+	QuotaCheckBlockUndeclared QuotaCheckStrategy = "BlockUndeclared"
+
+	// QuotaCheckIgnoreUndeclared means only resources defined in the workload that are declared in the
+	// ClusterQueue's coveredResources are checked against quota. Resources undeclared in the clusterQueue
+	// are ignored. ExcludeResourcePrefixes is not allowed in combination with this strategy.
+	QuotaCheckIgnoreUndeclared QuotaCheckStrategy = "IgnoreUndeclared"
+)
+
 type Resources struct {
+	// QuotaCheckStrategy determines which resources are considered during quota admission.
+	// +optional
+	QuotaCheckStrategy *QuotaCheckStrategy `json:"quotaCheckStrategy,omitempty"`
+
 	// ExcludedResourcePrefixes defines which resources should be ignored by Kueue
 	ExcludeResourcePrefixes []string `json:"excludeResourcePrefixes,omitempty"`
 
@@ -514,6 +587,53 @@ type DeviceClassMapping struct {
 	// DNS subdomain prefixes follow the same rules as DNS labels but can contain periods.
 	// The total length of each name must not exceed 253 characters.
 	DeviceClassNames []corev1.ResourceName `json:"deviceClassNames"`
+
+	// Sources configures resource accounting sources for this mapping.
+	// Each source defines how quota is tracked for this DeviceClass.
+	// Currently only counter sources are supported (for partitionable devices).
+	// Extended resource requests that resolve to a DeviceClass with sources
+	// configured are marked inadmissible.
+	// Requires the KueueDRAIntegrationPartitionableDevices feature gate.
+	// +optional
+	Sources []DeviceClassSourceConfig `json:"sources,omitempty"`
+}
+
+// DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
+// Exactly one of the source types must be set.
+type DeviceClassSourceConfig struct {
+	// Counter configures counter-based quota for partitionable devices.
+	// Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.
+	// +optional
+	Counter *DeviceClassCounterSource `json:"counter,omitempty"`
+}
+
+// DeviceClassCounterSource identifies where to read counter data from and which counter to track.
+type DeviceClassCounterSource struct {
+	// Name is the counter name within the device's consumesCounters
+	// entries to track for quota. Must match a counter name published by
+	// the driver in ResourceSlice devices' consumesCounters field.
+	// Counter set names are per-device identifiers (e.g., gpu-0-counter-set,
+	// gpu-1-counter-set), so name matches across all counter sets
+	// for a given driver without requiring one mapping per device.
+	// The total length must not exceed 63 characters.
+	// +required
+	Name string `json:"name"`
+
+	// Driver is the DRA driver name used to filter relevant ResourceSlices.
+	// Must match the spec.driver field on ResourceSlice objects.
+	// The total length must not exceed 253 characters.
+	// +required
+	Driver string `json:"driver"`
+
+	// DeviceSelector scopes which devices are eligible for counter-based
+	// quota accounting. Typically matches a GPU model (e.g., productName)
+	// so all partition profiles on that model share one quota pool.
+	// Per-workload charging is determined by the workload's own
+	// ResourceClaimTemplate selector, which narrows to the requested profile.
+	// The selector is compiled at config load time using the upstream dracel
+	// compiler.
+	// +required
+	DeviceSelector resourcev1.DeviceSelector `json:"deviceSelector"`
 }
 
 type PreemptionStrategy string
@@ -586,4 +706,16 @@ type WorkloadRetentionPolicy struct {
 	// Represented using metav1.Duration (e.g. "10m", "1h30m").
 	// +optional
 	AfterDeactivatedByKueue *metav1.Duration `json:"afterDeactivatedByKueue,omitempty"`
+}
+
+type VisibilityServerConfiguration struct {
+	// BindAddress is the IP address the visibility server listens on.
+	// Defaults to 0.0.0.0 (all network interfaces).
+	// +optional
+	BindAddress *string `json:"bindAddress,omitempty"`
+
+	// BindPort is the port the visibility server listens on.
+	// Defaults to 8082.
+	// +optional
+	BindPort *int32 `json:"bindPort,omitempty"`
 }

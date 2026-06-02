@@ -59,6 +59,15 @@ const (
 	// is defined.
 	PodSetSliceSizeAnnotation = "kueue.x-k8s.io/podset-slice-size"
 
+	// PodSetSliceRequiredTopologyConstraintsAnnotation contains a JSON-encoded
+	// array of topology constraints for multi-level slice subdivision.
+	// Each entry specifies a topology level and slice size. This annotation
+	// is mutually exclusive with PodSetSliceRequiredTopologyAnnotation and
+	// PodSetSliceSizeAnnotation.
+	//
+	// This annotation is alpha-level for the TASMultiLayerTopology feature gate.
+	PodSetSliceRequiredTopologyConstraintsAnnotation = "kueue.x-k8s.io/podset-slice-required-topology-constraints"
+
 	// TopologySchedulingGate is used to delay scheduling of a Pod until the
 	// nodeSelectors corresponding to the assigned topology domain are injected
 	// into the Pod. For the Pod-based integrations the gate is added in webhook
@@ -69,14 +78,6 @@ const (
 	// indicate the name of the admitted Workload corresponding to the Job. The
 	// annotation is set when starting the Job, and removed on stopping the Job.
 	WorkloadAnnotation = "kueue.x-k8s.io/workload"
-
-	// TASLabel is a label set on the Job's PodTemplate to indicate that the
-	// PodSet is admitted using TopologyAwareScheduling, and all Pods created
-	// from the Job's PodTemplate also have the label. For the Pod-based
-	// integrations the label is added in webhook during the Pod creation.
-	// Depracted. This label is no longer added by TAS to Pod. The constant is
-	// only kept to support "reading" the label until 0.16.
-	TASLabel = "kueue.x-k8s.io/tas"
 
 	// PodIndexOffsetAnnotation is an annotation on the Pod's metadata
 	// belonging to a Workload. It indicates an offset which represents starting index number
@@ -137,7 +138,7 @@ type TopologyLevel struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
-// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:scope=Cluster,shortName={topo}
 
 // Topology is the Schema for the topology API
 type Topology struct {
