@@ -29,12 +29,13 @@ import (
 
 func TestBuildConfigMap(t *testing.T) {
 	testCases := map[string]struct {
-		configuration              kueue.KueueConfiguration
-		gvrToKind                  map[string]string
-		draExtendedResourceEnabled bool
-		tlsOpts                    *configapi.TLSOptions
-		wantCfgMap                 *corev1.ConfigMap
-		wantErr                    error
+		configuration                  kueue.KueueConfiguration
+		gvrToKind                      map[string]string
+		draExtendedResourceEnabled     bool
+		draPartitionableDevicesEnabled bool
+		tlsOpts                        *configapi.TLSOptions
+		wantCfgMap                     *corev1.ConfigMap
+		wantErr                        error
 	}{
 		"batch job example": {
 			configuration: kueue.KueueConfiguration{
@@ -1124,7 +1125,7 @@ webhook:
 
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
-			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draExtendedResourceEnabled, tc.tlsOpts)
+			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draExtendedResourceEnabled, tc.draPartitionableDevicesEnabled, tc.tlsOpts)
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("Unexpected error: want=%v, got=%v", tc.wantErr, err)
 			}

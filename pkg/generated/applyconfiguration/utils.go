@@ -35,8 +35,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.AdmissionFairSharingApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ByWorkload"):
 		return &kueueoperatorv1.ByWorkloadApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("CELDeviceSelector"):
+		return &kueueoperatorv1.CELDeviceSelectorApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeviceClassCounterSource"):
+		return &kueueoperatorv1.DeviceClassCounterSourceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeviceClassMapping"):
 		return &kueueoperatorv1.DeviceClassMappingApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeviceClassSourceConfig"):
+		return &kueueoperatorv1.DeviceClassSourceConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeviceSelector"):
+		return &kueueoperatorv1.DeviceSelectorApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ExternalFramework"):
 		return &kueueoperatorv1.ExternalFrameworkApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GangScheduling"):

@@ -45,6 +45,15 @@ type DeviceClassMappingApplyConfiguration struct {
 	// an alphanumeric character.
 	// This matches upstream kueue's use of IsQualifiedName for this field.
 	DeviceClassNames []kueueoperatorv1.DeviceClassName `json:"deviceClassNames,omitempty"`
+	// sources configures resource accounting sources for this mapping.
+	// Each source defines how quota is tracked for this DeviceClass.
+	// Currently only counter sources are supported (for partitionable devices).
+	// Extended resource requests that resolve to a DeviceClass with sources
+	// configured are marked inadmissible.
+	// The operator automatically enables the required kueue feature gate when
+	// sources are configured and the Kubernetes DRAPartitionableDevices
+	// feature gate is enabled on the cluster.
+	Sources []DeviceClassSourceConfigApplyConfiguration `json:"sources,omitempty"`
 }
 
 // DeviceClassMappingApplyConfiguration constructs a declarative configuration of the DeviceClassMapping type for use with
@@ -67,6 +76,19 @@ func (b *DeviceClassMappingApplyConfiguration) WithName(value string) *DeviceCla
 func (b *DeviceClassMappingApplyConfiguration) WithDeviceClassNames(values ...kueueoperatorv1.DeviceClassName) *DeviceClassMappingApplyConfiguration {
 	for i := range values {
 		b.DeviceClassNames = append(b.DeviceClassNames, values[i])
+	}
+	return b
+}
+
+// WithSources adds the given value to the Sources field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Sources field.
+func (b *DeviceClassMappingApplyConfiguration) WithSources(values ...*DeviceClassSourceConfigApplyConfiguration) *DeviceClassMappingApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithSources")
+		}
+		b.Sources = append(b.Sources, *values[i])
 	}
 	return b
 }
