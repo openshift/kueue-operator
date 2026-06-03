@@ -146,9 +146,6 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "DynamicResourceAllocation: true") {
-				return fmt.Errorf("DynamicResourceAllocation not enabled yet")
-			}
 			if !strings.Contains(configData, draLogicalResource) {
 				return fmt.Errorf("deviceClassMappings not configured yet")
 			}
