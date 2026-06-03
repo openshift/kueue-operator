@@ -4,7 +4,7 @@ COPY . .
 
 RUN make build
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-base-openshift-4.19
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-enterprise-base-multi-openshift-4.19
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/kueue-operator /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/manifests/* /manifests/
 COPY --from=builder /usr/bin/lsof /usr/bin/lsof
