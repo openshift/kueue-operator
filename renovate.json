@@ -9,6 +9,12 @@
   "rebaseWhen": "behind-base-branch",
   "recreateWhen": "always",
   "commitMessageSuffix": "{{baseBranch}}",
+  "rpm-lockfile": {
+    "enabled": false,
+    "lockFileMaintenance": {
+      "enabled": false
+    }
+  },
   "git-submodules": {
     "enabled": true,
     "schedule": "* 4 * * 2",
