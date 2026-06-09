@@ -443,6 +443,117 @@ type DeviceClassMapping struct {
 	// +kubebuilder:validation:MinItems=1
 	// +required
 	DeviceClassNames []DeviceClassName `json:"deviceClassNames,omitempty"`
+
+	// sources configures resource accounting sources for this mapping.
+	// Each source defines how quota is tracked for this DeviceClass.
+	// Currently only counter sources are supported (for partitionable devices).
+	// Extended resource requests that resolve to a DeviceClass with sources
+	// configured are marked inadmissible.
+	// The operator automatically enables the required kueue feature gate when
+	// sources are configured and the Kubernetes DRAPartitionableDevices
+	// feature gate is enabled on the cluster.
+	// +listType=map
+	// +listMapKey=type
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=1
+	// +optional
+	Sources []DeviceClassSourceConfig `json:"sources,omitempty"`
+}
+
+// DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
+// Exactly one of the source types must be set.
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'Counter' ? has(self.counter) : !has(self.counter)",message="counter is required when type is Counter, and forbidden otherwise"
+// +union
+type DeviceClassSourceConfig struct {
+	// type selects the source type for resource accounting.
+	// Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
+	// +unionDiscriminator
+	// +required
+	Type DeviceClassSourceType `json:"type"`
+
+	// counter configures counter-based quota for partitionable devices.
+	// Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.
+	// counter is required when type is Counter, and forbidden otherwise.
+	// +optional
+	Counter DeviceClassCounterSource `json:"counter,omitzero"`
+}
+
+// +kubebuilder:validation:Enum=Counter
+type DeviceClassSourceType string
+
+const (
+	DeviceClassSourceTypeCounter DeviceClassSourceType = "Counter"
+)
+
+// DeviceClassCounterSource identifies where to read counter data from and which counter to track.
+type DeviceClassCounterSource struct {
+	// name is the counter name within the device's consumesCounters
+	// entries to track for quota. Must match a counter name published by
+	// the driver in ResourceSlice devices' consumesCounters field.
+	// Counter set names are per-device identifiers (e.g., gpu-0-counter-set,
+	// gpu-1-counter-set), so name matches across all counter sets
+	// for a given driver without requiring one mapping per device.
+	// Must be a valid DNS label consisting of lowercase alphanumeric characters
+	// and hyphens, of at most 63 characters in length.
+	// Must start and end with an alphanumeric character.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.dns1123Label().validate(self).hasValue()",message="must be a valid DNS label consisting of lowercase alphanumeric characters and hyphens, of at most 63 characters in length, must start and end with an alphanumeric character (e.g., 'memory')"
+	// +required
+	Name string `json:"name,omitempty"`
+
+	// driver is the DRA driver name used to filter relevant ResourceSlices.
+	// Must match the spec.driver field on ResourceSlice objects.
+	// Must be a valid DNS subdomain consisting of lowercase alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment must start and end with an alphanumeric character.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.dns1123Subdomain().validate(self).hasValue()",message="must be a valid DNS subdomain consisting of lowercase alphanumeric characters, hyphens and periods, of at most 253 characters in length, each period separated segment must start and end with an alphanumeric character (e.g., 'gpu.nvidia.com')"
+	// +required
+	Driver string `json:"driver,omitempty"`
+
+	// deviceSelector scopes which devices are eligible for counter-based
+	// quota accounting. Typically matches a GPU model (e.g., productName)
+	// so all partition profiles on that model share one quota pool.
+	// Per-workload charging is determined by the workload's own
+	// ResourceClaimTemplate selector, which narrows to the requested profile.
+	// The selector is compiled at config load time using the upstream dracel
+	// compiler.
+	// +required
+	DeviceSelector DeviceSelector `json:"deviceSelector,omitzero"`
+}
+
+// DeviceSelector selects devices by attributes.
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'CEL' ? has(self.cel) : !has(self.cel)",message="cel is required when type is CEL, and forbidden otherwise"
+// +union
+type DeviceSelector struct {
+	// type selects the device selector type.
+	// CEL uses a CEL expression to filter devices by attributes.
+	// +unionDiscriminator
+	// +required
+	Type DeviceSelectorType `json:"type"`
+
+	// cel contains a CEL expression for filtering devices.
+	// cel is required when type is CEL, and forbidden otherwise.
+	// +optional
+	CEL CELDeviceSelector `json:"cel,omitzero"`
+}
+
+// +kubebuilder:validation:Enum=CEL
+type DeviceSelectorType string
+
+const (
+	DeviceSelectorTypeCEL DeviceSelectorType = "CEL"
+)
+
+// CELDeviceSelector filters devices using a CEL expression.
+type CELDeviceSelector struct {
+	// expression is a CEL expression that evaluates against device attributes.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=1024
+	// +required
+	Expression string `json:"expression,omitempty"`
 }
 
 // DeviceClassName is a Kubernetes DeviceClass name.

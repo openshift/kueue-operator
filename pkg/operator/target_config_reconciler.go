@@ -97,29 +97,30 @@ const (
 )
 
 type TargetConfigReconciler struct {
-	operatorClient             kueueconfigclient.KueueV1Interface
-	kueueClient                *operatorclient.KueueClient
-	lwsOperatorConfigClient    leaderworkersetoperatorv1.LeaderWorkerSetOperatorInterface
-	jobsetOperatorConfigClient openshiftoperatorv1.JobSetOperatorInterface
-	kubeClient                 kubernetes.Interface
-	osrClient                  openshiftrouteclientset.Interface
-	dynamicClient              dynamic.Interface
-	discoveryClient            discovery.DiscoveryInterface
-	eventRecorder              events.Recorder
-	queue                      workqueue.TypedRateLimitingInterface[queueItem]
-	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces
-	crdClient                  apiextv1.ApiextensionsV1Interface
-	crdInformer                apiextinformer.SharedInformerFactory
-	kubeInformer               informers.SharedInformerFactory
-	operatorNamespace          string
-	resourceCache              resourceapply.ResourceCache
-	kueueImage                 string
-	serviceMonitorSupport      bool
-	apiRegistrationClient      apiregistrationv1client.ApiregistrationV1Interface
-	openshiftConfigClient      configclient.Interface
-	configInformer             dynamicinformer.DynamicSharedInformerFactory
-	isOpenShift                bool
-	draExtendedResourceEnabled bool
+	operatorClient                 kueueconfigclient.KueueV1Interface
+	kueueClient                    *operatorclient.KueueClient
+	lwsOperatorConfigClient        leaderworkersetoperatorv1.LeaderWorkerSetOperatorInterface
+	jobsetOperatorConfigClient     openshiftoperatorv1.JobSetOperatorInterface
+	kubeClient                     kubernetes.Interface
+	osrClient                      openshiftrouteclientset.Interface
+	dynamicClient                  dynamic.Interface
+	discoveryClient                discovery.DiscoveryInterface
+	eventRecorder                  events.Recorder
+	queue                          workqueue.TypedRateLimitingInterface[queueItem]
+	kubeInformersForNamespaces     v1helpers.KubeInformersForNamespaces
+	crdClient                      apiextv1.ApiextensionsV1Interface
+	crdInformer                    apiextinformer.SharedInformerFactory
+	kubeInformer                   informers.SharedInformerFactory
+	operatorNamespace              string
+	resourceCache                  resourceapply.ResourceCache
+	kueueImage                     string
+	serviceMonitorSupport          bool
+	apiRegistrationClient          apiregistrationv1client.ApiregistrationV1Interface
+	openshiftConfigClient          configclient.Interface
+	configInformer                 dynamicinformer.DynamicSharedInformerFactory
+	isOpenShift                    bool
+	draExtendedResourceEnabled     bool
+	draPartitionableDevicesEnabled bool
 }
 
 // computeSpecHash computes a SHA256 hash of the given object's spec.
@@ -356,25 +357,37 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		missingDependencies = append(missingDependencies, "DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)")
 	}
 
-	// Check if the K8s DRAExtendedResource feature gate is enabled on the cluster.
-	// This is an alpha K8s feature gate not yet in openshift/api, so it can only be
-	// enabled via CustomNoUpgrade. We check spec.customNoUpgrade.enabled on the
-	// FeatureGate CR to determine if kueue's KueueDRAIntegrationExtendedResource
-	// gate should be enabled. This does not require deviceClassMappings.
+	// Check if the K8s DRAExtendedResource and DRAPartitionableDevices feature gates
+	// are enabled on the cluster. These are alpha K8s feature gates not yet in openshift/api,
+	// so they can only be enabled via CustomNoUpgrade. We check spec.customNoUpgrade.enabled
+	// on the FeatureGate CR to determine if the corresponding kueue gates should be enabled.
 	if c.isOpenShift && draAPIsAvailable {
 		fg, err := c.openshiftConfigClient.ConfigV1().FeatureGates().Get(ctx, "cluster", metav1.GetOptions{})
 		if err != nil {
 			klog.Warningf("unable to read FeatureGate CR, preserving previous state: %v", err)
 		} else {
 			c.draExtendedResourceEnabled = false
+			c.draPartitionableDevicesEnabled = false
 			if fg.Spec.FeatureSet == configv1.CustomNoUpgrade && fg.Spec.CustomNoUpgrade != nil {
 				for _, gate := range fg.Spec.CustomNoUpgrade.Enabled {
-					// K8s gate is "DRAExtendedResource", kueue gate is "KueueDRAIntegrationExtendedResource"
-					if string(gate) == "DRAExtendedResource" {
+					switch string(gate) {
+					case "DRAExtendedResource":
 						c.draExtendedResourceEnabled = true
-						break
+					case "DRAPartitionableDevices":
+						c.draPartitionableDevicesEnabled = true
 					}
 				}
+			}
+		}
+	}
+
+	if !c.draPartitionableDevicesEnabled {
+		for _, m := range kueue.Spec.Config.Resources.DeviceClassMappings {
+			if len(m.Sources) > 0 {
+				klog.Warningf("DRAPartitionableDevices K8s feature gate is not enabled. Sources configuration will not take effect")
+				c.eventRecorder.Eventf("DRAPartitionableDevicesUnsupported", "DRAPartitionableDevices K8s feature gate is not enabled, sources will not take effect until the feature gate is enabled")
+				missingDependencies = append(missingDependencies, "DRA Partitionable Devices requires the DRAPartitionableDevices K8s feature gate to be enabled")
+				break
 			}
 		}
 	}
@@ -1322,7 +1335,7 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 }
 
 func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string, tlsOpts *kueueconfigapi.TLSOptions) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draExtendedResourceEnabled, tlsOpts)
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draExtendedResourceEnabled, c.draPartitionableDevicesEnabled, tlsOpts)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr

@@ -488,6 +488,131 @@ spec:
                                   optional DNS subdomain prefix and forward slash
                                   (e.g., 'nvidia.com/gpu' or 'gpu')
                                 rule: '!format.qualifiedName().validate(self).hasValue()'
+                            sources:
+                              description: |-
+                                sources configures resource accounting sources for this mapping.
+                                Each source defines how quota is tracked for this DeviceClass.
+                                Currently only counter sources are supported (for partitionable devices).
+                                Extended resource requests that resolve to a DeviceClass with sources
+                                configured are marked inadmissible.
+                                The operator automatically enables the required kueue feature gate when
+                                sources are configured and the Kubernetes DRAPartitionableDevices
+                                feature gate is enabled on the cluster.
+                              items:
+                                description: |-
+                                  DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
+                                  Exactly one of the source types must be set.
+                                properties:
+                                  counter:
+                                    description: |-
+                                      counter configures counter-based quota for partitionable devices.
+                                      Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.
+                                      counter is required when type is Counter, and forbidden otherwise.
+                                    properties:
+                                      deviceSelector:
+                                        description: |-
+                                          deviceSelector scopes which devices are eligible for counter-based
+                                          quota accounting. Typically matches a GPU model (e.g., productName)
+                                          so all partition profiles on that model share one quota pool.
+                                          Per-workload charging is determined by the workload's own
+                                          ResourceClaimTemplate selector, which narrows to the requested profile.
+                                          The selector is compiled at config load time using the upstream dracel
+                                          compiler.
+                                        properties:
+                                          cel:
+                                            description: |-
+                                              cel contains a CEL expression for filtering devices.
+                                              cel is required when type is CEL, and forbidden otherwise.
+                                            properties:
+                                              expression:
+                                                description: expression is a CEL expression
+                                                  that evaluates against device attributes.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - expression
+                                            type: object
+                                          type:
+                                            description: |-
+                                              type selects the device selector type.
+                                              CEL uses a CEL expression to filter devices by attributes.
+                                            enum:
+                                            - CEL
+                                            type: string
+                                        required:
+                                        - type
+                                        type: object
+                                        x-kubernetes-validations:
+                                        - message: cel is required when type is CEL,
+                                            and forbidden otherwise
+                                          rule: 'has(self.type) && self.type == ''CEL''
+                                            ? has(self.cel) : !has(self.cel)'
+                                      driver:
+                                        description: |-
+                                          driver is the DRA driver name used to filter relevant ResourceSlices.
+                                          Must match the spec.driver field on ResourceSlice objects.
+                                          Must be a valid DNS subdomain consisting of lowercase alphanumeric characters,
+                                          hyphens and periods, of at most 253 characters in length.
+                                          Each period separated segment must start and end with an alphanumeric character.
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: must be a valid DNS subdomain consisting
+                                            of lowercase alphanumeric characters,
+                                            hyphens and periods, of at most 253 characters
+                                            in length, each period separated segment
+                                            must start and end with an alphanumeric
+                                            character (e.g., 'gpu.nvidia.com')
+                                          rule: '!format.dns1123Subdomain().validate(self).hasValue()'
+                                      name:
+                                        description: |-
+                                          name is the counter name within the device's consumesCounters
+                                          entries to track for quota. Must match a counter name published by
+                                          the driver in ResourceSlice devices' consumesCounters field.
+                                          Counter set names are per-device identifiers (e.g., gpu-0-counter-set,
+                                          gpu-1-counter-set), so name matches across all counter sets
+                                          for a given driver without requiring one mapping per device.
+                                          Must be a valid DNS label consisting of lowercase alphanumeric characters
+                                          and hyphens, of at most 63 characters in length.
+                                          Must start and end with an alphanumeric character.
+                                        maxLength: 63
+                                        minLength: 1
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: must be a valid DNS label consisting
+                                            of lowercase alphanumeric characters and
+                                            hyphens, of at most 63 characters in length,
+                                            must start and end with an alphanumeric
+                                            character (e.g., 'memory')
+                                          rule: '!format.dns1123Label().validate(self).hasValue()'
+                                    required:
+                                    - deviceSelector
+                                    - driver
+                                    - name
+                                    type: object
+                                  type:
+                                    description: |-
+                                      type selects the source type for resource accounting.
+                                      Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
+                                    enum:
+                                    - Counter
+                                    type: string
+                                required:
+                                - type
+                                type: object
+                                x-kubernetes-validations:
+                                - message: counter is required when type is Counter,
+                                    and forbidden otherwise
+                                  rule: 'has(self.type) && self.type == ''Counter''
+                                    ? has(self.counter) : !has(self.counter)'
+                              maxItems: 1
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - type
+                              x-kubernetes-list-type: map
                           required:
                           - deviceClassNames
                           - name

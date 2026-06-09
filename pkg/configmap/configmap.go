@@ -22,6 +22,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	resourcev1 "k8s.io/api/resource/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/config/v1alpha1"
 	"k8s.io/utils/ptr"
@@ -34,8 +35,8 @@ import (
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
-	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draExtendedResourceEnabled, tlsOpts)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
+	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draExtendedResourceEnabled, draPartitionableDevicesEnabled, tlsOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -178,10 +179,29 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 			deviceClassNames = append(deviceClassNames, corev1.ResourceName(name))
 		}
 
-		mappings = append(mappings, configapi.DeviceClassMapping{
+		mapping := configapi.DeviceClassMapping{
 			Name:             corev1.ResourceName(m.Name),
 			DeviceClassNames: deviceClassNames,
-		})
+		}
+
+		for _, s := range m.Sources {
+			source := configapi.DeviceClassSourceConfig{
+				Counter: &configapi.DeviceClassCounterSource{
+					Name:   s.Counter.Name,
+					Driver: s.Counter.Driver,
+				},
+			}
+			if s.Counter.DeviceSelector.CEL.Expression != "" {
+				source.Counter.DeviceSelector = resourcev1.DeviceSelector{
+					CEL: &resourcev1.CELDeviceSelector{
+						Expression: s.Counter.DeviceSelector.CEL.Expression,
+					},
+				}
+			}
+			mapping.Sources = append(mapping.Sources, source)
+		}
+
+		mappings = append(mappings, mapping)
 	}
 
 	return &configapi.Resources{
@@ -189,7 +209,7 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceEnabled bool, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceEnabled bool, draPartitionableDevicesEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// KueueDRAIntegration is Beta in Kueue 0.18+ and enabled by default.
@@ -200,6 +220,18 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceE
 	// (e.g., nvidia.com/gpu: 1) when a DeviceClass has extendedResourceName set.
 	if draExtendedResourceEnabled {
 		featureGates["KueueDRAIntegrationExtendedResource"] = true
+	}
+
+	// KueueDRAIntegrationPartitionableDevices is Alpha in Kueue. Enable it when
+	// the K8s DRAPartitionableDevices feature gate is enabled on the cluster
+	// AND sources are configured in deviceClassMappings.
+	if draPartitionableDevicesEnabled {
+		for _, m := range resources.DeviceClassMappings {
+			if len(m.Sources) > 0 {
+				featureGates["KueueDRAIntegrationPartitionableDevices"] = true
+				break
+			}
+		}
 	}
 
 	// SparkApplicationIntegration is Alpha in Kueue, so we explicitly enable it
@@ -261,7 +293,7 @@ func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) 
 	return result, nil
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
 	admissionFairSharing, err := buildAdmissionFairSharing(kueueCfg.AdmissionFairSharing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
@@ -317,7 +349,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draExtendedResourceEnabled, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draExtendedResourceEnabled, draPartitionableDevicesEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil
