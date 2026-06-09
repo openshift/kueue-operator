@@ -33,6 +33,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	// Group=kueue.openshift.io, Version=v1
 	case v1.SchemeGroupVersion.WithKind("AdmissionFairSharing"):
 		return &kueueoperatorv1.AdmissionFairSharingApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("AdmissionFairSharingCustom"):
+		return &kueueoperatorv1.AdmissionFairSharingCustomApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ByWorkload"):
 		return &kueueoperatorv1.ByWorkloadApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("CELDeviceSelector"):
