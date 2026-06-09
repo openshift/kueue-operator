@@ -1069,7 +1069,7 @@ webhook:
 			wantCfgMap: &corev1.ConfigMap{
 				Data: map[string]string{
 					"controller_manager_config.yaml": `admissionFairSharing:
-  usageHalfLifeTime: 0s
+  usageHalfLifeTime: 30m0s
   usageSamplingInterval: 0s
 apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
@@ -1114,7 +1114,7 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"Admission Fair Sharing with only resourceWeights set": {
+		"Admission Fair Sharing with usageHalfLifeTime, usageSamplingInterval and resourceWeights set": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
@@ -1122,6 +1122,8 @@ webhook:
 				AdmissionFairSharing: kueue.AdmissionFairSharing{
 					Configuration: kueue.AdmissionFairSharingConfigurationCustom,
 					Custom: kueue.AdmissionFairSharingCustom{
+						UsageHalfLifeTimeSeconds:     10,
+						UsageSamplingIntervalSeconds: 5,
 						ResourceWeights: []kueue.ResourceWeight{
 							{Name: string(corev1.ResourceCPU), Weight: "+0.5"},
 							{Name: string(corev1.ResourceMemory), Weight: "2.0"},
@@ -1135,8 +1137,8 @@ webhook:
   resourceWeights:
     cpu: 0.5
     memory: 2
-  usageHalfLifeTime: 0s
-  usageSamplingInterval: 0s
+  usageHalfLifeTime: 10s
+  usageSamplingInterval: 5s
 apiVersion: config.kueue.x-k8s.io/v1beta2
 clientConnection:
   burst: 100

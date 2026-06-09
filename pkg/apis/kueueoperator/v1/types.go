@@ -151,7 +151,8 @@ type AdmissionFairSharing struct {
 	// configuration determines if admission fair sharing uses default or custom settings.
 	// The allowed values are Default and Custom.
 	// Default means admission fair sharing is enabled with kueue's defaults,
-	// which are subject to change over time.
+	// which are subject to change over time. The current default for usage half life time is 30 minutes,
+	// usage sampling interval is 5 minutes and resource weights is 1 for any resource.
 	// Custom means admission fair sharing is enabled with user-provided configuration
 	// in the custom field.
 	// +required
@@ -159,19 +160,16 @@ type AdmissionFairSharing struct {
 	Configuration AdmissionFairSharingConfiguration `json:"configuration,omitempty"`
 	// custom provides customized configuration for admission fair sharing.
 	// custom is required when configuration is Custom, and forbidden otherwise.
-	// When custom is specified, at least one of its fields must be set.
 	// +optional
 	Custom AdmissionFairSharingCustom `json:"custom,omitzero"`
 }
 
-// +kubebuilder:validation:MinProperties=1
 type AdmissionFairSharingCustom struct {
 	// usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
-	// When omitted, usage will be reset to 0 immediately.
 	// The value must be between 1 and 31536000 (one year in seconds).
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=31536000
-	// +optional
+	// +required
 	UsageHalfLifeTimeSeconds int32 `json:"usageHalfLifeTimeSeconds,omitempty"`
 
 	// usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
