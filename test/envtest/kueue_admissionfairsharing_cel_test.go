@@ -89,12 +89,23 @@ var _ = AfterSuite(func() {
 })
 
 var _ = Describe("AdmissionFairSharingCEL", func() {
+	It("should not allow updating to Custom configuration without custom field", func(ctx context.Context) {
+		By("setting only admissionFairSharing.configuration to Custom (no custom object)")
+		kueue.Spec.Config.AdmissionFairSharing = kueueopv1.AdmissionFairSharing{
+			Configuration: kueueopv1.AdmissionFairSharingConfigurationCustom,
+		}
+		_, err = clients.KueueV1().Kueues().Update(ctx, kueue, metav1.UpdateOptions{})
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "want invalid for Custom without custom field: %v", err)
+	})
 	It("should not allow resourceWeights name with name wrongly formatted", func(ctx context.Context) {
 		By("setting resourceWeights name with name wrongly formatted")
 		kueue.Spec.Config.AdmissionFairSharing = kueueopv1.AdmissionFairSharing{
-			UsageHalfLifeTimeSeconds: 10,
-			ResourceWeights: []kueueopv1.ResourceWeight{
-				{Name: "/gpu", Weight: "1.0"},
+			Configuration: kueueopv1.AdmissionFairSharingConfigurationCustom,
+			Custom: kueueopv1.AdmissionFairSharingCustom{
+				ResourceWeights: []kueueopv1.ResourceWeight{
+					{Name: "/gpu", Weight: "1.0"},
+				},
 			},
 		}
 		_, err = clients.KueueV1().Kueues().Update(ctx, kueue, metav1.UpdateOptions{})
@@ -104,9 +115,11 @@ var _ = Describe("AdmissionFairSharingCEL", func() {
 	It("should not allow resourceWeights weight not being a number", func(ctx context.Context) {
 		By("setting resourceWeights weight not a number")
 		kueue.Spec.Config.AdmissionFairSharing = kueueopv1.AdmissionFairSharing{
-			UsageHalfLifeTimeSeconds: 10,
-			ResourceWeights: []kueueopv1.ResourceWeight{
-				{Name: "nvidia.com/gpu", Weight: "foo"},
+			Configuration: kueueopv1.AdmissionFairSharingConfigurationCustom,
+			Custom: kueueopv1.AdmissionFairSharingCustom{
+				ResourceWeights: []kueueopv1.ResourceWeight{
+					{Name: "nvidia.com/gpu", Weight: "foo"},
+				},
 			},
 		}
 		_, err = clients.KueueV1().Kueues().Update(ctx, kueue, metav1.UpdateOptions{})
@@ -116,9 +129,11 @@ var _ = Describe("AdmissionFairSharingCEL", func() {
 	It("should not allow resourceWeights with negative weight", func(ctx context.Context) {
 		By("setting resourceWeights with negative weight")
 		kueue.Spec.Config.AdmissionFairSharing = kueueopv1.AdmissionFairSharing{
-			UsageHalfLifeTimeSeconds: 10,
-			ResourceWeights: []kueueopv1.ResourceWeight{
-				{Name: "nvidia.com/gpu", Weight: "-1.0"},
+			Configuration: kueueopv1.AdmissionFairSharingConfigurationCustom,
+			Custom: kueueopv1.AdmissionFairSharingCustom{
+				ResourceWeights: []kueueopv1.ResourceWeight{
+					{Name: "nvidia.com/gpu", Weight: "-1.0"},
+				},
 			},
 		}
 		_, err = clients.KueueV1().Kueues().Update(ctx, kueue, metav1.UpdateOptions{})
@@ -129,9 +144,11 @@ var _ = Describe("AdmissionFairSharingCEL", func() {
 	It("should allow resourceWeights name with fully qualified name", func(ctx context.Context) {
 		By("setting resourceWeights name with fully qualified name")
 		kueue.Spec.Config.AdmissionFairSharing = kueueopv1.AdmissionFairSharing{
-			UsageHalfLifeTimeSeconds: 10,
-			ResourceWeights: []kueueopv1.ResourceWeight{
-				{Name: "nvidia.com/gpu", Weight: "1.0"},
+			Configuration: kueueopv1.AdmissionFairSharingConfigurationCustom,
+			Custom: kueueopv1.AdmissionFairSharingCustom{
+				ResourceWeights: []kueueopv1.ResourceWeight{
+					{Name: "nvidia.com/gpu", Weight: "1.0"},
+				},
 			},
 		}
 		kueue, err = clients.KueueV1().Kueues().Update(ctx, kueue, metav1.UpdateOptions{})
