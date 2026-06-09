@@ -293,6 +293,8 @@ func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) 
 			resourceWeights[corev1.ResourceName(entry.Name)] = f
 		}
 		result.ResourceWeights = resourceWeights
+	} else {
+		result.UsageHalfLifeTime = v1.Duration{Duration: time.Duration(30) * time.Minute}
 	}
 	return result, nil
 }

@@ -579,7 +579,8 @@ func enableAdmissionFairSharing(ctx context.Context, halfLifeSeconds, samplingSe
 
 	By("Configuring Kueue with AdmissionFairSharing enabled")
 	desiredConfig := kueueInstance.Spec.Config
-	desiredConfig.AdmissionFairSharing = ssv1.AdmissionFairSharing{
+	desiredConfig.AdmissionFairSharing.Configuration = ssv1.AdmissionFairSharingConfigurationCustom
+	desiredConfig.AdmissionFairSharing.Custom = ssv1.AdmissionFairSharingCustom{
 		UsageHalfLifeTimeSeconds:     halfLifeSeconds,
 		UsageSamplingIntervalSeconds: samplingSeconds,
 		ResourceWeights:              resourceWeights,

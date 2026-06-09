@@ -146,6 +146,7 @@ var _ = Describe("AdmissionFairSharingCEL", func() {
 		kueue.Spec.Config.AdmissionFairSharing = kueueopv1.AdmissionFairSharing{
 			Configuration: kueueopv1.AdmissionFairSharingConfigurationCustom,
 			Custom: kueueopv1.AdmissionFairSharingCustom{
+				UsageHalfLifeTimeSeconds: 10,
 				ResourceWeights: []kueueopv1.ResourceWeight{
 					{Name: "nvidia.com/gpu", Weight: "1.0"},
 				},

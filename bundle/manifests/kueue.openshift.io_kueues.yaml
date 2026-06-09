@@ -56,7 +56,8 @@ spec:
                           configuration determines if admission fair sharing uses default or custom settings.
                           The allowed values are Default and Custom.
                           Default means admission fair sharing is enabled with kueue's defaults,
-                          which are subject to change over time.
+                          which are subject to change over time. The current default for usage half life time is 30 minutes,
+                          usage sampling interval is 5 minutes and resource weights is 1 for any resource.
                           Custom means admission fair sharing is enabled with user-provided configuration
                           in the custom field.
                         enum:
@@ -67,8 +68,6 @@ spec:
                         description: |-
                           custom provides customized configuration for admission fair sharing.
                           custom is required when configuration is Custom, and forbidden otherwise.
-                          When custom is specified, at least one of its fields must be set.
-                        minProperties: 1
                         properties:
                           resourceWeights:
                             description: |-
@@ -120,7 +119,6 @@ spec:
                           usageHalfLifeTimeSeconds:
                             description: |-
                               usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
-                              When omitted, usage will be reset to 0 immediately.
                               The value must be between 1 and 31536000 (one year in seconds).
                             format: int32
                             maximum: 31536000
@@ -136,6 +134,8 @@ spec:
                             maximum: 3600
                             minimum: 1
                             type: integer
+                        required:
+                        - usageHalfLifeTimeSeconds
                         type: object
                     required:
                     - configuration
