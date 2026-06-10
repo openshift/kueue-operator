@@ -21,7 +21,6 @@ package v1
 // with apply.
 type AdmissionFairSharingCustomApplyConfiguration struct {
 	// usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
-	// When omitted, usage will be reset to 0 immediately.
 	// The value must be between 1 and 31536000 (one year in seconds).
 	UsageHalfLifeTimeSeconds *int32 `json:"usageHalfLifeTimeSeconds,omitempty"`
 	// usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
