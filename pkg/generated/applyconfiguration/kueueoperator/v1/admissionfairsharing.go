@@ -30,13 +30,13 @@ type AdmissionFairSharingApplyConfiguration struct {
 	// configuration determines if admission fair sharing uses default or custom settings.
 	// The allowed values are Default and Custom.
 	// Default means admission fair sharing is enabled with kueue's defaults,
-	// which are subject to change over time.
+	// which are subject to change over time. The current default for usage half life time is 30 minutes,
+	// usage sampling interval is 5 minutes and resource weights is 1 for any resource.
 	// Custom means admission fair sharing is enabled with user-provided configuration
 	// in the custom field.
 	Configuration *kueueoperatorv1.AdmissionFairSharingConfiguration `json:"configuration,omitempty"`
 	// custom provides customized configuration for admission fair sharing.
 	// custom is required when configuration is Custom, and forbidden otherwise.
-	// When custom is specified, at least one of its fields must be set.
 	Custom *AdmissionFairSharingCustomApplyConfiguration `json:"custom,omitempty"`
 }
 
