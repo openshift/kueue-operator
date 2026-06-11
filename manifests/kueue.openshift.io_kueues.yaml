@@ -55,9 +55,9 @@ spec:
                         description: |-
                           configuration determines if admission fair sharing uses default or custom settings.
                           The allowed values are Default and Custom.
-                          Default means admission fair sharing is enabled with kueue's defaults,
-                          which are subject to change over time. The current default for usage half life time is 30 minutes,
-                          usage sampling interval is 5 minutes and resource weights is 1 for any resource.
+                          Default means admission fair sharing is enabled with default values,
+                          which are subject to change over time. The default for usage half life time set by the operator is 30 minutes,
+                          while kueue sets the default for usage sampling interval to 5 minutes and the default for resource weights to 1 for any resource.
                           Custom means admission fair sharing is enabled with user-provided configuration
                           in the custom field.
                         enum:
