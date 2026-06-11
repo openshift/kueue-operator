@@ -17,27 +17,27 @@ limitations under the License.
 
 package v1
 
+import (
+	kueueoperatorv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
+)
+
 // AdmissionFairSharingApplyConfiguration represents a declarative configuration of the AdmissionFairSharing type for use
 // with apply.
 //
 // AdmissionFairSharing provides configuration of intervals
 // and resource weights for Admission Fair Sharing.
 type AdmissionFairSharingApplyConfiguration struct {
-	// usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
-	// The value must be between 1 and 31536000 (one year in seconds).
-	UsageHalfLifeTimeSeconds *int32 `json:"usageHalfLifeTimeSeconds,omitempty"`
-	// usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
-	// When omitted, kueue will decide the default, which is subject to change over time.
-	// The current default is 300 (5 minutes).
-	// The value must be between 1 and 3600 (one hour in seconds).
-	UsageSamplingIntervalSeconds *int32 `json:"usageSamplingIntervalSeconds,omitempty"`
-	// resourceWeights assigns weights to resources which are then used to calculate LocalQueue's
-	// resource usage and order Workloads.
-	// When omitted, kueue will decide the default, which is subject to change over time.
-	// The current default weight is 1 for any resource.
-	// When specified, the list must contain between 1 and 16 items.
-	// Each entry must have a unique resource name.
-	ResourceWeights []ResourceWeightApplyConfiguration `json:"resourceWeights,omitempty"`
+	// configuration determines if admission fair sharing uses default or custom settings.
+	// The allowed values are Default and Custom.
+	// Default means admission fair sharing is enabled with default values,
+	// which are subject to change over time. The default for usage half life time set by the operator is 30 minutes,
+	// while kueue sets the default for usage sampling interval to 5 minutes and the default for resource weights to 1 for any resource.
+	// Custom means admission fair sharing is enabled with user-provided configuration
+	// in the custom field.
+	Configuration *kueueoperatorv1.AdmissionFairSharingConfiguration `json:"configuration,omitempty"`
+	// custom provides customized configuration for admission fair sharing.
+	// custom is required when configuration is Custom, and forbidden otherwise.
+	Custom *AdmissionFairSharingCustomApplyConfiguration `json:"custom,omitempty"`
 }
 
 // AdmissionFairSharingApplyConfiguration constructs a declarative configuration of the AdmissionFairSharing type for use with
@@ -46,31 +46,18 @@ func AdmissionFairSharing() *AdmissionFairSharingApplyConfiguration {
 	return &AdmissionFairSharingApplyConfiguration{}
 }
 
-// WithUsageHalfLifeTimeSeconds sets the UsageHalfLifeTimeSeconds field in the declarative configuration to the given value
+// WithConfiguration sets the Configuration field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the UsageHalfLifeTimeSeconds field is set to the value of the last call.
-func (b *AdmissionFairSharingApplyConfiguration) WithUsageHalfLifeTimeSeconds(value int32) *AdmissionFairSharingApplyConfiguration {
-	b.UsageHalfLifeTimeSeconds = &value
+// If called multiple times, the Configuration field is set to the value of the last call.
+func (b *AdmissionFairSharingApplyConfiguration) WithConfiguration(value kueueoperatorv1.AdmissionFairSharingConfiguration) *AdmissionFairSharingApplyConfiguration {
+	b.Configuration = &value
 	return b
 }
 
-// WithUsageSamplingIntervalSeconds sets the UsageSamplingIntervalSeconds field in the declarative configuration to the given value
+// WithCustom sets the Custom field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the UsageSamplingIntervalSeconds field is set to the value of the last call.
-func (b *AdmissionFairSharingApplyConfiguration) WithUsageSamplingIntervalSeconds(value int32) *AdmissionFairSharingApplyConfiguration {
-	b.UsageSamplingIntervalSeconds = &value
-	return b
-}
-
-// WithResourceWeights adds the given value to the ResourceWeights field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the ResourceWeights field.
-func (b *AdmissionFairSharingApplyConfiguration) WithResourceWeights(values ...*ResourceWeightApplyConfiguration) *AdmissionFairSharingApplyConfiguration {
-	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithResourceWeights")
-		}
-		b.ResourceWeights = append(b.ResourceWeights, *values[i])
-	}
+// If called multiple times, the Custom field is set to the value of the last call.
+func (b *AdmissionFairSharingApplyConfiguration) WithCustom(value *AdmissionFairSharingCustomApplyConfiguration) *AdmissionFairSharingApplyConfiguration {
+	b.Custom = value
 	return b
 }

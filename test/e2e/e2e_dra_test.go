@@ -989,7 +989,8 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 
 			savedAFSConfig = kueueInstance.Spec.Config.DeepCopy()
-			kueueInstance.Spec.Config.AdmissionFairSharing = ssv1.AdmissionFairSharing{
+			kueueInstance.Spec.Config.AdmissionFairSharing.Configuration = ssv1.AdmissionFairSharingConfigurationCustom
+			kueueInstance.Spec.Config.AdmissionFairSharing.Custom = ssv1.AdmissionFairSharingCustom{
 				UsageHalfLifeTimeSeconds:     120,
 				UsageSamplingIntervalSeconds: 1,
 			}
