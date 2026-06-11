@@ -1035,7 +1035,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		})
 	})
 
-	When("DeviceClass CEL selector validation with extended resources", Label("dra-extended-resources"), func() {
+	When("DeviceClass CEL selector validation with extended resources", func() {
 		It("should block scheduling when CEL selector matches no devices and resume after restoration", func(ctx context.Context) {
 			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
@@ -1312,7 +1312,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		})
 	})
 
-	When("extendedResourceName is removed from DeviceClass", Label("dra-extended-resources"), func() {
+	When("extendedResourceName is removed from DeviceClass", func() {
 		It("should prevent ER flow and recover after restoration", func(ctx context.Context) {
 			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
@@ -1467,14 +1467,313 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		})
 	})
 
-	When("Extended Resources are used with deviceClassMappings", Label("dra-extended-resources"), func() {
-		BeforeAll(func(ctx context.Context) {
-			if maxGPUsPerNode < 2 {
-				Skip("Need at least 2 GPUs on a single node for mixed ER + RCT test")
+	When("Extended Resources are used with deviceClassMappings", func() {
+		It("should make workload inadmissible when DeviceClass does not exist", func(ctx context.Context) {
+			By("Adding deviceClassMappings for DRA path")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			kueueInstance.Spec.Config.Resources.DeviceClassMappings = []ssv1.DeviceClassMapping{
+				{
+					Name:             draLogicalResource,
+					DeviceClassNames: []ssv1.DeviceClassName{draDeviceClassName},
+				},
 			}
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			Eventually(func(g Gomega) {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				configData := configMap.Data["controller_manager_config.yaml"]
+				g.Expect(configData).To(ContainSubstring(draLogicalResource), "deviceClassMappings not configured yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Deleting DeviceClass to simulate missing DeviceClass scenario")
+			dc, err := kubeClient.ResourceV1().DeviceClasses().Get(ctx, draDeviceClassName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			savedSpec := dc.Spec
+
+			err = kubeClient.ResourceV1().DeviceClasses().Delete(ctx, draDeviceClassName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func(cleanupCtx context.Context) {
+				By("Recreating DeviceClass in cleanup")
+				recreateDC := &resourcev1.DeviceClass{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: draDeviceClassName,
+					},
+					Spec: savedSpec,
+				}
+				_, err := kubeClient.ResourceV1().DeviceClasses().Create(cleanupCtx, recreateDC, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to recreate DeviceClass %s", draDeviceClassName)
+			})
+
+			Eventually(func() bool {
+				_, err := kubeClient.ResourceV1().DeviceClasses().Get(ctx, draDeviceClassName, metav1.GetOptions{})
+				return err != nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "DeviceClass %s should be deleted", draDeviceClassName)
+
+			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
+			kueueClient := clients.UpstreamKueueClient
+
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupResourceFlavor)
+
+			cq, cleanupCQ, err := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name).
+				WithDRAResource(draLogicalResource, fmt.Sprintf("%d", maxGPUsPerNode)).
+				CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: erTestNamespacePrefix,
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}
+			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupNs)
+
+			lq := testutils.NewLocalQueue(ns.Name, erLocalQueueName).WithClusterQueue(cq.Name)
+			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQ)
+
+			By("Creating Job with extended resource request nvidia.com/gpu")
+			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
+			job := builder.NewJob()
+			setDRAJobCPU(job)
+			job.Name = "er-no-deviceclass"
+			job.Labels[testutils.QueueLabel] = erLocalQueueName
+			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
+			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
+			}
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(cleanupCtx context.Context) {
+				testutils.CleanUpJob(cleanupCtx, kubeClient, createdJob.Namespace, createdJob.Name)
+			})
+
+			By("Verifying workload is created but not admitted (nvidia.com/gpu unavailable without DeviceClass)")
+			Eventually(func(g Gomega) {
+				wlList, err := kueueClient.KueueV1beta2().Workloads(ns.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(wlList.Items).NotTo(BeEmpty(), "workload not found for job %s", createdJob.Name)
+
+				wl := wlList.Items[0]
+				g.Expect(wl.Status.Admission).To(BeNil(), "workload should NOT be admitted without DeviceClass")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying workload condition indicates resource unavailable in ClusterQueue")
+			Eventually(func(g Gomega) {
+				wlList, err := kueueClient.KueueV1beta2().Workloads(ns.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(wlList.Items).NotTo(BeEmpty())
+
+				wl := wlList.Items[0]
+				found := false
+				for _, cond := range wl.Status.Conditions {
+					if strings.Contains(cond.Message, "unavailable in ClusterQueue") {
+						found = true
+						break
+					}
+				}
+				g.Expect(found).To(BeTrue(), "workload should have condition with 'unavailable in ClusterQueue' message")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job is suspended")
+			Eventually(func(g Gomega) {
+				suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				g.Expect(suspended).To(BeTrue(), "job %s/%s should be suspended", ns.Name, createdJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job remains suspended (workload inadmissible)")
+			Consistently(func(g Gomega) {
+				suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				g.Expect(suspended).To(BeTrue(), "job %s/%s should remain suspended without DeviceClass", ns.Name, createdJob.Name)
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed())
+
+			By("Verifying no ResourceClaim is created")
+			claims, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).List(ctx, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(claims.Items).To(BeEmpty(), "no ResourceClaim should be created when DeviceClass is missing")
+
+			By("Verifying no pod is created (job stays suspended)")
+			pods, err := kubeClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", createdJob.Name),
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pods.Items).To(BeEmpty(), "no pod should be created when job is suspended")
+
+			By("Verifying ClusterQueue usage is zero")
+			verifyClusterQueueReservation(ctx, kueueClient, cq.Name, draLogicalResource, "0")
+		})
+
+		It("should requeue and admit workload after late DeviceClass creation", func(ctx context.Context) {
+			By("Adding deviceClassMappings for DRA path")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			kueueInstance.Spec.Config.Resources.DeviceClassMappings = []ssv1.DeviceClassMapping{
+				{
+					Name:             draLogicalResource,
+					DeviceClassNames: []ssv1.DeviceClassName{draDeviceClassName},
+				},
+			}
+			applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
+
+			Eventually(func(g Gomega) {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				configData := configMap.Data["controller_manager_config.yaml"]
+				g.Expect(configData).To(ContainSubstring(draLogicalResource), "deviceClassMappings not configured yet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Deleting DeviceClass so workload is initially inadmissible")
+			dc, err := kubeClient.ResourceV1().DeviceClasses().Get(ctx, draDeviceClassName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			savedSpec := dc.Spec
+
+			err = kubeClient.ResourceV1().DeviceClasses().Delete(ctx, draDeviceClassName, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func(cleanupCtx context.Context) {
+				By("Ensuring DeviceClass exists in cleanup")
+				_, err := kubeClient.ResourceV1().DeviceClasses().Get(cleanupCtx, draDeviceClassName, metav1.GetOptions{})
+				if err != nil {
+					recreateDC := &resourcev1.DeviceClass{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: draDeviceClassName,
+						},
+						Spec: savedSpec,
+					}
+					_, err = kubeClient.ResourceV1().DeviceClasses().Create(cleanupCtx, recreateDC, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred(), "failed to recreate DeviceClass %s", draDeviceClassName)
+				}
+			})
+
+			Eventually(func() bool {
+				_, err := kubeClient.ResourceV1().DeviceClasses().Get(ctx, draDeviceClassName, metav1.GetOptions{})
+				return err != nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "DeviceClass %s should be deleted", draDeviceClassName)
+
+			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
+			kueueClient := clients.UpstreamKueueClient
+
+			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupResourceFlavor)
+
+			cq, cleanupCQ, err := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name).
+				WithDRAResource(draLogicalResource, fmt.Sprintf("%d", maxGPUsPerNode)).
+				CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: erTestNamespacePrefix,
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}
+			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupNs)
+
+			lq := testutils.NewLocalQueue(ns.Name, erLocalQueueName).WithClusterQueue(cq.Name)
+			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQ)
+
+			By("Creating Job with extended resource request nvidia.com/gpu")
+			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
+			job := builder.NewJob()
+			setDRAJobCPU(job)
+			job.Name = "er-late-deviceclass"
+			job.Labels[testutils.QueueLabel] = erLocalQueueName
+			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
+			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
+			}
+			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(cleanupCtx context.Context) {
+				testutils.CleanUpJob(cleanupCtx, kubeClient, createdJob.Namespace, createdJob.Name)
+			})
+
+			By("Verifying workload is initially inadmissible (no DeviceClass)")
+			Eventually(func(g Gomega) {
+				wlList, err := kueueClient.KueueV1beta2().Workloads(ns.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", string(createdJob.UID)),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(wlList.Items).NotTo(BeEmpty(), "workload not found for job %s", createdJob.Name)
+
+				wl := wlList.Items[0]
+				g.Expect(wl.Status.Admission).To(BeNil(), "workload should NOT be admitted without DeviceClass")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job is suspended before DeviceClass creation")
+			Eventually(func(g Gomega) {
+				suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				g.Expect(suspended).To(BeTrue(), "job %s/%s should be suspended", ns.Name, createdJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Creating DeviceClass with extendedResourceName to trigger requeue")
+			newDC := &resourcev1.DeviceClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: draDeviceClassName,
+				},
+				Spec: savedSpec,
+			}
+			_, err = kubeClient.ResourceV1().DeviceClasses().Create(ctx, newDC, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying workload is requeued and admitted after DeviceClass creation")
+			checkWorkloadCondition(ctx, ns.Name, string(createdJob.UID), kueuev1beta2.WorkloadAdmitted, "late-deviceclass")
+
+			By("Verifying job is unsuspended")
+			Eventually(func(g Gomega) {
+				suspended := testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				g.Expect(suspended).To(BeFalse(), "job %s/%s should be unsuspended after DeviceClass creation", ns.Name, createdJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying job pod is running")
+			Eventually(func(g Gomega) {
+				running := testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob.Name)
+				g.Expect(running).To(BeTrue(), "pod for job %s/%s should be running", ns.Name, createdJob.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying auto-generated ResourceClaim has ER annotation, correct DeviceClass, and is allocated/reserved")
+			Eventually(func(g Gomega) {
+				claims, err := kubeClient.ResourceV1().ResourceClaims(ns.Name).List(ctx, metav1.ListOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(claims.Items).NotTo(BeEmpty(), "ResourceClaim should be created after DeviceClass creation")
+
+				claim := claims.Items[0]
+				g.Expect(claim.Status.Allocation).NotTo(BeNil(), "ResourceClaim not allocated")
+				g.Expect(claim.Status.ReservedFor).NotTo(BeEmpty(), "ResourceClaim not reserved")
+				g.Expect(claim.Annotations).To(HaveKeyWithValue("resource.kubernetes.io/extended-resource-claim", "true"))
+				g.Expect(claim.Spec.Devices.Requests).NotTo(BeEmpty())
+				g.Expect(claim.Spec.Devices.Requests[0].Exactly).NotTo(BeNil())
+				g.Expect(claim.Spec.Devices.Requests[0].Exactly.DeviceClassName).To(Equal(draDeviceClassName))
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying ClusterQueue shows correct reservation")
+			verifyClusterQueueReservation(ctx, kueueClient, cq.Name, draLogicalResource, "1")
 		})
 
 		It("should account both ER and RCT under same quota with deviceClassMappings taking precedence", func(ctx context.Context) {
+			if maxGPUsPerNode < 2 {
+				Skip("Need at least 2 GPUs on a single node for mixed ER + RCT test")
+			}
 			By("Adding deviceClassMappings for RCT path")
 			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
