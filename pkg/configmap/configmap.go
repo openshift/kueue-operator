@@ -272,24 +272,30 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceE
 }
 
 func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) (*configapi.AdmissionFairSharing, error) {
-	if admissionFairSharing.UsageHalfLifeTimeSeconds == 0 {
+	if admissionFairSharing.Configuration == "" {
 		return nil, nil
 	}
 	result := &configapi.AdmissionFairSharing{}
-	result.UsageHalfLifeTime = v1.Duration{Duration: time.Duration(admissionFairSharing.UsageHalfLifeTimeSeconds) * time.Second}
-	if admissionFairSharing.UsageSamplingIntervalSeconds > 0 {
-		result.UsageSamplingInterval = v1.Duration{Duration: time.Duration(admissionFairSharing.UsageSamplingIntervalSeconds) * time.Second}
-	}
-	resourceWeights := make(map[corev1.ResourceName]float64, len(admissionFairSharing.ResourceWeights))
-	for _, entry := range admissionFairSharing.ResourceWeights {
-		f, err := strconv.ParseFloat(entry.Weight, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse resource weight for resource %s: %w", entry.Name, err)
+	if admissionFairSharing.Configuration == kueue.AdmissionFairSharingConfigurationCustom {
+		custom := admissionFairSharing.Custom
+		if custom.UsageHalfLifeTimeSeconds > 0 {
+			result.UsageHalfLifeTime = v1.Duration{Duration: time.Duration(custom.UsageHalfLifeTimeSeconds) * time.Second}
 		}
-		resourceWeights[corev1.ResourceName(entry.Name)] = f
+		if custom.UsageSamplingIntervalSeconds > 0 {
+			result.UsageSamplingInterval = v1.Duration{Duration: time.Duration(custom.UsageSamplingIntervalSeconds) * time.Second}
+		}
+		resourceWeights := make(map[corev1.ResourceName]float64, len(custom.ResourceWeights))
+		for _, entry := range custom.ResourceWeights {
+			f, err := strconv.ParseFloat(entry.Weight, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse resource weight for resource %s: %w", entry.Name, err)
+			}
+			resourceWeights[corev1.ResourceName(entry.Name)] = f
+		}
+		result.ResourceWeights = resourceWeights
+	} else {
+		result.UsageHalfLifeTime = v1.Duration{Duration: time.Duration(30) * time.Minute}
 	}
-	result.ResourceWeights = resourceWeights
-
 	return result, nil
 }
 
