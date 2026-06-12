@@ -496,7 +496,7 @@ type DeviceClassSourceConfig struct {
 	// Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
 	// +unionDiscriminator
 	// +required
-	Type DeviceClassSourceType `json:"type"`
+	Type DeviceClassSourceType `json:"type,omitempty"`
 
 	// counter configures counter-based quota for partitionable devices.
 	// Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.
@@ -559,7 +559,7 @@ type DeviceSelector struct {
 	// CEL uses a CEL expression to filter devices by attributes.
 	// +unionDiscriminator
 	// +required
-	Type DeviceSelectorType `json:"type"`
+	Type DeviceSelectorType `json:"type,omitempty"`
 
 	// cel contains a CEL expression for filtering devices.
 	// cel is required when type is CEL, and forbidden otherwise.
