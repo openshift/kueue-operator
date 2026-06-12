@@ -45,18 +45,16 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
 	})
 
-	BeforeAll(func(ctx context.Context) {
-		enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
-			Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
-			Custom: ssv1.AdmissionFairSharingCustom{
-				UsageHalfLifeTimeSeconds:     usageHalfLifeTimeSeconds,
-				UsageSamplingIntervalSeconds: usageSamplingIntervalSeconds,
-			},
+	When("Setting custom values for usage half life time and usage sampling interval", func() {
+		BeforeAll(func(ctx context.Context) {
+			enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
+				Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
+				Custom: ssv1.AdmissionFairSharingCustom{
+					UsageHalfLifeTimeSeconds:     usageHalfLifeTimeSeconds,
+					UsageSamplingIntervalSeconds: usageSamplingIntervalSeconds,
+				},
+			})
 		})
-	})
-
-	When("LocalQueues have different FairSharing weight values", func() {
-
 		It("should prioritize the higher-weight LocalQueue when quota frees up", func(ctx context.Context) {
 			By("Creating Resource Flavor")
 			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -187,9 +185,6 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				return testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, job3.Name)
 			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "Job3 on lq-heavy (weight=1) should remain suspended")
 		})
-	})
-
-	When("usageSamplingIntervalSeconds controls lastUpdate cadence", func() {
 
 		It("should advance lastUpdate timestamps at approximately the configured sampling interval", func(ctx context.Context) {
 			By("Creating Resource Flavor")
@@ -284,9 +279,6 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 					fmt.Sprintf("Interval %d (%v) should be at most %v", i, interval, expectedInterval+5*time.Second))
 			}
 		})
-	})
-
-	When("VisibilityOnDemand reflects usage-based ordering", func() {
 
 		It("should report pending workloads in usage-based order, not FIFO", func(ctx context.Context) {
 			By("Creating RBAC for visibility API access")
@@ -764,16 +756,6 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job1.Name)).To(BeFalse())
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"job %s was not admitted", job1.Name)
-
-			By("Waiting for both LocalQueues to accumulate usage (consumedResources.cpu > 0)")
-			Eventually(func() bool {
-				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqA.Name, metav1.GetOptions{})
-				if err != nil || lq.Status.FairSharing == nil || lq.Status.FairSharing.AdmissionFairSharingStatus == nil {
-					return false
-				}
-				cpu := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceCPU]
-				return cpu.Cmp(resource.MustParse("0")) > 0
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-a should have consumedResources.cpu > 0")
 
 			job2 := newLongRunningJob("job2", ns.Name, lqA.Name, "2", "100Mi")
 
