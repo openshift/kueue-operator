@@ -15,7 +15,7 @@ index 192fc8916..2b8708ca0 100644
  		util.MustCreate(ctx, k8sClient, ns)
  
 diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
-index 1ec80185e..63c816124 100644
+index 0cc393c98..eabe91047 100644
 --- a/test/e2e/certmanager/metrics_test.go
 +++ b/test/e2e/certmanager/metrics_test.go
 @@ -40,7 +40,7 @@ const (
@@ -28,7 +28,7 @@ index 1ec80185e..63c816124 100644
  )
  
 diff --git a/test/e2e/sequential/baseline/admission_fair_sharing_test.go b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
-index 0cc1e5d47..3215c2f9a 100644
+index 1cd6a7126..7757f919f 100644
 --- a/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 +++ b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 @@ -17,8 +17,6 @@ limitations under the License.
@@ -68,36 +68,21 @@ index 0cc1e5d47..3215c2f9a 100644
  
  		rf = utiltestingapi.MakeResourceFlavor("afs-rf").Obj()
  		util.MustCreate(ctx, k8sClient, rf)
-diff --git a/test/e2e/sequential/baseline/suite_test.go b/test/e2e/sequential/baseline/suite_test.go
-index 13c60383a..bd787db80 100644
---- a/test/e2e/sequential/baseline/suite_test.go
-+++ b/test/e2e/sequential/baseline/suite_test.go
-@@ -68,6 +68,7 @@ var _ = ginkgo.BeforeSuite(func() {
- 	defaultKueueCfg = util.GetKueueConfiguration(ctx, k8sClient)
- })
- 
--var _ = ginkgo.AfterSuite(func() {
--	util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName)
--})
-+// On OCP, kueue configuration is managed via the Kueue CR, not direct config updates.
-+// var _ = ginkgo.AfterSuite(func() {
-+// 	util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName)
-+// })
 diff --git a/test/e2e/singlecluster/extended/suite_test.go b/test/e2e/singlecluster/extended/suite_test.go
-index 78be86a76..55d24706a 100644
+index 4bbee0840..201c01148 100644
 --- a/test/e2e/singlecluster/extended/suite_test.go
 +++ b/test/e2e/singlecluster/extended/suite_test.go
 @@ -54,12 +54,12 @@ var _ = ginkgo.BeforeSuite(func() {
  	waitForAvailableStart := time.Now()
  	util.WaitForKueueAvailability(ctx, k8sClient)
  	labelFilter := ginkgo.GinkgoLabelFilter()
--	if ginkgo.Label("feature:jobset", "feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
+-	if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
 -		util.WaitForJobSetAvailability(ctx, k8sClient)
 -	}
 -	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
 -		util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
 -	}
-+	// if ginkgo.Label("feature:jobset", "feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
++	// if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
 +	// 	util.WaitForJobSetAvailability(ctx, k8sClient)
 +	// }
 +	// if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
