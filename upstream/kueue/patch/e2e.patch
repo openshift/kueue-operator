@@ -3,7 +3,7 @@ index 192fc8916..2b8708ca0 100644
 --- a/test/e2e/certmanager/certmanager_test.go
 +++ b/test/e2e/certmanager/certmanager_test.go
 @@ -40,7 +40,10 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
- 
+
  	ginkgo.BeforeEach(func() {
  		ns = &corev1.Namespace{
 -			ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-cert-manager-"},
@@ -13,9 +13,9 @@ index 192fc8916..2b8708ca0 100644
 +			},
  		}
  		util.MustCreate(ctx, k8sClient, ns)
- 
+
 diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
-index 1ec80185e..63c816124 100644
+index 0cc393c98..eabe91047 100644
 --- a/test/e2e/certmanager/metrics_test.go
 +++ b/test/e2e/certmanager/metrics_test.go
 @@ -40,7 +40,7 @@ const (
@@ -26,14 +26,14 @@ index 1ec80185e..63c816124 100644
 +	certSecretName               = "metrics-server-cert"
  	certMountPath                = "/etc/kueue/metrics/certs"
  )
- 
+
 diff --git a/test/e2e/sequential/baseline/admission_fair_sharing_test.go b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
-index 0cc1e5d47..3215c2f9a 100644
+index 1cd6a7126..7757f919f 100644
 --- a/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 +++ b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 @@ -17,8 +17,6 @@ limitations under the License.
  package baseline
- 
+
  import (
 -	"time"
 -
@@ -43,14 +43,14 @@ index 0cc1e5d47..3215c2f9a 100644
 @@ -27,7 +25,6 @@ import (
  	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
  	"sigs.k8s.io/controller-runtime/pkg/client"
- 
+
 -	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
  	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta2"
  	utiltestingapi "sigs.k8s.io/kueue/pkg/util/testing/v1beta2"
  	jobtesting "sigs.k8s.io/kueue/pkg/util/testingjobs/job"
 @@ -41,12 +38,13 @@ var _ = ginkgo.Describe("Admission Fair Sharing", ginkgo.Label("feature:admissio
  	)
- 
+
  	ginkgo.BeforeAll(func() {
 -		util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName, func(cfg *configapi.Configuration) {
 -			cfg.AdmissionFairSharing = &configapi.AdmissionFairSharing{
@@ -65,39 +65,24 @@ index 0cc1e5d47..3215c2f9a 100644
 +		// 		UsageSamplingInterval: metav1.Duration{Duration: 1 * time.Second},
 +		// 	}
 +		// })
- 
+
  		rf = utiltestingapi.MakeResourceFlavor("afs-rf").Obj()
  		util.MustCreate(ctx, k8sClient, rf)
-diff --git a/test/e2e/sequential/baseline/suite_test.go b/test/e2e/sequential/baseline/suite_test.go
-index 13c60383a..bd787db80 100644
---- a/test/e2e/sequential/baseline/suite_test.go
-+++ b/test/e2e/sequential/baseline/suite_test.go
-@@ -68,6 +68,7 @@ var _ = ginkgo.BeforeSuite(func() {
- 	defaultKueueCfg = util.GetKueueConfiguration(ctx, k8sClient)
- })
- 
--var _ = ginkgo.AfterSuite(func() {
--	util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName)
--})
-+// On OCP, kueue configuration is managed via the Kueue CR, not direct config updates.
-+// var _ = ginkgo.AfterSuite(func() {
-+// 	util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName)
-+// })
 diff --git a/test/e2e/singlecluster/extended/suite_test.go b/test/e2e/singlecluster/extended/suite_test.go
-index 78be86a76..55d24706a 100644
+index 4bbee0840..201c01148 100644
 --- a/test/e2e/singlecluster/extended/suite_test.go
 +++ b/test/e2e/singlecluster/extended/suite_test.go
 @@ -54,12 +54,12 @@ var _ = ginkgo.BeforeSuite(func() {
  	waitForAvailableStart := time.Now()
  	util.WaitForKueueAvailability(ctx, k8sClient)
  	labelFilter := ginkgo.GinkgoLabelFilter()
--	if ginkgo.Label("feature:jobset", "feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
+-	if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
 -		util.WaitForJobSetAvailability(ctx, k8sClient)
 -	}
 -	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
 -		util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
 -	}
-+	// if ginkgo.Label("feature:jobset", "feature:tas", "feature:trainjob").MatchesLabelFilter(labelFilter) {
++	// if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
 +	// 	util.WaitForJobSetAvailability(ctx, k8sClient)
 +	// }
 +	// if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
