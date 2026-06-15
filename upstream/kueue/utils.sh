@@ -4,16 +4,16 @@
 apply_patches() {
   for patch in patch/*.patch; do
     pushd src >/dev/null
-    # Check if patch can be applied (not already applied)
-    if git apply --check ../"$patch" 2>/dev/null; then
+    # Check if patch is already applied (reverse-apply succeeds)
+    if git apply --check --reverse ../"$patch" 2>/dev/null; then
+      echo "Skipping $patch (already applied)"
+    else
       echo "Applying $patch"
       git apply ../"$patch" || {
-        echo "Error: Failed to apply $patch"
+        echo "Error: Failed to apply $patch — patch may need updating after a submodule sync"
         popd >/dev/null
         return 1
       }
-    else
-      echo "Skipping $patch (already applied or conflicts)"
     fi
     popd >/dev/null
   done
