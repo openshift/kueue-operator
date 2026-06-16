@@ -77,7 +77,6 @@ rules:
       - serviceaccounts
       - events
       - pods
-      - secrets
       - configmaps
     verbs:
       - create

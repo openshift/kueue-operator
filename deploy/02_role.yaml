@@ -16,3 +16,19 @@ rules:
       - patch
       - update
       - watch
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openshift-kueue-operator-secrets
+  namespace: openshift-kueue-operator
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - delete
+      - get
+      - list
+      - watch
