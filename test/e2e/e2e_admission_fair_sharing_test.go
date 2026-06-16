@@ -45,12 +45,16 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 500)
 	})
 
-	BeforeAll(func(ctx context.Context) {
-		enableAdmissionFairSharing(ctx, usageHalfLifeTimeSeconds, usageSamplingIntervalSeconds)
-	})
-
-	When("LocalQueues have different FairSharing weight values", func() {
-
+	When("Setting custom values for usage half life time and usage sampling interval", func() {
+		BeforeAll(func(ctx context.Context) {
+			enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
+				Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
+				Custom: ssv1.AdmissionFairSharingCustom{
+					UsageHalfLifeTimeSeconds:     usageHalfLifeTimeSeconds,
+					UsageSamplingIntervalSeconds: usageSamplingIntervalSeconds,
+				},
+			})
+		})
 		It("should prioritize the higher-weight LocalQueue when quota frees up", func(ctx context.Context) {
 			By("Creating Resource Flavor")
 			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -181,9 +185,6 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				return testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, job3.Name)
 			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "Job3 on lq-heavy (weight=1) should remain suspended")
 		})
-	})
-
-	When("usageSamplingIntervalSeconds controls lastUpdate cadence", func() {
 
 		It("should advance lastUpdate timestamps at approximately the configured sampling interval", func(ctx context.Context) {
 			By("Creating Resource Flavor")
@@ -278,9 +279,6 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 					fmt.Sprintf("Interval %d (%v) should be at most %v", i, interval, expectedInterval+5*time.Second))
 			}
 		})
-	})
-
-	When("VisibilityOnDemand reflects usage-based ordering", func() {
 
 		It("should report pending workloads in usage-based order, not FIFO", func(ctx context.Context) {
 			By("Creating RBAC for visibility API access")
@@ -428,10 +426,17 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 
 		It("should deprioritize the queue with higher weighted CPU usage when cpu weight is 10 and memory weight is 0", func(ctx context.Context) {
 			By("Overriding Kueue config with resourceWeights (cpu: 10, memory: 0) and fast decay")
-			enableAdmissionFairSharing(ctx, 10, 1,
-				ssv1.ResourceWeight{Name: "cpu", Weight: "10"},
-				ssv1.ResourceWeight{Name: "memory", Weight: "0"},
-			)
+			enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
+				Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
+				Custom: ssv1.AdmissionFairSharingCustom{
+					UsageHalfLifeTimeSeconds:     10,
+					UsageSamplingIntervalSeconds: 1,
+					ResourceWeights: []ssv1.ResourceWeight{
+						{Name: "cpu", Weight: "10"},
+						{Name: "memory", Weight: "0"},
+					},
+				},
+			})
 
 			By("Creating Resource Flavor")
 			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -579,7 +584,13 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		)
 
 		BeforeAll(func(ctx context.Context) {
-			enableAdmissionFairSharing(ctx, afsHalfLifeSeconds, afsSamplingSeconds)
+			enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
+				Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
+				Custom: ssv1.AdmissionFairSharingCustom{
+					UsageHalfLifeTimeSeconds:     afsHalfLifeSeconds,
+					UsageSamplingIntervalSeconds: afsSamplingSeconds,
+				},
+			})
 		})
 
 		BeforeEach(func(ctx context.Context) {
@@ -682,9 +693,109 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		})
 	})
 
+	When("admission fair sharing is enabled with default values", func() {
+		BeforeAll(func(ctx context.Context) {
+			By("Enabling AdmissionFairSharing with default values")
+			enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
+				Configuration: ssv1.AdmissionFairSharingConfigurationDefault,
+			})
+
+		})
+
+		It("should admit jobs from local queues with lower usage", func(ctx context.Context) {
+			By("Creating ResourceFlavor")
+			rf, cleanupRF, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupRF)
+
+			By("Creating ClusterQueue with UsageBasedAdmissionFairSharing")
+			cq, cleanupCQ, err := testutils.NewClusterQueue().
+				WithGenerateName().
+				WithFlavorName(rf.Name).
+				WithCPU("2").
+				WithMemory("200Mi").
+				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
+				CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupCQ)
+
+			By("Creating namespace")
+			ns, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "afs-test-",
+					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				deleteNamespace(ctx, ns)
+			})
+
+			By("Creating LocalQueue lq-a bound to the ClusterQueue")
+			lqA, cleanupLQ, err := testutils.NewLocalQueue(ns.Name, "lq-a").
+				WithClusterQueue(cq.Name).
+				CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQ)
+
+			By("Creating LocalQueue lq-b bound to the ClusterQueue")
+			lqB, cleanupLQB, err := testutils.NewLocalQueue(ns.Name, "lq-b").
+				WithClusterQueue(cq.Name).
+				CreateWithObject(ctx, clients.UpstreamKueueClient)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupLQB)
+
+			By("Step 1: Creating job1 on lq-a to saturate the 2-CPU ClusterQueue")
+			job1 := newLongRunningJob("job1", ns.Name, lqA.Name, "2", "100Mi")
+
+			_, err = kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying job1 is admitted (unsuspended)")
+			Eventually(func(g Gomega) {
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job1.Name)).To(BeFalse())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"job %s was not admitted", job1.Name)
+
+			job2 := newLongRunningJob("job2", ns.Name, lqA.Name, "2", "100Mi")
+
+			_, err = kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			job3 := newLongRunningJob("job3", ns.Name, lqB.Name, "2", "100Mi")
+
+			_, err = kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job3, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying both newer jobs remain suspended (ClusterQueue is full)")
+			Consistently(func(g Gomega) {
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job2.Name)).To(BeTrue())
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job3.Name)).To(BeTrue())
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "Newer jobs should stay suspended while CQ is full")
+
+			By("Deleting job1 to free 2 CPUs")
+			err = kubeClient.BatchV1().Jobs(ns.Name).Delete(ctx, job1.Name, metav1.DeleteOptions{
+				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
+			})
+			Expect(err).NotTo(HaveOccurred(), "Failed to delete job1")
+
+			By("Verifying job3 is admitted")
+			Eventually(func(g Gomega) {
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job3.Name)).To(BeFalse())
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"job %s was not admitted", job3.Name)
+
+			By("Verifying job2 is not admitted")
+			Consistently(func(g Gomega) {
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job2.Name)).To(BeTrue())
+			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(),
+				"job %s was admitted", job2.Name)
+		})
+	})
+
 })
 
-func enableAdmissionFairSharing(ctx context.Context, halfLifeSeconds, samplingSeconds int32, resourceWeights ...ssv1.ResourceWeight) {
+func enableAdmissionFairSharing(ctx context.Context, afs ssv1.AdmissionFairSharing) {
 	By("Saving initial Kueue configuration")
 	kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
@@ -697,27 +808,29 @@ func enableAdmissionFairSharing(ctx context.Context, halfLifeSeconds, samplingSe
 
 	By("Configuring Kueue with AdmissionFairSharing enabled")
 	desiredConfig := kueueInstance.Spec.Config
-	desiredConfig.AdmissionFairSharing.Configuration = ssv1.AdmissionFairSharingConfigurationCustom
-	desiredConfig.AdmissionFairSharing.Custom = ssv1.AdmissionFairSharingCustom{
-		UsageHalfLifeTimeSeconds:     halfLifeSeconds,
-		UsageSamplingIntervalSeconds: samplingSeconds,
-		ResourceWeights:              resourceWeights,
-	}
+	desiredConfig.AdmissionFairSharing = afs
 	applyKueueConfig(ctx, desiredConfig, kubeClient)
-
-	expectedHalfLife := (time.Duration(halfLifeSeconds) * time.Second).String()
-	expectedSampling := (time.Duration(samplingSeconds) * time.Second).String()
 
 	By("Verifying kueue-manager-config ConfigMap contains AdmissionFairSharing settings")
 	Eventually(func(g Gomega) {
 		configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 		g.Expect(err).ToNot(HaveOccurred(), "Failed to get kueue-manager-config ConfigMap")
 		configData := configMap.Data["controller_manager_config.yaml"]
-		g.Expect(configData).To(ContainSubstring(fmt.Sprintf("usageHalfLifeTime: %s", expectedHalfLife)), "usageHalfLifeTime not found in ConfigMap")
-		g.Expect(configData).To(ContainSubstring(fmt.Sprintf("usageSamplingInterval: %s", expectedSampling)), "usageSamplingInterval not found in ConfigMap")
-		for _, rw := range resourceWeights {
-			g.Expect(configData).To(ContainSubstring(fmt.Sprintf("%s: %s", rw.Name, rw.Weight)),
-				fmt.Sprintf("resourceWeight %s: %s not found in ConfigMap", rw.Name, rw.Weight))
+		switch afs.Configuration {
+		case ssv1.AdmissionFairSharingConfigurationDefault:
+			// The operator uses a 30-minute default for usageHalfLifeTime.
+			g.Expect(configData).To(ContainSubstring("usageHalfLifeTime: 30m0s"), "usageHalfLifeTime not found in ConfigMap")
+			g.Expect(configData).To(ContainSubstring("usageSamplingInterval: 0s"), "usageSamplingInterval not found in ConfigMap")
+			g.Expect(configData).To(Not(ContainSubstring("resourceWeights")), "resourceWeights found in ConfigMap")
+		case ssv1.AdmissionFairSharingConfigurationCustom:
+			expectedHalfLife := (time.Duration(afs.Custom.UsageHalfLifeTimeSeconds) * time.Second).String()
+			g.Expect(configData).To(ContainSubstring(fmt.Sprintf("usageHalfLifeTime: %s", expectedHalfLife)), "usageHalfLifeTime not found in ConfigMap")
+			expectedSampling := (time.Duration(afs.Custom.UsageSamplingIntervalSeconds) * time.Second).String()
+			g.Expect(configData).To(ContainSubstring(fmt.Sprintf("usageSamplingInterval: %s", expectedSampling)), "usageSamplingInterval not found in ConfigMap")
+			for _, rw := range afs.Custom.ResourceWeights {
+				g.Expect(configData).To(ContainSubstring(fmt.Sprintf("%s: %s", rw.Name, rw.Weight)),
+					fmt.Sprintf("resourceWeight %s: %s not found in ConfigMap", rw.Name, rw.Weight))
+			}
 		}
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-manager-config should have AdmissionFairSharing settings")
 }
