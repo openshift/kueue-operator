@@ -39,6 +39,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		labelValue                         = trueLabelValue
 		usageHalfLifeTimeSeconds     int32 = 60
 		usageSamplingIntervalSeconds int32 = 5
+		afsSamplingLQName                  = "lq-sampling"
 	)
 
 	JustAfterEach(func(ctx context.Context) {
@@ -187,48 +188,15 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		})
 
 		It("should advance lastUpdate timestamps at approximately the configured sampling interval", func(ctx context.Context) {
-			By("Creating Resource Flavor")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
-
-			By("Creating ClusterQueue with UsageBasedAdmissionFairSharing")
-			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithCPU("1").
-				WithMemory("200Mi").
-				WithFlavorName(resourceFlavor.Name).
-				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-			DeferCleanup(cleanupClusterQueue)
-
-			By("Creating namespace")
-			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "afs-sampling-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
-			DeferCleanup(func(ctx context.Context) {
-				By(fmt.Sprintf("Deleting namespace %s", namespace.Name))
-				err := kubeClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{})
-				Expect(err).NotTo(HaveOccurred(), "Failed to delete namespace")
-				testutils.WaitForAllPodsInNamespaceDeleted(ctx, clients.GenericClient, namespace)
-			})
-
-			By("Creating LocalQueue")
-			lq, cleanupLQ, err := testutils.NewLocalQueue(namespace.Name, "lq-sampling").
-				WithClusterQueue(clusterQueue.Name).
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
-			DeferCleanup(cleanupLQ)
+			_, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"afs-sampling-", afsSamplingLQName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("1").WithMemory("200Mi").
+						WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing)
+				})
 
 			By("Creating a long-running job to generate usage")
-			job, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-sampling", namespace.Name, lq.Name, "500m", "50Mi"), metav1.CreateOptions{})
+			job, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-sampling", namespace.Name, afsSamplingLQName, "500m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job")
 
 			By("Verifying job workload is admitted")
@@ -242,7 +210,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			By("Waiting for initial lastUpdate to appear on LocalQueue status")
 			var firstUpdate metav1.Time
 			Eventually(func() bool {
-				lqStatus, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, lq.Name, metav1.GetOptions{})
+				lqStatus, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, afsSamplingLQName, metav1.GetOptions{})
 				if err != nil || lqStatus.Status.FairSharing == nil || lqStatus.Status.FairSharing.AdmissionFairSharingStatus == nil {
 					return false
 				}
@@ -259,7 +227,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				previousUpdate := timestamps[len(timestamps)-1]
 				var nextUpdate metav1.Time
 				Eventually(func(g Gomega) {
-					lqStatus, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, lq.Name, metav1.GetOptions{})
+					lqStatus, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, afsSamplingLQName, metav1.GetOptions{})
 					g.Expect(err).NotTo(HaveOccurred(), "Failed to get LocalQueue status")
 					g.Expect(lqStatus.Status.FairSharing).NotTo(BeNil(), "FairSharing status should not be nil")
 					g.Expect(lqStatus.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil(), "AdmissionFairSharingStatus should not be nil")
@@ -836,34 +804,13 @@ func enableAdmissionFairSharing(ctx context.Context, afs ssv1.AdmissionFairShari
 }
 
 func newLongRunningJob(name, namespace, queueName, cpu, memory string) *batchv1.Job {
-	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				testutils.QueueLabel: queueName,
-			},
-		},
-		Spec: batchv1.JobSpec{
-			Suspend: ptr.To(true),
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:    "worker",
-							Image:   testutils.GetContainerImageForWorkloads(),
-							Command: []string{"sh", "-c", "sleep infinity"},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse(cpu),
-									corev1.ResourceMemory: resource.MustParse(memory),
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	builder := testutils.NewTestResourceBuilder(namespace, queueName)
+	job := builder.NewJob()
+	job.Name = name
+	job.Labels[testutils.QueueLabel] = queueName
+	job.Spec.Suspend = ptr.To(true)
+	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep infinity"}
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse(cpu)
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memory)
+	return job
 }

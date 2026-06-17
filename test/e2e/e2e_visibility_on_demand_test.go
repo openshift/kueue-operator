@@ -42,8 +42,9 @@ import (
 )
 
 const (
-	priorityName   = "kueue-visibility"
-	trueLabelValue = "true"
+	priorityName     = "kueue-visibility"
+	trueLabelValue   = "true"
+	visibilityLQName = "local-queue"
 )
 
 var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, func() {
@@ -577,38 +578,13 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 	})
 
 	When("PendingWorkloads Endpoints should be checked", func() {
-		labelKey := testutils.OpenShiftManagedLabel
-		labelValue := trueLabelValue
 
 		It("Should use the correct PriorityLevelConfiguration and FlowSchema for ClusterQueue and LocalQueue", func(ctx context.Context) {
 			// capturedHeaders stores HTTP response headers captured by headerCaptureRoundTripper during API calls.
 			var capturedHeaders = make(http.Header)
 
-			By("Creating Cluster Resources")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
-			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-			DeferCleanup(cleanupClusterQueue)
-
-			By("Creating Namespaces and LocalQueues")
-			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "namespace-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
-			})
-
-			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
-			DeferCleanup(cleanupLocalQueue)
+			clusterQueue, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"namespace-", "local-queue")
 
 			By("Creating RBAC kueue-batch-admin-role for Visibility API")
 			cleanupClusterRoleBinding, err := createClusterRoleBinding(ctx, "default", namespace.Name, "kueue-batch-admin-role")
@@ -659,9 +635,9 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 			By("Getting the pending workloads for the LocalQueue API response")
 			Eventually(func() error {
-				_, err = testUserVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, localQueue.Name, metav1.GetOptions{})
+				_, err = testUserVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, visibilityLQName, metav1.GetOptions{})
 				return err
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", visibilityLQName)
 
 			By("Extracting response headers from API call")
 			priorityLevelUIDHeaderLocalQueue := capturedHeaders.Get("X-Kubernetes-Pf-Prioritylevel-Uid")
@@ -1020,31 +996,12 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 		It("Should show on pending workloads list for local queue and cluster queue", func(ctx context.Context) {
 			var clusterPendingWorkloads *visibilityv1beta2.PendingWorkloadsSummary
 			var localPendingWorkloads *visibilityv1beta2.PendingWorkloadsSummary
-			By("Creating Cluster Resources")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
-			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().WithGenerateName().WithCPU("40m").WithMemory("512Mi").WithFlavorName(resourceFlavor.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-			DeferCleanup(cleanupClusterQueue)
 
-			By("Creating Namespaces and LocalQueues")
-			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "test-namespace-",
-					Labels: map[string]string{
-						testutils.OpenShiftManagedLabel: trueLabelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
-			})
-
-			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
-			DeferCleanup(cleanupLocalQueue)
+			clusterQueue, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"test-namespace-", visibilityLQName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("40m").WithMemory("512Mi")
+				})
 
 			By("Creating RBAC kueue-batch-admin-role for Visibility API")
 			serviceAccountAdmin, err := createServiceAccount(ctx, namespace.Name)
@@ -1071,7 +1028,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			Expect(err).NotTo(HaveOccurred(), "Failed to create visibility client for system:serviceaccount:%s:%s", namespace.Name, serviceAccountUser.Name)
 
 			By("Creating custom jobset")
-			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			builder := testutils.NewTestResourceBuilder(namespace.Name, visibilityLQName)
 			jobset := builder.NewJobSet()
 			Expect(genericClient.Create(ctx, jobset)).To(Succeed(), "Failed to create jobset")
 			defer testutils.CleanUpObject(ctx, genericClient, jobset)
@@ -1079,14 +1036,14 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			By("Verifying all pending workloads are created")
 			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespace.Name, jobset.GetUID())
 
-			Byf("Checking the pending workloads for local queue %s in namespace %s", localQueue.Name, namespace.Name)
+			Byf("Checking the pending workloads for local queue %s in namespace %s", visibilityLQName, namespace.Name)
 			Eventually(func() error {
-				localPendingWorkloads, err = userVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, localQueue.Name, metav1.GetOptions{})
+				localPendingWorkloads, err = userVisibilityClient.LocalQueues(namespace.Name).GetPendingWorkloadsSummary(ctx, visibilityLQName, metav1.GetOptions{})
 				return err
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", localQueue.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Failed to get pending workloads for LocalQueue %s", visibilityLQName)
 
 			By("Verifying pending workloads for LocalQueue")
-			Expect(localPendingWorkloads.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workloads on LocalQueue %s", localQueue.Name))
+			Expect(localPendingWorkloads.Items).To(HaveLen(1), fmt.Sprintf("Expected 1 pending workloads on LocalQueue %s", visibilityLQName))
 
 			Byf("Checking the pending workloads for cluster queue %s", clusterQueue.Name)
 			Eventually(func() error {
