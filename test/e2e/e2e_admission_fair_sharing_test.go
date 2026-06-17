@@ -61,10 +61,10 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
 			DeferCleanup(cleanupResourceFlavor)
 
-			By("Creating ClusterQueue with 2 CPUs and UsageBasedAdmissionFairSharing")
+			By("Creating ClusterQueue with 1 CPU and UsageBasedAdmissionFairSharing")
 			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
 				WithGenerateName().
-				WithCPU("2").
+				WithCPU("1").
 				WithMemory("200Mi").
 				WithFlavorName(resourceFlavor.Name).
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
@@ -105,15 +105,15 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue light")
 			DeferCleanup(cleanupLQLight)
 
-			By("Creating Job1 on lq-heavy consuming 1 CPU (long-running)")
-			job1, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-1", namespace.Name, lqHeavy.Name, "1", "50Mi"), metav1.CreateOptions{})
+			By("Creating Job1 on lq-heavy consuming 500m CPU (long-running)")
+			job1, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-1", namespace.Name, lqHeavy.Name, "500m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job on heavy queue")
 
 			By("Verifying Job1 workload is admitted")
 			checkWorkloadCondition(ctx, namespace.Name, string(job1.UID), kueuev1beta2.WorkloadAdmitted, "job-heavy-1")
 
-			By("Creating Job2 on lq-light consuming 1 CPU (long-running)")
-			job2, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-1", namespace.Name, lqLight.Name, "1", "50Mi"), metav1.CreateOptions{})
+			By("Creating Job2 on lq-light consuming 500m CPU (long-running)")
+			job2, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-1", namespace.Name, lqLight.Name, "500m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job on light queue")
 
 			By("Verifying Job2 workload is admitted")
@@ -146,11 +146,11 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-light should have consumedResources.cpu > 0")
 
 			By("Creating Job3 on lq-heavy (pending, no quota available)")
-			job3, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-2", namespace.Name, lqHeavy.Name, "800m", "100Mi"), metav1.CreateOptions{})
+			job3, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-2", namespace.Name, lqHeavy.Name, "400m", "100Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on heavy queue")
 
 			By("Creating Job4 on lq-light (pending, no quota available)")
-			job4, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-2", namespace.Name, lqLight.Name, "800m", "50Mi"), metav1.CreateOptions{})
+			job4, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-2", namespace.Name, lqLight.Name, "400m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on light queue")
 
 			By("Waiting for both pending jobs to be Suspended")
@@ -169,7 +169,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 					"Job4 on lq-light should remain suspended")
 			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "Pending jobs should stay suspended while CQ is full")
 
-			By("Deleting Job1 (heavy) to free 1 CPU")
+			By("Deleting Job1 (heavy) to free 500m CPU")
 			err = kubeClient.BatchV1().Jobs(namespace.Name).Delete(ctx, job1.Name, metav1.DeleteOptions{
 				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
 			})
@@ -195,7 +195,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			By("Creating ClusterQueue with UsageBasedAdmissionFairSharing")
 			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
 				WithGenerateName().
-				WithCPU("2").
+				WithCPU("1").
 				WithMemory("200Mi").
 				WithFlavorName(resourceFlavor.Name).
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
@@ -228,7 +228,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			DeferCleanup(cleanupLQ)
 
 			By("Creating a long-running job to generate usage")
-			job, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-sampling", namespace.Name, lq.Name, "1", "50Mi"), metav1.CreateOptions{})
+			job, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-sampling", namespace.Name, lq.Name, "500m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job")
 
 			By("Verifying job workload is admitted")
@@ -291,10 +291,10 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
 			DeferCleanup(cleanupResourceFlavor)
 
-			By("Creating ClusterQueue with 2 CPUs and UsageBasedAdmissionFairSharing")
+			By("Creating ClusterQueue with 1 CPU and UsageBasedAdmissionFairSharing")
 			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
 				WithGenerateName().
-				WithCPU("2").
+				WithCPU("1").
 				WithMemory("2Gi").
 				WithFlavorName(resourceFlavor.Name).
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
@@ -333,11 +333,11 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue lq2")
 			DeferCleanup(cleanupLQ2)
 
-			By("Saturating the ClusterQueue with 2 jobs from lq1 (2/2 CPU)")
-			job1, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job1", namespace.Name, lq1.Name, "1", "200Mi"), metav1.CreateOptions{})
+			By("Saturating the ClusterQueue with 2 jobs from lq1 (1/1 CPU)")
+			job1, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job1", namespace.Name, lq1.Name, "500m", "200Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job1")
 
-			job2, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job2", namespace.Name, lq1.Name, "1", "200Mi"), metav1.CreateOptions{})
+			job2, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job2", namespace.Name, lq1.Name, "500m", "200Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job2")
 
 			By("Verifying both jobs are admitted")
@@ -373,11 +373,11 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "lq2 should have zero CPU usage")
 
 			By("Creating job3 on lq1 FIRST (high-usage queue, should get lower priority)")
-			job3, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job3", namespace.Name, lq1.Name, "1", "200Mi"), metav1.CreateOptions{})
+			job3, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job3", namespace.Name, lq1.Name, "500m", "200Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job3")
 
 			By("Creating job4 on lq2 SECOND (zero-usage queue, should get higher priority)")
-			job4, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job4", namespace.Name, lq2.Name, "1", "200Mi"), metav1.CreateOptions{})
+			job4, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job4", namespace.Name, lq2.Name, "500m", "200Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job4")
 
 			By("Verifying both pending jobs are suspended")
@@ -400,7 +400,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				g.Expect(pendingWorkloads.Items[1].PositionInClusterQueue).To(Equal(int32(1)))
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Pending workloads should reflect usage-based ordering")
 
-			By("Deleting job1 to free 1 CPU and verify admission matches visibility ordering")
+			By("Deleting job1 to free 500m CPU and verify admission matches visibility ordering")
 			err = kubeClient.BatchV1().Jobs(namespace.Name).Delete(ctx, job1.Name, metav1.DeleteOptions{
 				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
 			})
@@ -443,10 +443,10 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
 			DeferCleanup(cleanupResourceFlavor)
 
-			By("Creating ClusterQueue with 2 CPUs and UsageBasedAdmissionFairSharing")
+			By("Creating ClusterQueue with 1 CPU and UsageBasedAdmissionFairSharing")
 			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
 				WithGenerateName().
-				WithCPU("2").
+				WithCPU("1").
 				WithMemory("2Gi").
 				WithFlavorName(resourceFlavor.Name).
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
@@ -487,15 +487,15 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue lq-cpu-light")
 			DeferCleanup(cleanupLQCPULight)
 
-			By("Creating job-heavy on lq-cpu-heavy consuming 1500m CPU and 500Mi memory")
-			jobHeavy, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy", namespace.Name, lqCPUHeavy.Name, "1500m", "500Mi"), metav1.CreateOptions{})
+			By("Creating job-heavy on lq-cpu-heavy consuming 700m CPU and 50Mi memory")
+			jobHeavy, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy", namespace.Name, lqCPUHeavy.Name, "700m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job on cpu-heavy queue")
 
 			By("Verifying job-heavy workload is admitted")
 			checkWorkloadCondition(ctx, namespace.Name, string(jobHeavy.UID), kueuev1beta2.WorkloadAdmitted, "job-heavy")
 
-			By("Creating job-light on lq-cpu-light consuming 500m CPU")
-			jobLight, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light", namespace.Name, lqCPULight.Name, "500m", "1Mi"), metav1.CreateOptions{})
+			By("Creating job-light on lq-cpu-light consuming 300m CPU")
+			jobLight, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light", namespace.Name, lqCPULight.Name, "300m", "1Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job on cpu-light queue")
 
 			By("Verifying job-light workload is admitted")
@@ -528,11 +528,11 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-cpu-light should have consumedResources.cpu > 0")
 
 			By("Creating job-heavy-pending on lq-cpu-heavy (pending, no quota available)")
-			jobHeavyPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-pending", namespace.Name, lqCPUHeavy.Name, "1500m", "500Mi"), metav1.CreateOptions{})
+			jobHeavyPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-pending", namespace.Name, lqCPUHeavy.Name, "700m", "50Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on cpu-heavy queue")
 
 			By("Creating job-light-pending on lq-cpu-light (pending, no quota available)")
-			jobLightPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-pending", namespace.Name, lqCPULight.Name, "1500m", "1Mi"), metav1.CreateOptions{})
+			jobLightPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-pending", namespace.Name, lqCPULight.Name, "700m", "1Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on cpu-light queue")
 
 			By("Waiting for both pending jobs to be Suspended")
@@ -551,7 +551,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 					"job-light-pending should remain suspended")
 			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "Pending jobs should stay suspended while CQ is full")
 
-			By("Deleting job-heavy to free 1500m CPU")
+			By("Deleting job-heavy to free 700m CPU")
 			err = kubeClient.BatchV1().Jobs(namespace.Name).Delete(ctx, jobHeavy.Name, metav1.DeleteOptions{
 				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
 			})
@@ -612,7 +612,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			cq, cleanupCQ, err = testutils.NewClusterQueue().
 				WithGenerateName().
 				WithFlavorName(rf.Name).
-				WithCPU("2").
+				WithCPU("1").
 				WithMemory("200Mi").
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
 				CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -639,8 +639,8 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		})
 
 		It("should increase then decrease consumedResources", func(ctx context.Context) {
-			By("Step 1: Creating job1 on lq-a to saturate the 2-CPU ClusterQueue")
-			job1 := newLongRunningJob("job1", ns.Name, lqA.Name, "2", "100Mi")
+			By("Step 1: Creating job1 on lq-a")
+			job1 := newLongRunningJob("job1", ns.Name, lqA.Name, "500m", "100Mi")
 
 			_, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -651,7 +651,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"job %s was not admitted", job1.Name)
 
-			By("waiting until afsHalfLifeSeconds for CPU consumedResources to accumulate to a measurable baseline (≥900m)")
+			By("waiting until afsHalfLifeSeconds for CPU consumedResources to accumulate to a measurable baseline (≥225m)")
 			var usageBeforeDelete float64
 			Eventually(func(g Gomega) {
 				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(ns.Name).Get(ctx, lqA.Name, metav1.GetOptions{})
@@ -659,8 +659,8 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				g.Expect(lq.Status.FairSharing).NotTo(BeNil())
 				g.Expect(lq.Status.FairSharing.AdmissionFairSharingStatus).NotTo(BeNil())
 				cpu := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceCPU]
-				g.Expect(cpu.AsApproximateFloat64()).Should(BeNumerically(">=", 0.9),
-					"consumedResources should reach ≥900m before being used as decay baseline")
+				g.Expect(cpu.AsApproximateFloat64()).Should(BeNumerically(">=", 0.225),
+					"consumedResources should reach ≥225m before being used as decay baseline")
 				usageBeforeDelete = cpu.AsApproximateFloat64()
 				GinkgoWriter.Printf("Result: consumedResources.cpu = %.3f cores\n", usageBeforeDelete)
 			}, afsHalfLifeSeconds*time.Second, afsSamplingSeconds*time.Second).
@@ -712,7 +712,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			cq, cleanupCQ, err := testutils.NewClusterQueue().
 				WithGenerateName().
 				WithFlavorName(rf.Name).
-				WithCPU("2").
+				WithCPU("1").
 				WithMemory("200Mi").
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
 				CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -745,8 +745,8 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(cleanupLQB)
 
-			By("Step 1: Creating job1 on lq-a to saturate the 2-CPU ClusterQueue")
-			job1 := newLongRunningJob("job1", ns.Name, lqA.Name, "2", "100Mi")
+			By("Step 1: Creating job1 on lq-a to saturate the 1-CPU ClusterQueue")
+			job1 := newLongRunningJob("job1", ns.Name, lqA.Name, "1", "100Mi")
 
 			_, err = kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -757,12 +757,12 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"job %s was not admitted", job1.Name)
 
-			job2 := newLongRunningJob("job2", ns.Name, lqA.Name, "2", "100Mi")
+			job2 := newLongRunningJob("job2", ns.Name, lqA.Name, "1", "100Mi")
 
 			_, err = kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			job3 := newLongRunningJob("job3", ns.Name, lqB.Name, "2", "100Mi")
+			job3 := newLongRunningJob("job3", ns.Name, lqB.Name, "1", "100Mi")
 
 			_, err = kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job3, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -773,7 +773,7 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, ns.Name, job3.Name)).To(BeTrue())
 			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "Newer jobs should stay suspended while CQ is full")
 
-			By("Deleting job1 to free 2 CPUs")
+			By("Deleting job1 to free 1 CPU")
 			err = kubeClient.BatchV1().Jobs(ns.Name).Delete(ctx, job1.Name, metav1.DeleteOptions{
 				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
 			})

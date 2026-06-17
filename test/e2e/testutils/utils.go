@@ -47,10 +47,17 @@ func IsHyperShiftCluster(configClient *configclientv1.ConfigV1Client) (bool, err
 var removeFinalizersMergePatch = []byte(`{"metadata":{"finalizers":[]}}`)
 
 func removeFinalizersWithPatch(patchFn func() error) {
-	err := patchFn()
-	if err != nil && !apierrors.IsNotFound(err) {
-		Expect(err).NotTo(HaveOccurred())
-	}
+	Eventually(func() error {
+		err := patchFn()
+		if err == nil || apierrors.IsNotFound(err) {
+			return nil
+		}
+		if apierrors.IsConflict(err) || apierrors.IsServerTimeout(err) || apierrors.IsServiceUnavailable(err) || apierrors.IsTooManyRequests(err) {
+			return err
+		}
+		Expect(err).NotTo(HaveOccurred(), "non-retryable error removing finalizers")
+		return nil
+	}, DeletionTime, DeletionPoll).Should(Succeed(), "failed to remove finalizers after retries")
 }
 
 func GetContainerImageForWorkloads() string {
