@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2026-06-11T19:23:16Z"
+    createdAt: "2026-06-12T20:43:50Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -149,7 +149,6 @@ spec:
           - serviceaccounts
           - events
           - pods
-          - secrets
           - configmaps
           verbs:
           - create
@@ -311,6 +310,15 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - delete
+          - get
+          - list
           - watch
         serviceAccountName: openshift-kueue-operator
     strategy: deployment
