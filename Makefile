@@ -42,11 +42,11 @@ $(call add-crd-gen,kueueoperator,./pkg/apis/kueueoperator/v1,./manifests/,./mani
 
 .PHONY: test-e2e
 test-e2e: ginkgo
-	${GINKGO} --keep-going --flake-attempts=3 --label-filter="!disruptive" -v ./test/e2e/...
+	${GINKGO} --keep-going --flake-attempts=3 --timeout=90m --label-filter="!disruptive" -v ./test/e2e/...
 
 .PHONY: test-e2e-disruptive
 test-e2e-disruptive: ginkgo
-	${GINKGO} --keep-going --flake-attempts=3 --label-filter="disruptive" -v ./test/e2e/...
+	${GINKGO} --keep-going --flake-attempts=3 --timeout=90m --label-filter="disruptive" -v ./test/e2e/...
 
 regen-crd:
 	go run ./vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd paths=./pkg/apis/kueueoperator/v1/... output:crd:dir=./manifests
@@ -227,17 +227,17 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="!disruptive && !flaky" --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --timeout=90m --label-filter="!disruptive && !flaky" --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-ci-test-dra
 e2e-ci-test-dra: ginkgo
 	@echo "Running DRA e2e tests..."
-	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="dra" --junit-report=${ARTIFACT_DIR}/e2e-dra-junit.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --timeout=90m --label-filter="dra" --junit-report=${ARTIFACT_DIR}/e2e-dra-junit.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-ci-test-disruptive
 e2e-ci-test-disruptive: ginkgo
 	@echo "Running operator e2e tests disuptive..."
-	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="disruptive && !flaky" --junit-report=report.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --timeout=90m --label-filter="disruptive && !flaky" --junit-report=report.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-upstream-test
 e2e-upstream-test: ginkgo
