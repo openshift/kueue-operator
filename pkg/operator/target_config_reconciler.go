@@ -94,6 +94,10 @@ const (
 	keyCaCrt                        = "ca.crt"
 	keyTlsCrt                       = "tls.crt"
 	keyTlsKey                       = "tls.key"
+
+	kueueManagerRoleName                    = "kueue-manager-role"
+	kueueMutatingWebhookConfigurationName   = "kueue-mutating-webhook-configuration"
+	kueueValidatingWebhookConfigurationName = "kueue-validating-webhook-configuration"
 )
 
 type TargetConfigReconciler struct {
@@ -1548,6 +1552,11 @@ func (c *TargetConfigReconciler) manageClusterRoles(ctx context.Context, specAnn
 		required.OwnerReferences = []metav1.OwnerReference{
 			ownerReference,
 		}
+		if required.Name == kueueManagerRoleName {
+			if err := scopeManagerRoleResourceNames(required); err != nil {
+				return fmt.Errorf("failed to scope manager role resource names: %w", err)
+			}
+		}
 
 		role, _, err := c.applyClusterRoleWithCache(ctx, required)
 		if err != nil {
@@ -1560,6 +1569,73 @@ func (c *TargetConfigReconciler) manageClusterRoles(ctx context.Context, specAnn
 		specAnnotations["clusterrole/"+role.Name] = hash
 	}
 	return nil
+}
+
+// kueueCRDNames returns the names of all non-alpha Kueue CRDs by reading the
+// embedded CRD assets, keeping the list in sync with deployed resources.
+func kueueCRDNames() ([]string, error) {
+	crdDir := "assets/kueue-operator/crds"
+	files, err := bindata.AssetDir(crdDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read crd directory: %w", err)
+	}
+
+	var names []string
+	for _, file := range files {
+		assetPath := filepath.Join(crdDir, file)
+		crd := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
+
+		isAlpha := false
+		for _, version := range crd.Spec.Versions {
+			if strings.HasPrefix(version.Name, "v1alpha") {
+				isAlpha = true
+				break
+			}
+		}
+		if isAlpha {
+			continue
+		}
+		names = append(names, crd.Name)
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
+// scopeManagerRoleResourceNames restricts the webhook configuration and CRD
+// rules to only the resources owned by Kueue, preventing the controller from
+// modifying other operators' webhook configurations or CRDs.
+func scopeManagerRoleResourceNames(role *rbacv1.ClusterRole) error {
+	crdNames, err := kueueCRDNames()
+	if err != nil {
+		return fmt.Errorf("failed to derive CRD resource names: %w", err)
+	}
+
+	for i := range role.Rules {
+		rule := &role.Rules[i]
+		if isWebhookConfigurationRule(rule) {
+			rule.ResourceNames = []string{
+				kueueMutatingWebhookConfigurationName,
+				kueueValidatingWebhookConfigurationName,
+			}
+		}
+		if isCRDRule(rule) {
+			rule.ResourceNames = crdNames
+		}
+	}
+	return nil
+}
+
+// isWebhookConfigurationRule returns true if the rule grants access to webhook configurations.
+func isWebhookConfigurationRule(rule *rbacv1.PolicyRule) bool {
+	return slices.Contains(rule.APIGroups, "admissionregistration.k8s.io") &&
+		(slices.Contains(rule.Resources, "mutatingwebhookconfigurations") ||
+			slices.Contains(rule.Resources, "validatingwebhookconfigurations"))
+}
+
+// isCRDRule returns true if the rule grants access to custom resource definitions.
+func isCRDRule(rule *rbacv1.PolicyRule) bool {
+	return slices.Contains(rule.APIGroups, "apiextensions.k8s.io") &&
+		slices.Contains(rule.Resources, "customresourcedefinitions")
 }
 
 func (c *TargetConfigReconciler) manageNetworkPolicies(ctx context.Context, specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
@@ -1745,7 +1821,7 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ctx context
 			{
 				APIGroups: []string{"config.openshift.io"},
 				Resources: []string{"infrastructures", "apiservers"},
-				Verbs:     []string{"get", "watch", "list"},
+				Verbs:     []string{"get", "watch", "list"}, //nolint:goconst
 			},
 		},
 	}
