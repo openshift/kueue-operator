@@ -36,8 +36,7 @@ import (
 var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 	var (
 		initialKueueInstance *ssv1.Kueue
-		labelKey             = testutils.OpenShiftManagedLabel
-		labelValue           = trueLabelValue
+		gangLocalQueueName   = "local-queue"
 	)
 
 	When("Policy is ByWorkload and Admission is Sequential", func() {
@@ -79,36 +78,14 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 		})
 
 		It("should apply all-or-nothing admission for workloads", func(ctx context.Context) {
-			By("Creating Cluster Resources")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
-			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
-				WithGenerateName().WithCPU("500m").WithMemory("512Mi").
-				WithFlavorName(resourceFlavor.Name).
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-			DeferCleanup(cleanupClusterQueue)
-
-			By("Creating Namespaces and LocalQueues")
-			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "gangscheduling-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
-			})
-			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
-			DeferCleanup(cleanupLocalQueue)
+			_, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"gangscheduling-", gangLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("500m").WithMemory("512Mi")
+				})
 
 			By("Admitting a Job that consumes partial quota")
-			cleanupJob1, job1, err := createJobGang(ctx, "job-1", namespace.Name, localQueue.Name, "250m", "128Mi", 1)
+			cleanupJob1, job1, err := createJobGang(ctx, "job-1", namespace.Name, gangLocalQueueName, "250m", "128Mi", 1)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first job")
 			DeferCleanup(cleanupJob1)
 
@@ -116,7 +93,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job1.UID))
 
 			By("Creating a gang job (parallelism=2) that exceeds remaining quota")
-			cleanupJob2, job2, err := createJobGang(ctx, "job-gang", namespace.Name, localQueue.Name, "150m", "128Mi", 2)
+			cleanupJob2, job2, err := createJobGang(ctx, "job-gang", namespace.Name, gangLocalQueueName, "150m", "128Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create gang job")
 			DeferCleanup(cleanupJob2)
 
@@ -155,39 +132,14 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 		})
 
 		It("should admit workloads sequentially even when quota is available", func(ctx context.Context) {
-
-			By("Creating Cluster Resources with enough quota for multiple jobs")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
-
-			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
-				WithGenerateName().WithCPU("500m").WithMemory("512Mi").
-				WithFlavorName(resourceFlavor.Name).
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-			DeferCleanup(cleanupClusterQueue)
-
-			By("Creating Namespace and LocalQueue")
-			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "sequential-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
-			})
-
-			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
-			DeferCleanup(cleanupLocalQueue)
+			_, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"sequential-", gangLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("500m").WithMemory("512Mi")
+				})
 
 			By("Creating the first gang job (parallelism=2) with delayed pod readiness")
-			cleanupJob1, createdJob1, err := createJobGang(ctx, "job-sequential-1", namespace.Name, localQueue.Name, "100m", "100Mi", 2)
+			cleanupJob1, createdJob1, err := createJobGang(ctx, "job-sequential-1", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first gang job")
 			DeferCleanup(cleanupJob1)
 
@@ -195,7 +147,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
 
 			By("Creating the second gang job (parallelism=2) while first gang job pods are not yet ready")
-			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-sequential-2", namespace.Name, localQueue.Name, "100m", "100Mi", 2)
+			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-sequential-2", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second gang job")
 			DeferCleanup(cleanupJob2)
 
@@ -271,38 +223,14 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 		})
 
 		It("should admit workloads in parallel without waiting for pods to be ready", func(ctx context.Context) {
-			By("Creating Cluster Resources with enough quota for multiple jobs")
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
-			DeferCleanup(cleanupResourceFlavor)
-
-			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
-				WithGenerateName().WithCPU("500m").WithMemory("512Mi").
-				WithFlavorName(resourceFlavor.Name).
-				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create cluster queue")
-			DeferCleanup(cleanupClusterQueue)
-
-			By("Creating Namespace and LocalQueue")
-			namespace, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "parallel-",
-					Labels: map[string]string{
-						labelKey: labelValue,
-					},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func(ctx context.Context) {
-				deleteNamespace(ctx, namespace)
-			})
-
-			localQueue, cleanupLocalQueue, err := testutils.NewLocalQueue(namespace.Name, "local-queue").WithClusterQueue(clusterQueue.Name).CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue")
-			DeferCleanup(cleanupLocalQueue)
+			_, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"parallel-", gangLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("500m").WithMemory("512Mi")
+				})
 
 			By("Creating the first gang job (parallelism=2) with delayed pod readiness")
-			cleanupJob1, createdJob1, err := createJobGang(ctx, "job-parallel-1", namespace.Name, localQueue.Name, "100m", "100Mi", 2)
+			cleanupJob1, createdJob1, err := createJobGang(ctx, "job-parallel-1", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first gang job")
 			DeferCleanup(cleanupJob1)
 
@@ -310,7 +238,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
 
 			By("Creating the second gang job (parallelism=2) while first gang job pods are not yet ready")
-			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-parallel-2", namespace.Name, localQueue.Name, "100m", "100Mi", 2)
+			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-parallel-2", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second gang job")
 			DeferCleanup(cleanupJob2)
 
@@ -337,50 +265,29 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 // Parallelism specifies how many pods should run in parallel (for gang scheduling tests).
 // CPU and memory specify the resource requests per pod.
 func createJobGang(ctx context.Context, name, namespace, queueName, cpu, memory string, parallelism int32) (func(context.Context), *batchv1.Job, error) {
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				testutils.QueueLabel: queueName,
-			},
-		},
-		Spec: batchv1.JobSpec{
-			Parallelism: ptr.To(parallelism),
-			Completions: ptr.To(parallelism),
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					InitContainers: []corev1.Container{
-						{
-							Name:    "delay-ready",
-							Image:   "quay.io/prometheus/busybox:latest",
-							Command: []string{"sh", "-c", "echo 'Delaying readiness...'; sleep 30"},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
-									corev1.ResourceMemory: resource.MustParse("64Mi"),
-								},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:    "main",
-							Image:   "quay.io/prometheus/busybox:latest",
-							Command: []string{"sh", "-c", "echo 'Running main container'"},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse(cpu),
-									corev1.ResourceMemory: resource.MustParse(memory),
-								},
-							},
-						},
-					},
+	builder := testutils.NewTestResourceBuilder(namespace, queueName)
+	job := builder.NewJob()
+	job.Name = name
+	job.Labels[testutils.QueueLabel] = queueName
+	job.Spec.Parallelism = ptr.To(parallelism)
+	job.Spec.Completions = ptr.To(parallelism)
+	job.Spec.Template.Spec.InitContainers = []corev1.Container{
+		{
+			Name:    "delay-ready",
+			Image:   "quay.io/prometheus/busybox:latest",
+			Command: []string{"sh", "-c", "echo 'Delaying readiness...'; sleep 30"},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
 				},
 			},
 		},
 	}
+	job.Spec.Template.Spec.Containers[0].Image = "quay.io/prometheus/busybox:latest"
+	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo 'Running main container'"}
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse(cpu)
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memory)
 
 	createdJob, err := kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {

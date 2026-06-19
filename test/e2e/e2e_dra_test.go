@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -45,12 +44,6 @@ const (
 	draLocalQueueName      = "dra-test-queue"
 )
 
-// setDRAJobCPU reduces CPU request for DRA test jobs to fit on GPU nodes
-// where NVIDIA operator daemonsets consume most of the CPU budget.
-func setDRAJobCPU(job *batchv1.Job) {
-	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
-}
-
 var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered, func() {
 	var (
 		gpuCount             int
@@ -62,18 +55,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 	})
 
 	BeforeAll(func(ctx context.Context) {
-		// Check if DRA APIs are available
-		draSupported := false
-		apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
-		if err == nil {
-			for _, apiResource := range apiResourceLists.APIResources {
-				if apiResource.Kind == testutils.DeviceClassKind {
-					draSupported = true
-					break
-				}
-			}
-		}
-		if !draSupported {
+		if !testutils.IsDRASupported(kubeClient) {
 			Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 		}
 
@@ -165,44 +147,21 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	When("basic DRA quota is configured", func() {
 		It("should admit job with ResourceClaimTemplate and account DRA quota correctly", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate for gpu.nvidia.com")
-			rct := newDRAResourceClaimTemplate("gpu-template-basic", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-basic", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating Job referencing ResourceClaimTemplate")
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
-			job := newDRAJob(builder, "dra-basic-job", "gpu-template-basic", draLocalQueueName)
+			job := builder.NewDRAJob("dra-basic-job", draLocalQueueName, "gpu-template-basic")
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -236,44 +195,20 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		})
 
 		It("should suspend job when DRA quota is exceeded", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
-			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate requesting more GPUs than quota allows")
-			rct := newDRAResourceClaimTemplate("gpu-template-exceed", ns.Name, 5) // quota is 1
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-exceed", ns.Name, draDeviceClassName, 5, "") // quota is 1
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating Job that exceeds DRA quota")
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
-			job := newDRAJob(builder, "dra-exceed-job", "gpu-template-exceed", draLocalQueueName)
+			job := builder.NewDRAJob("dra-exceed-job", draLocalQueueName, "gpu-template-exceed")
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -285,44 +220,21 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		})
 
 		It("should admit waiting job after DRA quota is freed", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			cq, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating shared ResourceClaimTemplate requesting 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-shared", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-shared", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating first job referencing shared template (fills 1/1 quota)")
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
-			job1 := newDRAJob(builder, "dra-fill-job-1", "gpu-template-shared", draLocalQueueName)
+			job1 := builder.NewDRAJob("dra-fill-job-1", draLocalQueueName, "gpu-template-shared")
 			createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob1.Namespace, createdJob1.Name)
@@ -354,7 +266,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Creating second job referencing same shared template (quota full, should be suspended)")
-			job2 := newDRAJob(builder, "dra-fill-job-2", "gpu-template-shared", draLocalQueueName)
+			job2 := builder.NewDRAJob("dra-fill-job-2", draLocalQueueName, "gpu-template-shared")
 			createdJob2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob2.Namespace, createdJob2.Name)
@@ -379,44 +291,21 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		})
 
 		It("should verify ClusterQueue shows correct DRA resource usage", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			cq, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate for 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-usage", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-usage", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating Job")
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
-			job := newDRAJob(builder, "dra-usage-job", "gpu-template-usage", draLocalQueueName)
+			job := builder.NewDRAJob("dra-usage-job", draLocalQueueName, "gpu-template-usage")
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -449,44 +338,21 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	When("two containers share a single GPU", func() {
 		It("should admit job with two containers sharing a single GPU", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate for a single GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-shared-ctr", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-shared-ctr", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating Job with two containers sharing the same GPU claim")
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
-			job := newDRAJob(builder, "dra-shared-gpu-job", "gpu-template-shared-ctr", draLocalQueueName)
+			job := builder.NewDRAJob("dra-shared-gpu-job", draLocalQueueName, "gpu-template-shared-ctr")
 			job.Spec.Template.Spec.Containers = append(job.Spec.Template.Spec.Containers, corev1.Container{
 				Name:    "ctr1",
 				Image:   testutils.GetContainerImageForWorkloads(),
@@ -542,39 +408,16 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	When("different workload types use DRA resources", func() {
 		It("should admit DRA workloads for Pod type", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate requesting 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-workload-types", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-workload-types", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
@@ -599,39 +442,16 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		})
 
 		It("should admit DRA workloads for Deployment type", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate requesting 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-workload-types", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-workload-types", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
@@ -657,39 +477,16 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 		})
 
 		It("should admit DRA workloads for StatefulSet type", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
 			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating ResourceClaimTemplate requesting 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-workload-types", ns.Name, 1)
-			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+			rct := testutils.NewResourceClaimTemplate("gpu-template-workload-types", ns.Name, draDeviceClassName, 1, "")
+			_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
@@ -718,35 +515,11 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	When("deviceClassMappings are misconfigured", func() {
 		It("should not admit DRA workloads when deviceClassMappings point to wrong DeviceClass", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
-			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			cq, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
-
-			lq := testutils.NewLocalQueue(ns.Name, draLocalQueueName).WithClusterQueue(cq.Name)
-			_, cleanupLQ, err := lq.CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Saving current Kueue config before modifying deviceClassMappings")
 			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
@@ -774,14 +547,14 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Creating ResourceClaimTemplate for DRA job")
-			rct := newDRAResourceClaimTemplate("gpu-template-wrong-class", ns.Name, 1)
+			rct := testutils.NewResourceClaimTemplate("gpu-template-wrong-class", ns.Name, draDeviceClassName, 1, "")
 			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating DRA job with wrong DeviceClass mapping")
 			wrongClassStart := metav1.Now()
 			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
-			job := newDRAJob(builder, "dra-wrong-class", "gpu-template-wrong-class", draLocalQueueName)
+			job := builder.NewDRAJob("dra-wrong-class", draLocalQueueName, "gpu-template-wrong-class")
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -798,22 +571,12 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 	When("preemption is enabled", func() {
 		It("should preempt low-priority DRA workload when high-priority DRA workload is submitted", func(ctx context.Context) {
-			By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
-			kueueClient := clients.UpstreamKueueClient
-
-			resourceFlavor, cleanupResourceFlavor, err := testutils.NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupResourceFlavor)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: draTestNamespacePrefix,
-					Labels:       map[string]string{testutils.OpenShiftManagedLabel: "true"},
-				},
-			}
-			cleanupNs, err := testutils.CreateNamespace(kubeClient, ns)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNs)
+			_, ns := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				draTestNamespacePrefix, draLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
+						WithDRAResource(draLogicalResource, "1")
+				})
 
 			By("Creating PriorityClasses")
 			lowPC, cleanupLowPC, err := createPriorityClass(ctx, 100, "Low priority for DRA preemption")
@@ -823,29 +586,14 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(cleanupHighPC)
 
-			By("Creating ClusterQueue with preemption enabled and DRA quota")
-			preemptCQ, cleanupCQ, err := testutils.NewClusterQueue().
-				WithGenerateName().
-				WithFlavorName(resourceFlavor.Name).
-				WithPreemption(kueuev1beta2.PreemptionPolicyLowerPriority).
-				WithDRAResource(draLogicalResource, "1").
-				CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupCQ)
-
-			By("Creating LocalQueue for preemption test")
-			preemptLQ, cleanupLQ, err := testutils.NewLocalQueue(ns.Name, "").WithGenerateName().WithClusterQueue(preemptCQ.Name).CreateWithObject(ctx, kueueClient)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupLQ)
-
 			By("Creating ResourceClaimTemplate")
-			rct := newDRAResourceClaimTemplate("gpu-template-preempt", ns.Name, 1)
+			rct := testutils.NewResourceClaimTemplate("gpu-template-preempt", ns.Name, draDeviceClassName, 1, "")
 			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Submitting low-priority DRA job that fills the 1-GPU quota")
-			builder := testutils.NewTestResourceBuilder(ns.Name, preemptLQ.Name)
-			lowJob := newDRAJob(builder, "dra-low-prio", "gpu-template-preempt", preemptLQ.Name)
+			builder := testutils.NewTestResourceBuilder(ns.Name, draLocalQueueName)
+			lowJob := builder.NewDRAJob("dra-low-prio", draLocalQueueName, "gpu-template-preempt")
 			lowJob.Spec.Template.Spec.PriorityClassName = lowPC.Name
 			createdLowJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, lowJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -860,7 +608,8 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Submitting high-priority DRA job that triggers preemption")
-			highJob := newDRAJob(builder, "dra-high-prio", "gpu-template-preempt", preemptLQ.Name)
+			highJob := builder.NewDRAJob("dra-high-prio", draLocalQueueName, "gpu-template-preempt")
+			highJob.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
 			highJob.Spec.Template.Spec.PriorityClassName = highPC.Name
 			createdHighJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, highJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -934,13 +683,13 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			DeferCleanup(cleanupLQ)
 
 			By("Creating ResourceClaimTemplate")
-			rct := newDRAResourceClaimTemplate("gpu-template-gang", ns.Name, 1)
+			rct := testutils.NewResourceClaimTemplate("gpu-template-gang", ns.Name, draDeviceClassName, 1, "")
 			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Submitting single-pod DRA job that fills 1 of 2 GPUs")
 			builder := testutils.NewTestResourceBuilder(ns.Name, gangLQ.Name)
-			singleJob := newDRAJob(builder, "dra-single-gpu", "gpu-template-gang", gangLQ.Name)
+			singleJob := builder.NewDRAJob("dra-single-gpu", gangLQ.Name, "gpu-template-gang")
 			createdSingleJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, singleJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
@@ -952,7 +701,8 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
 
 			By("Submitting gang DRA job (parallelism=2, needs 2 GPUs, only 1 free)")
-			gangJob := newDRAJob(builder, "dra-gang-job", "gpu-template-gang", gangLQ.Name)
+			gangJob := builder.NewDRAJob("dra-gang-job", gangLQ.Name, "gpu-template-gang")
+			gangJob.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
 			gangJob.Spec.Parallelism = ptr.To(int32(2))
 			gangJob.Spec.Completions = ptr.To(int32(2))
 			createdGangJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, gangJob, metav1.CreateOptions{})
@@ -1047,18 +797,20 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			DeferCleanup(cleanupLQCPU)
 
 			By("Creating ResourceClaimTemplate for 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-afs", ns.Name, 1)
+			rct := testutils.NewResourceClaimTemplate("gpu-template-afs", ns.Name, draDeviceClassName, 1, "")
 			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Submitting GPU+CPU DRA jobs to lq-gpu")
 			builder := testutils.NewTestResourceBuilder(ns.Name, lqGPU.Name)
-			jobGPU1 := newDRAJob(builder, "job-gpu-afs-1", "gpu-template-afs", lqGPU.Name)
+			jobGPU1 := builder.NewDRAJob("job-gpu-afs-1", lqGPU.Name, "gpu-template-afs")
+			jobGPU1.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
 			createdJobGPU1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU1.Namespace, createdJobGPU1.Name)
 
-			jobGPU2 := newDRAJob(builder, "job-gpu-afs-2", "gpu-template-afs", lqGPU.Name)
+			jobGPU2 := builder.NewDRAJob("job-gpu-afs-2", lqGPU.Name, "gpu-template-afs")
+			jobGPU2.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
 			createdJobGPU2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU2.Namespace, createdJobGPU2.Name)
@@ -1066,7 +818,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			By("Submitting CPU-only job to lq-cpu")
 			cpuBuilder := testutils.NewTestResourceBuilder(ns.Name, lqCPU.Name)
 			jobCPU := cpuBuilder.NewJob()
-			setDRAJobCPU(jobCPU)
+			jobCPU.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
 			jobCPU.Name = "job-cpu-afs"
 			jobCPU.Labels[testutils.QueueLabel] = lqCPU.Name
 			jobCPU.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
@@ -1165,18 +917,20 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			DeferCleanup(cleanupLQCPU)
 
 			By("Creating ResourceClaimTemplate for 1 GPU")
-			rct := newDRAResourceClaimTemplate("gpu-template-afs-order", ns.Name, 1)
+			rct := testutils.NewResourceClaimTemplate("gpu-template-afs-order", ns.Name, draDeviceClassName, 1, "")
 			_, err = kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Submitting GPU+CPU DRA jobs to lq-gpu to build usage history")
 			builder := testutils.NewTestResourceBuilder(ns.Name, lqGPU.Name)
-			jobGPU1 := newDRAJob(builder, "job-gpu-order-1", "gpu-template-afs-order", lqGPU.Name)
+			jobGPU1 := builder.NewDRAJob("job-gpu-order-1", lqGPU.Name, "gpu-template-afs-order")
+			jobGPU1.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
 			createdJobGPU1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU1, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU1.Namespace, createdJobGPU1.Name)
 
-			jobGPU2 := newDRAJob(builder, "job-gpu-order-2", "gpu-template-afs-order", lqGPU.Name)
+			jobGPU2 := builder.NewDRAJob("job-gpu-order-2", lqGPU.Name, "gpu-template-afs-order")
+			jobGPU2.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
 			createdJobGPU2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, jobGPU2, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobGPU2.Namespace, createdJobGPU2.Name)
@@ -1184,7 +938,7 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			By("Submitting CPU-only job to lq-cpu to build usage history")
 			cpuBuilder := testutils.NewTestResourceBuilder(ns.Name, lqCPU.Name)
 			jobCPU := cpuBuilder.NewJob()
-			setDRAJobCPU(jobCPU)
+			jobCPU.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
 			jobCPU.Name = "job-cpu-order"
 			jobCPU.Labels[testutils.QueueLabel] = lqCPU.Name
 			jobCPU.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
@@ -1319,32 +1073,6 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 
 })
 
-// newDRAResourceClaimTemplate creates a ResourceClaimTemplate that requests the given number of GPUs
-// from the gpu.nvidia.com DeviceClass.
-func newDRAResourceClaimTemplate(name, namespace string, gpuCount int64) *resourcev1.ResourceClaimTemplate {
-	return &resourcev1.ResourceClaimTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: resourcev1.ResourceClaimTemplateSpec{
-			Spec: resourcev1.ResourceClaimSpec{
-				Devices: resourcev1.DeviceClaim{
-					Requests: []resourcev1.DeviceRequest{
-						{
-							Name: "gpu-req",
-							Exactly: &resourcev1.ExactDeviceRequest{
-								DeviceClassName: draDeviceClassName,
-								Count:           gpuCount,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 // waitForPodWorkloadAdmitted waits until a pod matching the label selector has
 // a corresponding admitted Kueue workload, correlating via OwnerReferences.
 func waitForPodWorkloadAdmitted(ctx context.Context, kubeClient *kubernetes.Clientset, kueueClient *upstreamkueueclient.Clientset, namespace, labelSelector string) {
@@ -1410,20 +1138,6 @@ func verifyNoResourceClaims(ctx context.Context, kubeClient *kubernetes.Clientse
 		}
 		g.Expect(filtered).To(BeEmpty(), "expected no ResourceClaims after %v in namespace %s", createdAfter.Time, namespace)
 	}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed())
-}
-
-// newDRAJob creates a Job with DRA ResourceClaim configuration for the given template.
-func newDRAJob(builder *testutils.TestResourceBuilder, name, templateName, queueName string) *batchv1.Job {
-	job := builder.NewJob()
-	setDRAJobCPU(job)
-	job.Name = name
-	job.Labels[testutils.QueueLabel] = queueName
-	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo Hello Kueue; sleep 10"}
-	job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
-		{Name: "gpu", ResourceClaimTemplateName: ptr.To(templateName)},
-	}
-	job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{{Name: "gpu"}}
-	return job
 }
 
 // restoreKueueConfig restores a Kueue CR config with retry on resourceVersion conflicts.
