@@ -54,18 +54,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 	})
 
 	BeforeAll(func(ctx context.Context) {
-		// Check if DRA APIs are available
-		draSupported := false
-		apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
-		if err == nil {
-			for _, apiResource := range apiResourceLists.APIResources {
-				if apiResource.Kind == testutils.DeviceClassKind {
-					draSupported = true
-					break
-				}
-			}
-		}
-		if !draSupported {
+		if !testutils.IsDRASupported(kubeClient) {
 			Skip("DRA APIs (resource.k8s.io/v1) not available on this cluster")
 		}
 
@@ -187,14 +176,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By("Creating Job with extended resource request nvidia.com/gpu")
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-		job := builder.NewJob()
-		setDRAJobCPU(job)
-		job.Name = "er-basic-job"
-		job.Labels[testutils.QueueLabel] = erLocalQueueName
-		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-		job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-		}
+		job := builder.NewDRAExtendedResourceJob("er-basic-job", erLocalQueueName, extendedResourceName, 1)
 		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -288,15 +270,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By(fmt.Sprintf("Creating Job requesting %d GPUs via extended resources (quota is %d)", maxGPUsPerNode+1, maxGPUsPerNode))
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-		job := builder.NewJob()
-		setDRAJobCPU(job)
-		job.Name = "er-exceed-job"
-		job.Labels[testutils.QueueLabel] = erLocalQueueName
-		exceededCount := *resource.NewQuantity(int64(maxGPUsPerNode+1), resource.DecimalSI)
-		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = exceededCount
-		job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			corev1.ResourceName(extendedResourceName): exceededCount,
-		}
+		job := builder.NewDRAExtendedResourceJob("er-exceed-job", erLocalQueueName, extendedResourceName, maxGPUsPerNode+1)
 		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -345,15 +319,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By(fmt.Sprintf("Creating first job requesting all %d GPUs via extended resources (fills quota)", maxGPUsPerNode))
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-		job1 := builder.NewJob()
-		setDRAJobCPU(job1)
-		job1.Name = "er-fill-job-1"
-		job1.Labels[testutils.QueueLabel] = erLocalQueueName
-		fillCount := *resource.NewQuantity(int64(maxGPUsPerNode), resource.DecimalSI)
-		job1.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = fillCount
-		job1.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			corev1.ResourceName(extendedResourceName): fillCount,
-		}
+		job1 := builder.NewDRAExtendedResourceJob("er-fill-job-1", erLocalQueueName, extendedResourceName, maxGPUsPerNode)
 		createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
@@ -371,14 +337,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 		By("Creating second job requesting 1 GPU via extended resources (quota full, should be suspended)")
-		job2 := builder.NewJob()
-		setDRAJobCPU(job2)
-		job2.Name = "er-fill-job-2"
-		job2.Labels[testutils.QueueLabel] = erLocalQueueName
-		job2.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-		job2.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-		}
+		job2 := builder.NewDRAExtendedResourceJob("er-fill-job-2", erLocalQueueName, extendedResourceName, 1)
 		createdJob2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
@@ -442,14 +401,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 		By("Creating Job with 1 GPU via extended resource request")
 		builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-		job := builder.NewJob()
-		setDRAJobCPU(job)
-		job.Name = "er-usage-job"
-		job.Labels[testutils.QueueLabel] = erLocalQueueName
-		job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-		job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-		}
+		job := builder.NewDRAExtendedResourceJob("er-usage-job", erLocalQueueName, extendedResourceName, 1)
 		createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -723,16 +675,9 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Submitting low-priority ER job that fills the 1-GPU quota")
 			builder := testutils.NewTestResourceBuilder(ns.Name, preemptLQ.Name)
-			lowJob := builder.NewJob()
-			setDRAJobCPU(lowJob)
-			lowJob.Name = "er-low-prio"
-			lowJob.Labels[testutils.QueueLabel] = preemptLQ.Name
+			lowJob := builder.NewDRAExtendedResourceJob("er-low-prio", preemptLQ.Name, extendedResourceName, 1)
 			lowJob.Spec.Template.Spec.PriorityClassName = lowPC.Name
 			lowJob.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 60"}
-			lowJob.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			lowJob.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
 			createdLowJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, lowJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdLowJob.Namespace, createdLowJob.Name)
@@ -777,16 +722,9 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Submitting high-priority ER job that triggers preemption")
-			highJob := builder.NewJob()
-			setDRAJobCPU(highJob)
-			highJob.Name = "er-high-prio"
-			highJob.Labels[testutils.QueueLabel] = preemptLQ.Name
+			highJob := builder.NewDRAExtendedResourceJob("er-high-prio", preemptLQ.Name, extendedResourceName, 1)
 			highJob.Spec.Template.Spec.PriorityClassName = highPC.Name
 			highJob.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 10"}
-			highJob.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			highJob.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
 			createdHighJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, highJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdHighJob.Namespace, createdHighJob.Name)
@@ -934,15 +872,8 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Submitting single-pod ER job that fills 1 of 2 GPUs")
 			builder := testutils.NewTestResourceBuilder(ns.Name, gangLQ.Name)
-			singleJob := builder.NewJob()
-			setDRAJobCPU(singleJob)
-			singleJob.Name = "er-single-gpu"
-			singleJob.Labels[testutils.QueueLabel] = gangLQ.Name
+			singleJob := builder.NewDRAExtendedResourceJob("er-single-gpu", gangLQ.Name, extendedResourceName, 1)
 			singleJob.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 60"}
-			singleJob.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			singleJob.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
 			createdSingleJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, singleJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdSingleJob.Namespace, createdSingleJob.Name)
@@ -955,17 +886,10 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Submitting gang ER job (parallelism=2, needs 2 GPUs, only 1 free)")
-			gangJob := builder.NewJob()
-			setDRAJobCPU(gangJob)
-			gangJob.Name = "er-gang-job"
-			gangJob.Labels[testutils.QueueLabel] = gangLQ.Name
+			gangJob := builder.NewDRAExtendedResourceJob("er-gang-job", gangLQ.Name, extendedResourceName, 1)
 			gangJob.Spec.Parallelism = ptr.To(int32(2))
 			gangJob.Spec.Completions = ptr.To(int32(2))
 			gangJob.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 60"}
-			gangJob.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			gangJob.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
 			createdGangJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, gangJob, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdGangJob.Namespace, createdGangJob.Name)
@@ -1100,15 +1024,8 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Submitting ER job requesting 1 GPU")
 			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-			job := builder.NewJob()
-			setDRAJobCPU(job)
-			job.Name = "er-cel-invalid-test"
-			job.Labels[testutils.QueueLabel] = erLocalQueueName
+			job := builder.NewDRAExtendedResourceJob("er-cel-invalid-test", erLocalQueueName, extendedResourceName, 1)
 			job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 30"}
-			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -1373,15 +1290,8 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Submitting ER job requesting 1 GPU")
 			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-			job := builder.NewJob()
-			setDRAJobCPU(job)
-			job.Name = "er-no-mapping-test"
-			job.Labels[testutils.QueueLabel] = erLocalQueueName
+			job := builder.NewDRAExtendedResourceJob("er-no-mapping-test", erLocalQueueName, extendedResourceName, 1)
 			job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "sleep 30"}
-			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
@@ -1543,14 +1453,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Creating Job with extended resource request nvidia.com/gpu")
 			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-			job := builder.NewJob()
-			setDRAJobCPU(job)
-			job.Name = "er-no-deviceclass"
-			job.Labels[testutils.QueueLabel] = erLocalQueueName
-			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
+			job := builder.NewDRAExtendedResourceJob("er-no-deviceclass", erLocalQueueName, extendedResourceName, 1)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(cleanupCtx context.Context) {
@@ -1694,14 +1597,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Creating Job with extended resource request nvidia.com/gpu")
 			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
-			job := builder.NewJob()
-			setDRAJobCPU(job)
-			job.Name = "er-late-deviceclass"
-			job.Labels[testutils.QueueLabel] = erLocalQueueName
-			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
+			job := builder.NewDRAExtendedResourceJob("er-late-deviceclass", erLocalQueueName, extendedResourceName, 1)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(cleanupCtx context.Context) {
@@ -1855,14 +1751,7 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 
 			By("Creating Job with both extended resource request and ResourceClaimTemplate")
 			builder := testutils.NewTestResourceBuilder(ns.Name, "er-mixed-queue")
-			job := builder.NewJob()
-			setDRAJobCPU(job)
-			job.Name = "er-mixed-job"
-			job.Labels[testutils.QueueLabel] = "er-mixed-queue"
-			job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResourceName)] = resource.MustParse("1")
-			job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-				corev1.ResourceName(extendedResourceName): resource.MustParse("1"),
-			}
+			job := builder.NewDRAExtendedResourceJob("er-mixed-job", "er-mixed-queue", extendedResourceName, 1)
 			job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
 				{Name: gpuDeviceType, ResourceClaimTemplateName: ptr.To("gpu-template-mixed")},
 			}

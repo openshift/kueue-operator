@@ -17,9 +17,12 @@
 package testutils
 
 import (
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -359,4 +362,66 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet(opts LeaderWorkerSetOptions) *l
 	}
 
 	return lws
+}
+
+// NewResourceClaimTemplate creates a ResourceClaimTemplate for DRA e2e tests.
+// If celExpression is empty, no CEL selector is added.
+func NewResourceClaimTemplate(name, namespace, deviceClass string, count int64, celExpression string) *resourcev1.ResourceClaimTemplate {
+	rct := &resourcev1.ResourceClaimTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: resourcev1.ResourceClaimTemplateSpec{
+			Spec: resourcev1.ResourceClaimSpec{
+				Devices: resourcev1.DeviceClaim{
+					Requests: []resourcev1.DeviceRequest{
+						{
+							Name: "gpu-req",
+							Exactly: &resourcev1.ExactDeviceRequest{
+								DeviceClassName: deviceClass,
+								Count:           count,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	if celExpression != "" {
+		rct.Spec.Spec.Devices.Requests[0].Exactly.Selectors = []resourcev1.DeviceSelector{
+			{CEL: &resourcev1.CELDeviceSelector{Expression: celExpression}},
+		}
+	}
+	return rct
+}
+
+// NewDRAExtendedResourceJob creates a Job with an extended resource request for DRA e2e tests.
+func (b *TestResourceBuilder) NewDRAExtendedResourceJob(name, queueName, extendedResource string, count int) *batchv1.Job {
+	job := b.NewJob()
+	job.Name = name
+	job.Labels[QueueLabel] = queueName
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse("100Mi")
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(extendedResource)] = resource.MustParse(fmt.Sprintf("%d", count))
+	job.Spec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+		corev1.ResourceName(extendedResource): resource.MustParse(fmt.Sprintf("%d", count)),
+	}
+	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo DRA ER test; sleep 120"}
+	return job
+}
+
+// NewDRAJob creates a Job with a DRA ResourceClaim for e2e tests.
+func (b *TestResourceBuilder) NewDRAJob(name, queueName, templateName string) *batchv1.Job {
+	job := b.NewJob()
+	job.Name = name
+	job.Labels[QueueLabel] = queueName
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
+	job.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse("100Mi")
+	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c", "echo DRA test; sleep 120"}
+	job.Spec.Template.Spec.ResourceClaims = []corev1.PodResourceClaim{
+		{Name: "gpu", ResourceClaimTemplateName: ptr.To(templateName)},
+	}
+	job.Spec.Template.Spec.Containers[0].Resources.Claims = []corev1.ResourceClaim{{Name: "gpu"}}
+	return job
 }
