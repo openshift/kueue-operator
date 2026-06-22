@@ -933,3 +933,49 @@ func AddLabelAndPatch(ctx context.Context, kubeClient *kubernetes.Clientset, nam
 	}
 	return nil
 }
+
+// IsDRASupported checks if DRA APIs (resource.k8s.io/v1) are available on the cluster.
+func IsDRASupported(kubeClient *kubernetes.Clientset) bool {
+	apiResourceLists, err := kubeClient.Discovery().ServerResourcesForGroupVersion("resource.k8s.io/v1")
+	if err != nil {
+		return false
+	}
+	for _, apiResource := range apiResourceLists.APIResources {
+		if apiResource.Kind == DeviceClassKind {
+			return true
+		}
+	}
+	return false
+}
+
+// SetupTestEnv creates a ResourceFlavor, ClusterQueue, Namespace, and LocalQueue
+// for e2e tests. All resources are registered with DeferCleanup.
+// cqModifiers are applied to the ClusterQueueWrapper before creation to configure
+// resources like DRA, preemption, cohorts, etc.
+func SetupTestEnv(ctx context.Context, kubeClient *kubernetes.Clientset, kueueClient *upstreamkueueclient.Clientset,
+	namespacePrefix, localQueueName string, cqModifiers ...func(*ClusterQueueWrapper)) (*kueuev1beta2.ClusterQueue, *corev1.Namespace) {
+
+	By("Creating ResourceFlavor, ClusterQueue, Namespace and LocalQueue")
+	resourceFlavor, cleanupRF, err := NewResourceFlavor().WithGenerateName().CreateWithObject(ctx, kueueClient)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(cleanupRF)
+
+	cqBuilder := NewClusterQueue().WithGenerateName().WithFlavorName(resourceFlavor.Name)
+	for _, mod := range cqModifiers {
+		mod(cqBuilder)
+	}
+	cq, cleanupCQ, err := cqBuilder.CreateWithObject(ctx, kueueClient)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(cleanupCQ)
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: namespacePrefix, Labels: map[string]string{OpenShiftManagedLabel: "true"}}}
+	cleanupNs, err := CreateNamespace(kubeClient, ns)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(cleanupNs)
+
+	_, cleanupLQ, err := NewLocalQueue(ns.Name, localQueueName).WithClusterQueue(cq.Name).CreateWithObject(ctx, kueueClient)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(cleanupLQ)
+
+	return cq, ns
+}
