@@ -386,22 +386,20 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 		})
 	})
 
-	// Upstream bug: kubernetes-sigs/kueue#10434 (OCPBUGS-85113)
-	// Memory resourceWeights are counted in raw bytes instead of GiB, so non-zero
-	// memory weights produce unintuitive scores. Setting memory weight to "0"
-	// sidesteps this and isolates CPU as the sole scoring factor.
 	When("resourceWeights customizes which resources drive fair sharing scoring", func() {
 
-		It("should deprioritize the queue with higher weighted CPU usage when cpu weight is 10 and memory weight is 0", func(ctx context.Context) {
-			By("Overriding Kueue config with resourceWeights (cpu: 10, memory: 0) and fast decay")
+		It("should deprioritize the queue with higher weighted CPU usage when cpu weight is 2 and memory weight is 1/GiB", func(ctx context.Context) {
+			// Normalize memory weight due to bug in kubernetes-sigs/kueue#10434 (OCPBUGS-85113)
+			weightMemory := 1.0 / 1073741824
+			By("Overriding Kueue config with resourceWeights (cpu: 2, memory: 1/GiB) and fast decay")
 			enableAdmissionFairSharing(ctx, ssv1.AdmissionFairSharing{
 				Configuration: ssv1.AdmissionFairSharingConfigurationCustom,
 				Custom: ssv1.AdmissionFairSharingCustom{
 					UsageHalfLifeTimeSeconds:     10,
 					UsageSamplingIntervalSeconds: 1,
 					ResourceWeights: []ssv1.ResourceWeight{
-						{Name: "cpu", Weight: "10"},
-						{Name: "memory", Weight: "0"},
+						{Name: "cpu", Weight: "2"},
+						{Name: "memory", Weight: fmt.Sprintf("%g", weightMemory)},
 					},
 				},
 			})
@@ -411,11 +409,11 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create resource flavor")
 			DeferCleanup(cleanupResourceFlavor)
 
-			By("Creating ClusterQueue with 1 CPU and UsageBasedAdmissionFairSharing")
+			By("Creating ClusterQueue with 1 CPU and 1Gi memory and UsageBasedAdmissionFairSharing")
 			clusterQueue, cleanupClusterQueue, err := testutils.NewClusterQueue().
 				WithGenerateName().
 				WithCPU("1").
-				WithMemory("2Gi").
+				WithMemory("1Gi").
 				WithFlavorName(resourceFlavor.Name).
 				WithAdmissionScope(kueuev1beta2.UsageBasedAdmissionFairSharing).
 				CreateWithObject(ctx, clients.UpstreamKueueClient)
@@ -447,93 +445,95 @@ var _ = Describe("Admission Fair Sharing", Label("admission-fair-sharing"), Orde
 			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue lq-cpu-heavy")
 			DeferCleanup(cleanupLQCPUHeavy)
 
-			By("Creating LocalQueue 'lq-cpu-light' with weight=1")
-			lqCPULight, cleanupLQCPULight, err := testutils.NewLocalQueue(namespace.Name, "lq-cpu-light").
+			By("Creating LocalQueue 'lq-mem-heavy' with weight=1")
+			lqMemHeavy, cleanupLQMemHeavy, err := testutils.NewLocalQueue(namespace.Name, "lq-mem-heavy").
 				WithClusterQueue(clusterQueue.Name).
 				WithFairSharingWeight("1").
 				CreateWithObject(ctx, clients.UpstreamKueueClient)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue lq-cpu-light")
-			DeferCleanup(cleanupLQCPULight)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create local queue lq-mem-heavy")
+			DeferCleanup(cleanupLQMemHeavy)
 
-			By("Creating job-heavy on lq-cpu-heavy consuming 700m CPU and 50Mi memory")
-			jobHeavy, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy", namespace.Name, lqCPUHeavy.Name, "700m", "50Mi"), metav1.CreateOptions{})
+			By("Creating job-cpu-heavy on lq-cpu-heavy consuming 600m CPU and 100Mi memory")
+			jobCPUHeavy, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-cpu-heavy", namespace.Name, lqCPUHeavy.Name, "600m", "100Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create job on cpu-heavy queue")
 
-			By("Verifying job-heavy workload is admitted")
-			checkWorkloadCondition(ctx, namespace.Name, string(jobHeavy.UID), kueuev1beta2.WorkloadAdmitted, "job-heavy")
+			By("Verifying job-cpu-heavy workload is admitted")
+			checkWorkloadCondition(ctx, namespace.Name, string(jobCPUHeavy.UID), kueuev1beta2.WorkloadAdmitted, "job-cpu-heavy")
 
-			By("Creating job-light on lq-cpu-light consuming 300m CPU")
-			jobLight, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light", namespace.Name, lqCPULight.Name, "300m", "1Mi"), metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create job on cpu-light queue")
+			By("Creating job-mem-heavy on lq-mem-heavy consuming 100m CPU and 900Mi memory")
+			jobMemHeavy, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-mem-heavy", namespace.Name, lqMemHeavy.Name, "100m", "900Mi"), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "Failed to create job on mem-heavy queue")
 
-			By("Verifying job-light workload is admitted")
-			checkWorkloadCondition(ctx, namespace.Name, string(jobLight.UID), kueuev1beta2.WorkloadAdmitted, "job-light")
+			By("Verifying job-mem-heavy workload is admitted")
+			checkWorkloadCondition(ctx, namespace.Name, string(jobMemHeavy.UID), kueuev1beta2.WorkloadAdmitted, "job-mem-heavy")
 
 			By("Waiting for both job pods to be running")
 			Eventually(func() bool {
-				return testutils.IsJobPodRunning(ctx, kubeClient, namespace.Name, "job-heavy")
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "job-heavy pod should be running")
+				return testutils.IsJobPodRunning(ctx, kubeClient, namespace.Name, "job-cpu-heavy")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "job-cpu-heavy pod should be running")
 			Eventually(func() bool {
-				return testutils.IsJobPodRunning(ctx, kubeClient, namespace.Name, "job-light")
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "job-light pod should be running")
+				return testutils.IsJobPodRunning(ctx, kubeClient, namespace.Name, "job-mem-heavy")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "job-mem-heavy pod should be running")
 
-			By("Waiting for both LocalQueues to accumulate usage (consumedResources.cpu > 0)")
+			By("Waiting for both LocalQueues to accumulate usage (consumedResources.cpu > 0 and consumedResources.memory > 0)")
 			Eventually(func() bool {
 				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, lqCPUHeavy.Name, metav1.GetOptions{})
 				if err != nil || lq.Status.FairSharing == nil || lq.Status.FairSharing.AdmissionFairSharingStatus == nil {
 					return false
 				}
 				cpu := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceCPU]
-				return cpu.Cmp(resource.MustParse("0")) > 0
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-cpu-heavy should have consumedResources.cpu > 0")
+				memory := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceMemory]
+				return cpu.Cmp(resource.MustParse("0")) > 0 && memory.Cmp(resource.MustParse("0")) > 0
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-cpu-heavy should have consumedResources.cpu > 0 and consumedResources.memory > 0")
 			Eventually(func() bool {
-				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, lqCPULight.Name, metav1.GetOptions{})
+				lq, err := clients.UpstreamKueueClient.KueueV1beta2().LocalQueues(namespace.Name).Get(ctx, lqMemHeavy.Name, metav1.GetOptions{})
 				if err != nil || lq.Status.FairSharing == nil || lq.Status.FairSharing.AdmissionFairSharingStatus == nil {
 					return false
 				}
 				cpu := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceCPU]
-				return cpu.Cmp(resource.MustParse("0")) > 0
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-cpu-light should have consumedResources.cpu > 0")
+				memory := lq.Status.FairSharing.AdmissionFairSharingStatus.ConsumedResources[corev1.ResourceMemory]
+				return cpu.Cmp(resource.MustParse("0")) > 0 && memory.Cmp(resource.MustParse("0")) > 0
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "lq-mem-heavy should have consumedResources.cpu > 0 and consumedResources.memory > 0")
 
-			By("Creating job-heavy-pending on lq-cpu-heavy (pending, no quota available)")
-			jobHeavyPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-heavy-pending", namespace.Name, lqCPUHeavy.Name, "700m", "50Mi"), metav1.CreateOptions{})
+			By("Creating job-1-pending on lq-cpu-heavy (pending, no quota available)")
+			jobLQCPUHeavyPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-1-pending", namespace.Name, lqCPUHeavy.Name, "500m", "30Mi"), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on cpu-heavy queue")
 
-			By("Creating job-light-pending on lq-cpu-light (pending, no quota available)")
-			jobLightPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-light-pending", namespace.Name, lqCPULight.Name, "700m", "1Mi"), metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on cpu-light queue")
+			By("Creating job-2-pending on lq-mem-heavy (pending, no quota available)")
+			jobLQMemHeavyPending, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, newLongRunningJob("job-2-pending", namespace.Name, lqMemHeavy.Name, "500m", "30Mi"), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "Failed to create pending job on mem-heavy queue")
 
 			By("Waiting for both pending jobs to be Suspended")
 			Eventually(func(g Gomega) {
-				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobHeavyPending.Name)).To(BeTrue(),
-					"job-heavy-pending should be suspended")
-				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLightPending.Name)).To(BeTrue(),
-					"job-light-pending should be suspended")
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLQCPUHeavyPending.Name)).To(BeTrue(),
+					"job-1-pending should be suspended")
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLQMemHeavyPending.Name)).To(BeTrue(),
+					"job-2-pending should be suspended")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Both pending jobs should become suspended")
 
 			By("Verifying both pending jobs remain suspended (ClusterQueue is full)")
 			Consistently(func(g Gomega) {
-				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobHeavyPending.Name)).To(BeTrue(),
-					"job-heavy-pending should remain suspended")
-				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLightPending.Name)).To(BeTrue(),
-					"job-light-pending should remain suspended")
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLQCPUHeavyPending.Name)).To(BeTrue(),
+					"job-1-pending should remain suspended")
+				g.Expect(testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLQMemHeavyPending.Name)).To(BeTrue(),
+					"job-2-pending should remain suspended")
 			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "Pending jobs should stay suspended while CQ is full")
 
-			By("Deleting job-heavy to free 700m CPU")
-			err = kubeClient.BatchV1().Jobs(namespace.Name).Delete(ctx, jobHeavy.Name, metav1.DeleteOptions{
+			By("Deleting job-cpu-heavy to free 600m CPU")
+			err = kubeClient.BatchV1().Jobs(namespace.Name).Delete(ctx, jobCPUHeavy.Name, metav1.DeleteOptions{
 				PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
 			})
-			Expect(err).NotTo(HaveOccurred(), "Failed to delete job-heavy")
+			Expect(err).NotTo(HaveOccurred(), "Failed to delete job-cpu-heavy")
 
-			By("Verifying job-light-pending (lq-cpu-light, lower weighted usage) wins admission")
+			By("Verifying job-2-pending (lq-mem-heavy, lower weighted usage) wins admission")
 			Eventually(func() bool {
-				return !testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLightPending.Name)
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "job-light-pending should be admitted (lower CPU usage score)")
+				return !testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLQMemHeavyPending.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(), "job-2-pending should be admitted (lower CPU usage score)")
 
-			By("Verifying job-heavy-pending (lq-cpu-heavy, higher weighted usage) remains suspended")
+			By("Verifying job-1-pending (lq-cpu-heavy, higher weighted usage) remains suspended")
 			Consistently(func() bool {
-				return testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobHeavyPending.Name)
-			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "job-heavy-pending should remain suspended (higher CPU usage score)")
+				return testutils.IsJobSuspended(ctx, kubeClient, namespace.Name, jobLQCPUHeavyPending.Name)
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(BeTrue(), "job-1-pending should remain suspended (higher CPU usage score)")
 		})
 	})
 	When("Job is created and deleted", func() {
