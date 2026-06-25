@@ -97,6 +97,12 @@ function configure_kueue_for_folder() {
       # Let's wait for the reconciliation to complete. The test suite checks if kueue-controller-manager is available.
       $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
       ;;
+    dra/counter)
+      echo "Replacing deviceClassMappings with counter sources for partitionable devices..."
+      $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
+        '{"spec":{"config":{"resources":{"deviceClassMappings":[{"name":"gpu.memory","deviceClassNames":["gpu.example.com"],"sources":[{"type":"Counter","counter":{"name":"memory","driver":"gpu.example.com","deviceSelector":{"type":"CEL","cel":{"expression":"device.driver == '"'"'gpu.example.com'"'"'"}}}}]}]}}}}'
+      $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
+      ;;
   esac
 }
 
@@ -107,6 +113,11 @@ function restore_kueue_for_folder() {
       echo "Removing admissionFairSharing from cluster Kueue CR..."
       $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
         '[{"op":"remove","path":"/spec/config/admissionFairSharing"}]'
+      ;;
+    dra/counter)
+      echo "Removing counter sources from Kueue CR..."
+      $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
+        '{"spec":{"config":{"resources":{"deviceClassMappings":[{"name":"gpu","deviceClassNames":["gpu.example.com"]},{"name":"gpu-late-dc","deviceClassNames":["gpu-late-dc.example.com"]}]}}}}'
       ;;
   esac
 }
@@ -121,11 +132,12 @@ for folder in $E2E_TARGET_FOLDERS; do
     folder_ginkgo_args="$folder_ginkgo_args --label-filter=$label_filter"
   fi
 
+  report_name="${folder//\//-}"
   # shellcheck disable=SC2086
   $GINKGO ${folder_ginkgo_args} \
     --skip="${GINKGO_SKIP_PATTERN}" \
-    --junit-report="e2e-upstream-${folder}-junit.xml" \
-    --json-report="e2e-upstream-${folder}.json" \
+    --junit-report="e2e-upstream-${report_name}-junit.xml" \
+    --json-report="e2e-upstream-${report_name}.json" \
     --output-dir="$ARTIFACT_DIR" \
     --keep-going \
     --flake-attempts=3 \
