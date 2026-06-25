@@ -28,7 +28,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.24.0
 	sigs.k8s.io/controller-tools v0.19.0
 	sigs.k8s.io/jobset v0.12.0
-	sigs.k8s.io/kueue v0.18.0
+	sigs.k8s.io/kueue v0.18.1
 	sigs.k8s.io/lws v0.8.0
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0
 	sigs.k8s.io/yaml v1.6.0
