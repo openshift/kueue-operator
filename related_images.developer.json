@@ -9,7 +9,7 @@
   },
   {
     "name": "operand",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operand-main@sha256:f21f758c6e4c2418a00e17d3b6b7fbe1151492e2a5fedd151576f59868da913a "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operand-main@sha256:2edec3923d06ccba1a650381f25b44f1b1a2346313883946b000f5f59bf6fbf6 "
   },
   {
     "name": "operand-0-12",
