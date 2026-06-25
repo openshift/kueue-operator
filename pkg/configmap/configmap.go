@@ -244,19 +244,6 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceE
 		}
 	}
 
-	// ElasticJobsViaWorkloadSlices is Alpha in Kueue, so we explicitly enable it
-	// when any Ray integration (RayJob, RayCluster, or RayService) is in the
-	// frameworks list. Once it graduates to Beta in upstream Kueue, it will be
-	// enabled by default and this explicit enablement won't be necessary.
-	for _, f := range frameworks {
-		switch f {
-		case kueue.KueueIntegrationRayJob,
-			kueue.KueueIntegrationRayCluster,
-			kueue.KueueIntegrationRayService:
-			featureGates["ElasticJobsViaWorkloadSlices"] = true
-		}
-	}
-
 	// ShortWorkloadNames is Alpha in Kueue. Enable it when external frameworks
 	// are configured to prevent workload names from exceeding the 63-character
 	// Kubernetes label value limit in the MultiKueue external frameworks adapter.
