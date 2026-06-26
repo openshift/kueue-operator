@@ -115,8 +115,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -843,166 +841,7 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"ray job enables elastic workload slices": {
-			configuration: kueue.KueueConfiguration{
-				Integrations: kueue.Integrations{
-					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayJob},
-				},
-			},
-			wantCfgMap: &corev1.ConfigMap{
-				Data: map[string]string{
-					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
-clientConnection:
-  burst: 100
-  qps: 50
-controller:
-  groupKindConcurrency:
-    ClusterQueue.kueue.x-k8s.io: 1
-    Job.batch: 5
-    LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
-    ResourceFlavor.kueue.x-k8s.io: 1
-    Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
-health:
-  healthProbeBindAddress: :8081
-integrations:
-  frameworks:
-  - ray.io/rayjob
-internalCertManagement:
-  enable: false
-kind: Configuration
-leaderElection:
-  leaderElect: true
-  leaseDuration: 2m17s
-  renewDeadline: 1m47s
-  resourceLock: ""
-  resourceName: ""
-  resourceNamespace: ""
-  retryPeriod: 26s
-manageJobsWithoutQueueName: false
-managedJobsNamespaceSelector:
-  matchLabels:
-    kueue.openshift.io/managed: "true"
-metrics:
-  bindAddress: :8443
-  enableClusterQueueResources: true
-namespace: test
-webhook:
-  port: 9443
-`,
-				},
-			},
-			wantErr: nil,
-		},
-		"ray cluster enables elastic workload slices": {
-			configuration: kueue.KueueConfiguration{
-				Integrations: kueue.Integrations{
-					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayCluster},
-				},
-			},
-			wantCfgMap: &corev1.ConfigMap{
-				Data: map[string]string{
-					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
-clientConnection:
-  burst: 100
-  qps: 50
-controller:
-  groupKindConcurrency:
-    ClusterQueue.kueue.x-k8s.io: 1
-    Job.batch: 5
-    LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
-    ResourceFlavor.kueue.x-k8s.io: 1
-    Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
-health:
-  healthProbeBindAddress: :8081
-integrations:
-  frameworks:
-  - ray.io/raycluster
-internalCertManagement:
-  enable: false
-kind: Configuration
-leaderElection:
-  leaderElect: true
-  leaseDuration: 2m17s
-  renewDeadline: 1m47s
-  resourceLock: ""
-  resourceName: ""
-  resourceNamespace: ""
-  retryPeriod: 26s
-manageJobsWithoutQueueName: false
-managedJobsNamespaceSelector:
-  matchLabels:
-    kueue.openshift.io/managed: "true"
-metrics:
-  bindAddress: :8443
-  enableClusterQueueResources: true
-namespace: test
-webhook:
-  port: 9443
-`,
-				},
-			},
-			wantErr: nil,
-		},
-		"ray service enables elastic workload slices": {
-			configuration: kueue.KueueConfiguration{
-				Integrations: kueue.Integrations{
-					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationRayService},
-				},
-			},
-			wantCfgMap: &corev1.ConfigMap{
-				Data: map[string]string{
-					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
-clientConnection:
-  burst: 100
-  qps: 50
-controller:
-  groupKindConcurrency:
-    ClusterQueue.kueue.x-k8s.io: 1
-    Job.batch: 5
-    LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
-    ResourceFlavor.kueue.x-k8s.io: 1
-    Workload.kueue.x-k8s.io: 5
-featureGates:
-  ElasticJobsViaWorkloadSlices: true
-health:
-  healthProbeBindAddress: :8081
-integrations:
-  frameworks:
-  - ray.io/rayservice
-internalCertManagement:
-  enable: false
-kind: Configuration
-leaderElection:
-  leaderElect: true
-  leaseDuration: 2m17s
-  renewDeadline: 1m47s
-  resourceLock: ""
-  resourceName: ""
-  resourceNamespace: ""
-  retryPeriod: 26s
-manageJobsWithoutQueueName: false
-managedJobsNamespaceSelector:
-  matchLabels:
-    kueue.openshift.io/managed: "true"
-metrics:
-  bindAddress: :8443
-  enableClusterQueueResources: true
-namespace: test
-webhook:
-  port: 9443
-`,
-				},
-			},
-			wantErr: nil,
-		},
-		"spark and ray enables both feature gates": {
+		"spark and ray integration": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationSparkApplication, kueue.KueueIntegrationRayJob},
@@ -1023,7 +862,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  ElasticJobsViaWorkloadSlices: true
   SparkApplicationIntegration: true
 health:
   healthProbeBindAddress: :8081
