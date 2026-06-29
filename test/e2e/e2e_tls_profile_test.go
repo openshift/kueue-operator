@@ -56,11 +56,20 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to get APIServer CR")
 		originalTLSProfile = apiServer.Spec.TLSSecurityProfile
 
-		// Capture current ConfigMap state
-		configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
-			context.TODO(), "kueue-manager-config", metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "failed to get kueue-manager-config ConfigMap")
-		initialConfigMapData = configMap.Data["controller_manager_config.yaml"]
+		// Wait for the operator to reconcile TLS settings into the ConfigMap.
+		// After an upgrade, the initial sync may be delayed by certificate waits.
+		Eventually(func(g Gomega) {
+			configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
+				context.TODO(), "kueue-manager-config", metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred(), "failed to get kueue-manager-config ConfigMap")
+			data, ok := configMap.Data["controller_manager_config.yaml"]
+			g.Expect(ok).To(BeTrue(), "controller_manager_config.yaml key missing from ConfigMap")
+			tlsOpts, err := extractTLSOptions(data)
+			g.Expect(err).NotTo(HaveOccurred(), "failed to extract TLS options")
+			g.Expect(tlsOpts).NotTo(BeNil(), "TLS options not yet in ConfigMap")
+			initialConfigMapData = data
+		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+			"TLS options should appear in ConfigMap after operator reconciliation")
 	})
 
 	AfterAll(func() {
