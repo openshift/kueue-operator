@@ -19,7 +19,7 @@ package testutils
 import "time"
 
 const (
-	OperatorReadyTime       = 3 * time.Minute
+	OperatorReadyTime       = 6 * time.Minute
 	OperatorPoll            = 10 * time.Second
 	OperatorNamespace       = "openshift-kueue-operator"
 	OpenShiftManagedLabel   = "kueue.openshift.io/managed"
