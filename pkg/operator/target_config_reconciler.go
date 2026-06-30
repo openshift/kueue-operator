@@ -223,7 +223,7 @@ func NewTargetConfigReconciler(
 	}
 
 	// Detect platform type (OpenShift vs kind/vanilla k8s)
-	c.isOpenShift = c.detectOpenShift()
+	c.isOpenShift = c.detectOpenShift(ctx)
 
 	informerList := []factory.Informer{
 		kueueClient.Informer(),
@@ -525,6 +525,20 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	if err != nil {
 		klog.Warningf("Kueue Visibility certificate not ready yet: %v - will retry on next reconciliation", err)
 		return err
+	}
+
+	// Re-read the Kueue CR after certificate waits, which can block for
+	// minutes. The CR spec may have been updated in the meantime.
+	obj, exists, err = c.kueueClient.Informer().GetIndexer().GetByKey(operatorclient.OperatorConfigName)
+	if err != nil {
+		return fmt.Errorf("failed to re-read operator configuration after certificate wait: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("operator configuration %q not found after certificate wait", operatorclient.OperatorConfigName)
+	}
+	kueue, ok = obj.(*kueuev1.Kueue)
+	if !ok {
+		return fmt.Errorf("unable to convert cached object to Kueue type after certificate wait")
 	}
 
 	// Resolve TLS security profile from APIServer cluster-wide config
@@ -2435,17 +2449,28 @@ func (c *TargetConfigReconciler) isResourceRegisteredCached(gvk schema.GroupVers
 	return true, nil
 }
 
-// detectOpenShift detects whether the operator is running on OpenShift or vanilla Kubernetes (kind, etc.).
-// It checks for the presence of OpenShift-specific API groups using the discovery client.
-// This method should be fast and non-blocking (called at startup).
-func (c *TargetConfigReconciler) detectOpenShift() bool {
-	_, err := c.discoveryClient.ServerResourcesForGroupVersion(
-		schema.GroupVersion{
-			Group:   "project.openshift.io",
-			Version: "v1",
-		}.String(),
-	)
-	return err == nil
+// detectOpenShift detects whether the operator is running on OpenShift
+// or vanilla Kubernetes. It retries transient discovery errors because
+// after an upgrade the API server may not serve results immediately.
+// A NotFound error means the API group doesn't exist (vanilla K8s) and
+// is not retried.
+func (c *TargetConfigReconciler) detectOpenShift(ctx context.Context) bool {
+	gv := schema.GroupVersion{Group: "project.openshift.io", Version: "v1"}.String()
+	for i := 0; i < 6; i++ {
+		_, err := c.discoveryClient.ServerResourcesForGroupVersion(gv)
+		if err == nil {
+			return true
+		}
+		if errors.IsNotFound(err) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return false
 }
 
 // isOperatorAvailability checks if a given operator is installed and configured.
