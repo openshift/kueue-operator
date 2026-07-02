@@ -369,6 +369,22 @@ func (rfw *ResourceFlavorWrapper) WithGenerateName() *ResourceFlavorWrapper {
 	return rfw
 }
 
+// WithTopologyName sets the topology name on the ResourceFlavor.
+func (rfw *ResourceFlavorWrapper) WithTopologyName(name string) *ResourceFlavorWrapper {
+	topologyRef := kueuev1beta2.TopologyReference(name)
+	rfw.Spec.TopologyName = &topologyRef
+	return rfw
+}
+
+// WithNodeLabel adds a node label to the ResourceFlavor.
+func (rfw *ResourceFlavorWrapper) WithNodeLabel(key, value string) *ResourceFlavorWrapper {
+	if rfw.Spec.NodeLabels == nil {
+		rfw.Spec.NodeLabels = make(map[string]string)
+	}
+	rfw.Spec.NodeLabels[key] = value
+	return rfw
+}
+
 // Create creates the ResourceFlavor in the cluster and returns cleanup function.
 func (rfw *ResourceFlavorWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
 	_, cleanup, err := rfw.CreateWithObject(ctx, client)
@@ -404,6 +420,74 @@ func (rfw *ResourceFlavorWrapper) CreateWithObject(ctx context.Context, client *
 	}
 
 	return createdRF, cleanup, nil
+}
+
+// TopologyWrapper wraps a Topology and provides builder methods.
+type TopologyWrapper struct {
+	*kueuev1beta2.Topology
+}
+
+// NewTopology creates a new wrapper with a default single-level hostname topology.
+func NewTopology() *TopologyWrapper {
+	t := &kueuev1beta2.Topology{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "default-topology",
+		},
+		Spec: kueuev1beta2.TopologySpec{
+			Levels: []kueuev1beta2.TopologyLevel{
+				{NodeLabel: "kubernetes.io/hostname"},
+			},
+		},
+	}
+	return &TopologyWrapper{Topology: t}
+}
+
+// WithGenerateName switches to using GenerateName with "topology-" prefix.
+func (tw *TopologyWrapper) WithGenerateName() *TopologyWrapper {
+	tw.Name = ""
+	tw.GenerateName = "topology-"
+	return tw
+}
+
+// WithLevels sets the topology levels from a list of node label keys.
+func (tw *TopologyWrapper) WithLevels(labels []string) *TopologyWrapper {
+	levels := make([]kueuev1beta2.TopologyLevel, len(labels))
+	for i, label := range labels {
+		levels[i] = kueuev1beta2.TopologyLevel{NodeLabel: label}
+	}
+	tw.Spec.Levels = levels
+	return tw
+}
+
+// CreateWithObject creates the Topology in the cluster and returns the created object, cleanup function, and error.
+func (tw *TopologyWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta2.Topology, func(), error) {
+	createdTopology, err := client.KueueV1beta2().Topologies().Create(ctx, tw.Topology, v1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Destroying Topology %s", createdTopology.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta2().Topologies().Patch(ctx, createdTopology.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta2().Topologies().Delete(ctx, createdTopology.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta2().Topologies().Get(ctx, createdTopology.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("topology %s still exists: %w", createdTopology.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("Topology %s was not cleaned up", createdTopology.Name))
+	}
+
+	return createdTopology, cleanup, nil
 }
 
 type KueueWrapper struct {
