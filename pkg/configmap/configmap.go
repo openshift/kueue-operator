@@ -139,10 +139,50 @@ func buildManagedJobsWithoutQueueName(workloadManagement kueue.WorkloadManagemen
 func buildWaitForPodsReady(gangSchedulingPolicy kueue.GangScheduling) *configapi.WaitForPodsReady {
 	switch gangSchedulingPolicy.Policy {
 	case kueue.GangSchedulingPolicyByWorkload:
-		return &configapi.WaitForPodsReady{Timeout: v1.Duration{Duration: 5 * time.Minute}, BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload)}
+		w := &configapi.WaitForPodsReady{
+			BlockAdmission: blockAdmission(gangSchedulingPolicy.ByWorkload),
+		}
+		bw := gangSchedulingPolicy.ByWorkload
+		if bw != nil {
+			if bw.TimeoutSeconds > 0 {
+				w.Timeout = v1.Duration{Duration: time.Duration(bw.TimeoutSeconds) * time.Second}
+			}
+			if bw.RecoveryTimeoutSeconds != nil {
+				w.RecoveryTimeout = &v1.Duration{Duration: time.Duration(*bw.RecoveryTimeoutSeconds) * time.Second}
+			}
+			w.RequeuingStrategy = buildRequeuingStrategy(&bw.RequeuingStrategy)
+		}
+		return w
+	case kueue.GangSchedulingPolicyNone:
+		return &configapi.WaitForPodsReady{
+			Timeout:        v1.Duration{Duration: 365 * 24 * time.Hour},
+			BlockAdmission: ptr.To(false),
+		}
 	default:
+		// Defaults to the values Kueue enforces internally for waitForPodsReady.
 		return nil
 	}
+}
+
+func buildRequeuingStrategy(s *kueue.RequeuingStrategy) *configapi.RequeuingStrategy {
+	if s.RetryLimit == 0 && s.BackoffBaseSeconds == 0 && s.BackoffMaxSeconds == 0 && s.TimeReference == "" {
+		return nil
+	}
+	out := &configapi.RequeuingStrategy{}
+	if s.RetryLimit != 0 {
+		out.BackoffLimitCount = ptr.To(s.RetryLimit)
+	}
+	if s.BackoffBaseSeconds != 0 {
+		out.BackoffBaseSeconds = ptr.To(s.BackoffBaseSeconds)
+	}
+	if s.BackoffMaxSeconds != 0 {
+		out.BackoffMaxSeconds = ptr.To(s.BackoffMaxSeconds)
+	}
+	if s.TimeReference != "" {
+		ts := configapi.RequeuingTimestamp(s.TimeReference)
+		out.Timestamp = &ts
+	}
+	return out
 }
 
 func blockAdmission(admission *kueue.ByWorkload) *bool {

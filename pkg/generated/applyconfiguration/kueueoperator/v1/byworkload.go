@@ -24,7 +24,7 @@ import (
 // ByWorkloadApplyConfiguration represents a declarative configuration of the ByWorkload type for use
 // with apply.
 //
-// ByWorkload controls how admission is done
+// ByWorkload allows to configure how to handle workloads that are not ready within a timeout.
 type ByWorkloadApplyConfiguration struct {
 	// admission controls how Kueue will process workloads.
 	// admission is required.
@@ -40,6 +40,23 @@ type ByWorkloadApplyConfiguration struct {
 	// to choose a reasonable default, which is subject to change over time.
 	// The current default is Parallel.
 	Admission *kueueoperatorv1.GangSchedulingWorkloadAdmission `json:"admission,omitempty"`
+	// timeoutSeconds defines the maximum time an admitted workload is given to reach condition PodsReady=true.
+	// When the timeoutSeconds is expired, the workload is evicted and requeued.
+	// The value must be between 30 and 86400 (one day in seconds).
+	// When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+	// The current default is 1800 seconds.
+	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
+	// recoveryTimeoutSeconds is the maximum time allowed for a running Workload to recover
+	// after its pods transition to PodsReady=false, for example when a Pod fails and its
+	// replacement has not yet been scheduled.
+	// The value must be between 0 and 86400 (one day in seconds).
+	// When set to 0, recovery timeout is disabled.
+	// When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+	// The current default is the value of timeoutSeconds.
+	RecoveryTimeoutSeconds *int32 `json:"recoveryTimeoutSeconds,omitempty"`
+	// requeuingStrategy defines the strategy for requeuing an evicted Workload
+	// due to Pod readiness timeout.
+	RequeuingStrategy *RequeuingStrategyApplyConfiguration `json:"requeuingStrategy,omitempty"`
 }
 
 // ByWorkloadApplyConfiguration constructs a declarative configuration of the ByWorkload type for use with
@@ -53,5 +70,29 @@ func ByWorkload() *ByWorkloadApplyConfiguration {
 // If called multiple times, the Admission field is set to the value of the last call.
 func (b *ByWorkloadApplyConfiguration) WithAdmission(value kueueoperatorv1.GangSchedulingWorkloadAdmission) *ByWorkloadApplyConfiguration {
 	b.Admission = &value
+	return b
+}
+
+// WithTimeoutSeconds sets the TimeoutSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TimeoutSeconds field is set to the value of the last call.
+func (b *ByWorkloadApplyConfiguration) WithTimeoutSeconds(value int32) *ByWorkloadApplyConfiguration {
+	b.TimeoutSeconds = &value
+	return b
+}
+
+// WithRecoveryTimeoutSeconds sets the RecoveryTimeoutSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RecoveryTimeoutSeconds field is set to the value of the last call.
+func (b *ByWorkloadApplyConfiguration) WithRecoveryTimeoutSeconds(value int32) *ByWorkloadApplyConfiguration {
+	b.RecoveryTimeoutSeconds = &value
+	return b
+}
+
+// WithRequeuingStrategy sets the RequeuingStrategy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RequeuingStrategy field is set to the value of the last call.
+func (b *ByWorkloadApplyConfiguration) WithRequeuingStrategy(value *RequeuingStrategyApplyConfiguration) *ByWorkloadApplyConfiguration {
+	b.RequeuingStrategy = value
 	return b
 }
