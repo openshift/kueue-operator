@@ -67,6 +67,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.MultiKueueApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Preemption"):
 		return &kueueoperatorv1.PreemptionApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RequeuingStrategy"):
+		return &kueueoperatorv1.RequeuingStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Resources"):
 		return &kueueoperatorv1.ResourcesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ResourceWeight"):
