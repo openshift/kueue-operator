@@ -67,13 +67,16 @@ SELECTED_CHANNEL=$(echo "$COMPATIBLE_CHANNELS" | jq -s 'sort_by(.minor) | last')
 if [[ -z "$SELECTED_CHANNEL" || "$SELECTED_CHANNEL" == "null" ]]; then
   echo "No version-specific channel found, using default channel"
   DEFAULT_CHANNEL=$(echo "$PACKAGE_MANIFEST" | jq -r '.status.defaultChannel')
+  # Derive major/minor from currentCSV (e.g. cert-manager-operator.v1.20.0) since
+  # the default channel name (e.g. stable-v1) may not include a minor version.
   SELECTED_CHANNEL=$(echo "$PACKAGE_MANIFEST" | jq -r --arg ch "$DEFAULT_CHANNEL" '
     .status.channels[] | select(.name == $ch) | {
       name: .name,
-      major: (.name | split("-v")[1] | split(".")[0] | tonumber),
-      minor: (.name | split("-v")[1] | split(".")[1] | tonumber),
       currentCSV: .currentCSV
-    }
+    } | . + (.currentCSV | capture("v(?<maj>[0-9]+)\\.(?<min>[0-9]+)\\.(?<patch>[0-9]+)") | {
+      major: (.maj | tonumber),
+      minor: (.min | tonumber)
+    })
   ')
 fi
 

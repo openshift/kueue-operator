@@ -17,10 +17,22 @@ limitations under the License.
 package tlsprofile
 
 import (
+	"crypto/tls"
 	"testing"
 
 	configv1 "github.com/openshift/api/config/v1"
 )
+
+// curves converts a list of tls.CurveID constants to the []int32 form used by
+// Kueue's TLSOptions.CurvePreferences, so tests can reference named curves
+// (e.g. tls.X25519) instead of hard-coded IANA IDs.
+func curves(ids ...tls.CurveID) []int32 {
+	out := make([]int32, len(ids))
+	for i, id := range ids {
+		out[i] = int32(id)
+	}
+	return out
+}
 
 func TestTLSOptionsFromProfile(t *testing.T) {
 	tests := []struct {
@@ -30,12 +42,17 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 		expectCiphers           bool
 		expectError             bool
 		expectedUnmappedCiphers []string
+		expectedCurves          []int32
+		expectedUnmappedGroups  []string
 	}{
 		{
 			name:               "nil profile defaults to Intermediate",
 			profile:            nil,
 			expectedMinVersion: "VersionTLS12",
 			expectCiphers:      true,
+			// X25519MLKEM768, X25519, SecP256r1, SecP384r1: the Groups configured
+			// for TLSProfileIntermediateType in openshift/api's TLSProfiles map.
+			expectedCurves: curves(tls.X25519MLKEM768, tls.X25519, tls.CurveP256, tls.CurveP384),
 		},
 		{
 			name: "Intermediate profile",
@@ -45,6 +62,7 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 			},
 			expectedMinVersion: "VersionTLS12",
 			expectCiphers:      true,
+			expectedCurves:     curves(tls.X25519MLKEM768, tls.X25519, tls.CurveP256, tls.CurveP384),
 		},
 		{
 			name: "Modern profile has no cipher suites (TLS 1.3)",
@@ -54,6 +72,9 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 			},
 			expectedMinVersion: "VersionTLS13",
 			expectCiphers:      false,
+			// Modern also uses TLSProfiles[TLSProfileModernType].Groups, which is
+			// the same set as Intermediate in openshift/api.
+			expectedCurves: curves(tls.X25519MLKEM768, tls.X25519, tls.CurveP256, tls.CurveP384),
 		},
 		{
 			name: "Custom profile with TLS 1.2",
@@ -118,6 +139,85 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 			expectedUnmappedCiphers: []string{"BOGUS-CIPHER-1", "BOGUS-CIPHER-2"},
 		},
 		{
+			name: "Custom profile with groups maps to curve preferences",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+						MinTLSVersion: configv1.VersionTLS12,
+						Groups:        []configv1.TLSGroup{configv1.TLSGroupX25519, configv1.TLSGroupSecP256r1},
+					},
+				},
+			},
+			expectedMinVersion: "VersionTLS12",
+			expectCiphers:      true,
+			expectedCurves:     curves(tls.X25519, tls.CurveP256),
+		},
+		{
+			name: "Custom profile with invalid group reports unmapped",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+						MinTLSVersion: configv1.VersionTLS12,
+						Groups:        []configv1.TLSGroup{configv1.TLSGroupX25519, configv1.TLSGroup("bogus-group")},
+					},
+				},
+			},
+			expectedMinVersion:     "VersionTLS12",
+			expectCiphers:          true,
+			expectedCurves:         curves(tls.X25519),
+			expectedUnmappedGroups: []string{"bogus-group"},
+		},
+		{
+			name: "Custom profile without groups has no curve preferences",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+						MinTLSVersion: configv1.VersionTLS12,
+					},
+				},
+			},
+			expectedMinVersion: "VersionTLS12",
+			expectCiphers:      true,
+		},
+		{
+			name: "Custom profile with all invalid groups",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+						MinTLSVersion: configv1.VersionTLS12,
+						Groups:        []configv1.TLSGroup{"bogus-1", "bogus-2"},
+					},
+				},
+			},
+			expectedMinVersion:     "VersionTLS12",
+			expectCiphers:          true,
+			expectedUnmappedGroups: []string{"bogus-1", "bogus-2"},
+		},
+		{
+			name: "Custom profile with groups and TLS 1.3 still sets curve preferences",
+			profile: &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						MinTLSVersion: configv1.VersionTLS13,
+						Groups:        []configv1.TLSGroup{configv1.TLSGroupSecP384r1, configv1.TLSGroupX25519},
+					},
+				},
+			},
+			expectedMinVersion: "VersionTLS13",
+			expectCiphers:      false,
+			expectedCurves:     curves(tls.CurveP384, tls.X25519),
+		},
+		{
 			name: "Old profile returns error (TLS 1.0 unsupported)",
 			profile: &configv1.TLSSecurityProfile{
 				Type: configv1.TLSProfileOldType,
@@ -169,7 +269,7 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts, unmappedCiphers, err := TLSOptionsFromProfile(tt.profile)
+			opts, unmappedCiphers, unmappedGroups, err := TLSOptionsFromProfile(tt.profile)
 			if tt.expectError {
 				if err == nil {
 					t.Fatal("expected error but got nil")
@@ -197,6 +297,24 @@ func TestTLSOptionsFromProfile(t *testing.T) {
 				for i, expected := range tt.expectedUnmappedCiphers {
 					if unmappedCiphers[i] != expected {
 						t.Errorf("expected unmapped cipher %d to be %q, got %q", i, expected, unmappedCiphers[i])
+					}
+				}
+			}
+			if len(tt.expectedCurves) != len(opts.CurvePreferences) {
+				t.Errorf("expected %d curve preferences, got %d: %v", len(tt.expectedCurves), len(opts.CurvePreferences), opts.CurvePreferences)
+			} else {
+				for i, expected := range tt.expectedCurves {
+					if opts.CurvePreferences[i] != expected {
+						t.Errorf("expected curve preference %d to be %d, got %d", i, expected, opts.CurvePreferences[i])
+					}
+				}
+			}
+			if len(tt.expectedUnmappedGroups) != len(unmappedGroups) {
+				t.Errorf("expected %d unmapped groups, got %d: %v", len(tt.expectedUnmappedGroups), len(unmappedGroups), unmappedGroups)
+			} else {
+				for i, expected := range tt.expectedUnmappedGroups {
+					if unmappedGroups[i] != expected {
+						t.Errorf("expected unmapped group %d to be %q, got %q", i, expected, unmappedGroups[i])
 					}
 				}
 			}
