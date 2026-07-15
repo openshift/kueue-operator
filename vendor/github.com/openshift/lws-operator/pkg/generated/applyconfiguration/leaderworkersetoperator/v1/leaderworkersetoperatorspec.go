@@ -24,8 +24,18 @@ import (
 
 // LeaderWorkerSetOperatorSpecApplyConfiguration represents a declarative configuration of the LeaderWorkerSetOperatorSpec type for use
 // with apply.
+//
+// LeaderWorkerSetOperatorSpec defines the desired state of LeaderWorkerSetOperator
 type LeaderWorkerSetOperatorSpecApplyConfiguration struct {
 	operatorv1.OperatorSpecApplyConfiguration `json:",inline"`
+	// nodePlacement provides explicit control over the scheduling of lws-controller-manager pods.
+	//
+	// If unset, the operator does not inject nodeSelector or tolerations beyond the upstream operand manifest.
+	//
+	// When set, each specified field within nodePlacement replaces the corresponding field on the
+	// operand deployment pod template. Omitted fields within nodePlacement leave the upstream
+	// operand manifest values unchanged.
+	NodePlacement *NodePlacementApplyConfiguration `json:"nodePlacement,omitempty"`
 }
 
 // LeaderWorkerSetOperatorSpecApplyConfiguration constructs a declarative configuration of the LeaderWorkerSetOperatorSpec type for use with
@@ -71,5 +81,13 @@ func (b *LeaderWorkerSetOperatorSpecApplyConfiguration) WithUnsupportedConfigOve
 // If called multiple times, the ObservedConfig field is set to the value of the last call.
 func (b *LeaderWorkerSetOperatorSpecApplyConfiguration) WithObservedConfig(value runtime.RawExtension) *LeaderWorkerSetOperatorSpecApplyConfiguration {
 	b.OperatorSpecApplyConfiguration.ObservedConfig = &value
+	return b
+}
+
+// WithNodePlacement sets the NodePlacement field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NodePlacement field is set to the value of the last call.
+func (b *LeaderWorkerSetOperatorSpecApplyConfiguration) WithNodePlacement(value *NodePlacementApplyConfiguration) *LeaderWorkerSetOperatorSpecApplyConfiguration {
+	b.NodePlacement = value
 	return b
 }

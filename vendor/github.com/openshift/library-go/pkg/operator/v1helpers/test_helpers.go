@@ -24,10 +24,18 @@ import (
 
 // NewFakeSharedIndexInformer returns a fake shared index informer, suitable to use in static pod controller unit tests.
 func NewFakeSharedIndexInformer() cache.SharedIndexInformer {
-	return &fakeSharedIndexInformer{}
+	return &fakeSharedIndexInformer{synced: newFakeSyncedChan()}
 }
 
-type fakeSharedIndexInformer struct{}
+type fakeSharedIndexInformer struct {
+	synced chan struct{}
+}
+
+func newFakeSyncedChan() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
 
 func (i fakeSharedIndexInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
 	return nil, nil
@@ -65,8 +73,13 @@ func (fakeSharedIndexInformer) RunWithContext(ctx context.Context) {
 	panic("implement me")
 }
 
-func (fakeSharedIndexInformer) HasSynced() bool {
-	return true
+func (f fakeSharedIndexInformer) HasSynced() bool {
+	select {
+	case <-f.synced:
+		return true
+	default:
+		return false
+	}
 }
 
 type fakeSharedIndexInformerDone struct {
@@ -81,10 +94,8 @@ func (fd *fakeSharedIndexInformerDone) Done() <-chan struct{} {
 	return fd.synced
 }
 
-func (fakeSharedIndexInformer) HasSyncedChecker() cache.DoneChecker {
-	ch := make(chan struct{})
-	close(ch)
-	return &fakeSharedIndexInformerDone{synced: ch}
+func (f fakeSharedIndexInformer) HasSyncedChecker() cache.DoneChecker {
+	return &fakeSharedIndexInformerDone{synced: f.synced}
 }
 
 func (fakeSharedIndexInformer) LastSyncResourceVersion() string {
@@ -136,7 +147,7 @@ type fakeStaticPodOperatorClient struct {
 }
 
 func (c *fakeStaticPodOperatorClient) Informer() cache.SharedIndexInformer {
-	return &fakeSharedIndexInformer{}
+	return NewFakeSharedIndexInformer()
 
 }
 func (c *fakeStaticPodOperatorClient) GetObjectMeta() (*metav1.ObjectMeta, error) {
@@ -319,7 +330,7 @@ type fakeOperatorClient struct {
 }
 
 func (c *fakeOperatorClient) Informer() cache.SharedIndexInformer {
-	return &fakeSharedIndexInformer{}
+	return NewFakeSharedIndexInformer()
 }
 
 func (c *fakeOperatorClient) GetObjectMeta() (*metav1.ObjectMeta, error) {
