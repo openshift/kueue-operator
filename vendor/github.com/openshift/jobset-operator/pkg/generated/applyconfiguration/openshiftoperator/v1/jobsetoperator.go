@@ -27,11 +27,15 @@ import (
 
 // JobSetOperatorApplyConfiguration represents a declarative configuration of the JobSetOperator type for use
 // with apply.
+//
+// JobSetOperator is the Schema for the jobsetoperator API
 type JobSetOperatorApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *JobSetOperatorSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                               *JobSetOperatorStatusApplyConfiguration `json:"status,omitempty"`
+	// spec holds user settable values for configuration
+	Spec *JobSetOperatorSpecApplyConfiguration `json:"spec,omitempty"`
+	// status holds observed values from the cluster. They may not be overridden.
+	Status *JobSetOperatorStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // JobSetOperator constructs a declarative configuration of the JobSetOperator type for use with
@@ -44,29 +48,14 @@ func JobSetOperator(name string) *JobSetOperatorApplyConfiguration {
 	return b
 }
 
-// ExtractJobSetOperator extracts the applied configuration owned by fieldManager from
-// jobSetOperator. If no managedFields are found in jobSetOperator for fieldManager, a
-// JobSetOperatorApplyConfiguration is returned with only the Name, Namespace (if applicable),
-// APIVersion and Kind populated. It is possible that no managed fields were found for because other
-// field managers have taken ownership of all the fields previously owned by fieldManager, or because
-// the fieldManager never owned fields any fields.
+// ExtractJobSetOperatorFrom extracts the applied configuration owned by fieldManager from
+// jobSetOperator for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
 // jobSetOperator must be a unmodified JobSetOperator API object that was retrieved from the Kubernetes API.
-// ExtractJobSetOperator provides a way to perform a extract/modify-in-place/apply workflow.
+// ExtractJobSetOperatorFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-// Experimental!
-func ExtractJobSetOperator(jobSetOperator *openshiftoperatorv1.JobSetOperator, fieldManager string) (*JobSetOperatorApplyConfiguration, error) {
-	return extractJobSetOperator(jobSetOperator, fieldManager, "")
-}
-
-// ExtractJobSetOperatorStatus is the same as ExtractJobSetOperator except
-// that it extracts the status subresource applied configuration.
-// Experimental!
-func ExtractJobSetOperatorStatus(jobSetOperator *openshiftoperatorv1.JobSetOperator, fieldManager string) (*JobSetOperatorApplyConfiguration, error) {
-	return extractJobSetOperator(jobSetOperator, fieldManager, "status")
-}
-
-func extractJobSetOperator(jobSetOperator *openshiftoperatorv1.JobSetOperator, fieldManager string, subresource string) (*JobSetOperatorApplyConfiguration, error) {
+func ExtractJobSetOperatorFrom(jobSetOperator *openshiftoperatorv1.JobSetOperator, fieldManager string, subresource string) (*JobSetOperatorApplyConfiguration, error) {
 	b := &JobSetOperatorApplyConfiguration{}
 	err := managedfields.ExtractInto(jobSetOperator, internal.Parser().Type("com.github.openshift.jobset-operator.pkg.apis.openshiftoperator.v1.JobSetOperator"), fieldManager, b, subresource)
 	if err != nil {
@@ -78,6 +67,27 @@ func extractJobSetOperator(jobSetOperator *openshiftoperatorv1.JobSetOperator, f
 	b.WithAPIVersion("operator.openshift.io/v1")
 	return b, nil
 }
+
+// ExtractJobSetOperator extracts the applied configuration owned by fieldManager from
+// jobSetOperator. If no managedFields are found in jobSetOperator for fieldManager, a
+// JobSetOperatorApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// jobSetOperator must be a unmodified JobSetOperator API object that was retrieved from the Kubernetes API.
+// ExtractJobSetOperator provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractJobSetOperator(jobSetOperator *openshiftoperatorv1.JobSetOperator, fieldManager string) (*JobSetOperatorApplyConfiguration, error) {
+	return ExtractJobSetOperatorFrom(jobSetOperator, fieldManager, "")
+}
+
+// ExtractJobSetOperatorStatus extracts the applied configuration owned by fieldManager from
+// jobSetOperator for the status subresource.
+func ExtractJobSetOperatorStatus(jobSetOperator *openshiftoperatorv1.JobSetOperator, fieldManager string) (*JobSetOperatorApplyConfiguration, error) {
+	return ExtractJobSetOperatorFrom(jobSetOperator, fieldManager, "status")
+}
+
 func (b JobSetOperatorApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

@@ -24,6 +24,8 @@ import (
 
 // JobSetOperatorSpecApplyConfiguration represents a declarative configuration of the JobSetOperatorSpec type for use
 // with apply.
+//
+// JobSetOperatorSpec defines the desired state of JobSetOperator
 type JobSetOperatorSpecApplyConfiguration struct {
 	operatorv1.OperatorSpecApplyConfiguration `json:",inline"`
 }

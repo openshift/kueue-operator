@@ -22,6 +22,8 @@ import (
 
 // JobSetOperatorStatusApplyConfiguration represents a declarative configuration of the JobSetOperatorStatus type for use
 // with apply.
+//
+// JobSetOperatorStatus defines the observed state of JobSetOperator
 type JobSetOperatorStatusApplyConfiguration struct {
 	operatorv1.OperatorStatusApplyConfiguration `json:",inline"`
 }
