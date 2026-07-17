@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -181,7 +182,7 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 			Expect(sm).NotTo(BeNil())
 			Expect(sm.Spec.Endpoints).To(HaveLen(1))
 			Expect(sm.Spec.Endpoints[0].Port).To(Equal("https"))
-			Expect(sm.Spec.Endpoints[0].Scheme).To(Equal("https"))
+			Expect(sm.Spec.Endpoints[0].Scheme).To(Equal(ptr.To(monitoringv1.SchemeHTTPS)))
 		})
 
 		It("should have metrics network policy with correct namespace selectors", func() {
