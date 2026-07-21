@@ -1,4 +1,4 @@
-FROM registry.redhat.io/openshift4/ose-must-gather-rhel9@sha256:ea5b61bcdc1deed1952a07915e46f49b43c05cc0042c78d1a642fa1619ee70bd as builder
+FROM registry.redhat.io/openshift4/ose-must-gather-rhel9@sha256:f63e6e4302bc514208b9a488067e487639922c5182f1316edcdbbd85ecc8124f as builder
 
 FROM registry.redhat.io/ubi9/ubi-minimal@sha256:062c52ff973065752b0965787649db2bcf551a6c727a00e95a3eb42cebadbdab
 
