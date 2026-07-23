@@ -1,0 +1,8 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: tas-datacenter-flavor
+spec:
+  nodeLabels:
+    cloud.provider.com/node-group: tas-group
+  topologyName: datacenter-topology
