@@ -179,6 +179,59 @@ spec:
                             - Parallel
                             - Sequential
                             type: string
+                          recoveryTimeoutSeconds:
+                            description: |-
+                              recoveryTimeoutSeconds defines an opt-in timeout measured since the last transition to the
+                              PodsReady=false condition after a Workload is admitted and running. Such a transition
+                              may happen when a Pod failed and the replacement Pod is awaited to be scheduled.
+                              After exceeding the timeout the corresponding job gets suspended again and requeued
+                              after the backoff delay.
+                              Defaults to the value of timeout. Set to 0 to disable recovery timeout.
+                            format: int32
+                            type: integer
+                          requeuingStrategy:
+                            description: |-
+                              requeuingStrategy defines the strategy for requeuing a Workload that was evicted
+                              due to Pod readiness timeout.
+                            properties:
+                              backoffBaseSeconds:
+                                description: |-
+                                  backoffBaseSeconds defines the base for the exponential backoff for re-queuing an evicted workload.
+                                  The consecutive requeue delays are computed as backoffBaseSeconds * 2^(retryCount-1) + jitter.
+                                  Defaults to 60.
+                                format: int32
+                                type: integer
+                              backoffLimitCount:
+                                description: |-
+                                  backoffLimitCount defines the maximum number of re-queuing retries.
+                                  Once the number is reached, the workload is deactivated (spec.active set to false).
+                                  When not set, the workload is requeued indefinitely.
+                                format: int32
+                                type: integer
+                              backoffMaxSeconds:
+                                description: |-
+                                  backoffMaxSeconds defines the maximum backoff time to re-queue an evicted workload.
+                                  Defaults to 3600.
+                                format: int32
+                                type: integer
+                              timeReference:
+                                description: |-
+                                  timeReference defines which point in time is used as the reference for re-queuing a Workload
+                                  that was evicted due to Pod readiness. Allowed values are Eviction and Creation.
+                                  Eviction (default) uses the time of the Evicted condition with PodsReadyTimeout reason.
+                                  Creation uses the Workload .metadata.creationTimestamp.
+                                enum:
+                                - Eviction
+                                - Creation
+                                type: string
+                            type: object
+                          timeoutSeconds:
+                            description: |-
+                              timeoutSeconds defines the time for an admitted workload to reach the PodsReady=true condition.
+                              When the timeout is exceeded, the workload is evicted and requeued in the same cluster queue.
+                              Defaults to 300 seconds.
+                            format: int32
+                            type: integer
                         required:
                         - admission
                         type: object

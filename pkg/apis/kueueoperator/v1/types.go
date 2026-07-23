@@ -365,6 +365,64 @@ type ByWorkload struct {
 	// The current default is Parallel.
 	// +required
 	Admission GangSchedulingWorkloadAdmission `json:"admission"`
+
+	// timeoutSeconds defines the time for an admitted workload to reach the PodsReady=true condition.
+	// When the timeout is exceeded, the workload is evicted and requeued in the same cluster queue.
+	// Defaults to 300 seconds.
+	// +optional
+	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
+
+	// recoveryTimeoutSeconds defines an opt-in timeout measured since the last transition to the
+	// PodsReady=false condition after a Workload is admitted and running. Such a transition
+	// may happen when a Pod failed and the replacement Pod is awaited to be scheduled.
+	// After exceeding the timeout the corresponding job gets suspended again and requeued
+	// after the backoff delay.
+	// Defaults to the value of timeout. Set to 0 to disable recovery timeout.
+	// +optional
+	RecoveryTimeoutSeconds *int32 `json:"recoveryTimeoutSeconds,omitempty"`
+
+	// requeuingStrategy defines the strategy for requeuing a Workload that was evicted
+	// due to Pod readiness timeout.
+	// +optional
+	RequeuingStrategy *RequeuingStrategy `json:"requeuingStrategy,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Eviction;Creation
+type RequeuingTimeReference string
+
+const (
+	// EvictionTimestamp requeues the workload based on the time of the Evicted condition
+	// with PodsReadyTimeout reason.
+	EvictionTimestamp RequeuingTimeReference = "Eviction"
+	// CreationTimestamp requeues the workload based on its .metadata.creationTimestamp.
+	CreationTimestamp RequeuingTimeReference = "Creation"
+)
+
+// RequeuingStrategy defines the strategy for requeuing a Workload evicted due to Pod readiness.
+type RequeuingStrategy struct {
+	// timeReference defines which point in time is used as the reference for re-queuing a Workload
+	// that was evicted due to Pod readiness. Allowed values are Eviction and Creation.
+	// Eviction (default) uses the time of the Evicted condition with PodsReadyTimeout reason.
+	// Creation uses the Workload .metadata.creationTimestamp.
+	// +optional
+	TimeReference RequeuingTimeReference `json:"timeReference,omitempty"`
+
+	// backoffLimitCount defines the maximum number of re-queuing retries.
+	// Once the number is reached, the workload is deactivated (spec.active set to false).
+	// When not set, the workload is requeued indefinitely.
+	// +optional
+	BackoffLimitCount *int32 `json:"backoffLimitCount,omitempty"`
+
+	// backoffBaseSeconds defines the base for the exponential backoff for re-queuing an evicted workload.
+	// The consecutive requeue delays are computed as backoffBaseSeconds * 2^(retryCount-1) + jitter.
+	// Defaults to 60.
+	// +optional
+	BackoffBaseSeconds *int32 `json:"backoffBaseSeconds,omitempty"`
+
+	// backoffMaxSeconds defines the maximum backoff time to re-queue an evicted workload.
+	// Defaults to 3600.
+	// +optional
+	BackoffMaxSeconds *int32 `json:"backoffMaxSeconds,omitempty"`
 }
 
 // +kubebuilder:validation:Enum="";QueueName;None
