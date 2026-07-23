@@ -2151,34 +2151,38 @@ func (c *TargetConfigReconciler) manageServiceMonitor(ctx context.Context, kueue
 					Interval:        "30s",
 					Path:            "/metrics",
 					Port:            "https", // Name of the port you want to monitor
-					Scheme:          "https",
+					Scheme:          ptr.To(monitoringv1.SchemeHTTPS),
 					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
-					TLSConfig: &monitoringv1.TLSConfig{
-						SafeTLSConfig: monitoringv1.SafeTLSConfig{
-							InsecureSkipVerify: ptr.To(false),
-							CA: monitoringv1.SecretOrConfigMap{
-								Secret: &v1.SecretKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{
-										Name: secretMetricsServerCert,
+					HTTPConfigWithProxyAndTLSFiles: monitoringv1.HTTPConfigWithProxyAndTLSFiles{
+						HTTPConfigWithTLSFiles: monitoringv1.HTTPConfigWithTLSFiles{
+							TLSConfig: &monitoringv1.TLSConfig{
+								SafeTLSConfig: monitoringv1.SafeTLSConfig{
+									InsecureSkipVerify: ptr.To(false),
+									CA: monitoringv1.SecretOrConfigMap{
+										Secret: &v1.SecretKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{
+												Name: secretMetricsServerCert,
+											},
+											Key: keyCaCrt,
+										},
 									},
-									Key: keyCaCrt,
-								},
-							},
-							Cert: monitoringv1.SecretOrConfigMap{
-								Secret: &v1.SecretKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{
-										Name: secretMetricsServerCert,
+									Cert: monitoringv1.SecretOrConfigMap{
+										Secret: &v1.SecretKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{
+												Name: secretMetricsServerCert,
+											},
+											Key: keyTlsCrt,
+										},
 									},
-									Key: keyTlsCrt,
+									KeySecret: &v1.SecretKeySelector{
+										LocalObjectReference: v1.LocalObjectReference{
+											Name: secretMetricsServerCert,
+										},
+										Key: keyTlsKey,
+									},
+									ServerName: ptr.To("kueue-controller-manager-metrics-service.openshift-kueue-operator.svc"),
 								},
 							},
-							KeySecret: &v1.SecretKeySelector{
-								LocalObjectReference: v1.LocalObjectReference{
-									Name: secretMetricsServerCert,
-								},
-								Key: keyTlsKey,
-							},
-							ServerName: ptr.To("kueue-controller-manager-metrics-service.openshift-kueue-operator.svc"),
 						},
 					},
 				},

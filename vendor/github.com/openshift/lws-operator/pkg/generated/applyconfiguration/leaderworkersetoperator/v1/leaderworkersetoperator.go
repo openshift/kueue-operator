@@ -27,11 +27,15 @@ import (
 
 // LeaderWorkerSetOperatorApplyConfiguration represents a declarative configuration of the LeaderWorkerSetOperator type for use
 // with apply.
+//
+// LeaderWorkerSetOperator is the Schema for the LeaderWorkerSetOperator API
 type LeaderWorkerSetOperatorApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *LeaderWorkerSetOperatorSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                               *LeaderWorkerSetOperatorStatusApplyConfiguration `json:"status,omitempty"`
+	// spec holds user settable values for configuration
+	Spec *LeaderWorkerSetOperatorSpecApplyConfiguration `json:"spec,omitempty"`
+	// status holds observed values from the cluster. They may not be overridden.
+	Status *LeaderWorkerSetOperatorStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // LeaderWorkerSetOperator constructs a declarative configuration of the LeaderWorkerSetOperator type for use with
@@ -44,29 +48,14 @@ func LeaderWorkerSetOperator(name string) *LeaderWorkerSetOperatorApplyConfigura
 	return b
 }
 
-// ExtractLeaderWorkerSetOperator extracts the applied configuration owned by fieldManager from
-// leaderWorkerSetOperator. If no managedFields are found in leaderWorkerSetOperator for fieldManager, a
-// LeaderWorkerSetOperatorApplyConfiguration is returned with only the Name, Namespace (if applicable),
-// APIVersion and Kind populated. It is possible that no managed fields were found for because other
-// field managers have taken ownership of all the fields previously owned by fieldManager, or because
-// the fieldManager never owned fields any fields.
+// ExtractLeaderWorkerSetOperatorFrom extracts the applied configuration owned by fieldManager from
+// leaderWorkerSetOperator for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
 // leaderWorkerSetOperator must be a unmodified LeaderWorkerSetOperator API object that was retrieved from the Kubernetes API.
-// ExtractLeaderWorkerSetOperator provides a way to perform a extract/modify-in-place/apply workflow.
+// ExtractLeaderWorkerSetOperatorFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-// Experimental!
-func ExtractLeaderWorkerSetOperator(leaderWorkerSetOperator *leaderworkersetoperatorv1.LeaderWorkerSetOperator, fieldManager string) (*LeaderWorkerSetOperatorApplyConfiguration, error) {
-	return extractLeaderWorkerSetOperator(leaderWorkerSetOperator, fieldManager, "")
-}
-
-// ExtractLeaderWorkerSetOperatorStatus is the same as ExtractLeaderWorkerSetOperator except
-// that it extracts the status subresource applied configuration.
-// Experimental!
-func ExtractLeaderWorkerSetOperatorStatus(leaderWorkerSetOperator *leaderworkersetoperatorv1.LeaderWorkerSetOperator, fieldManager string) (*LeaderWorkerSetOperatorApplyConfiguration, error) {
-	return extractLeaderWorkerSetOperator(leaderWorkerSetOperator, fieldManager, "status")
-}
-
-func extractLeaderWorkerSetOperator(leaderWorkerSetOperator *leaderworkersetoperatorv1.LeaderWorkerSetOperator, fieldManager string, subresource string) (*LeaderWorkerSetOperatorApplyConfiguration, error) {
+func ExtractLeaderWorkerSetOperatorFrom(leaderWorkerSetOperator *leaderworkersetoperatorv1.LeaderWorkerSetOperator, fieldManager string, subresource string) (*LeaderWorkerSetOperatorApplyConfiguration, error) {
 	b := &LeaderWorkerSetOperatorApplyConfiguration{}
 	err := managedfields.ExtractInto(leaderWorkerSetOperator, internal.Parser().Type("com.github.openshift.lws-operator.pkg.apis.leaderworkersetoperator.v1.LeaderWorkerSetOperator"), fieldManager, b, subresource)
 	if err != nil {
@@ -78,6 +67,27 @@ func extractLeaderWorkerSetOperator(leaderWorkerSetOperator *leaderworkersetoper
 	b.WithAPIVersion("operator.openshift.io/v1")
 	return b, nil
 }
+
+// ExtractLeaderWorkerSetOperator extracts the applied configuration owned by fieldManager from
+// leaderWorkerSetOperator. If no managedFields are found in leaderWorkerSetOperator for fieldManager, a
+// LeaderWorkerSetOperatorApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// leaderWorkerSetOperator must be a unmodified LeaderWorkerSetOperator API object that was retrieved from the Kubernetes API.
+// ExtractLeaderWorkerSetOperator provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractLeaderWorkerSetOperator(leaderWorkerSetOperator *leaderworkersetoperatorv1.LeaderWorkerSetOperator, fieldManager string) (*LeaderWorkerSetOperatorApplyConfiguration, error) {
+	return ExtractLeaderWorkerSetOperatorFrom(leaderWorkerSetOperator, fieldManager, "")
+}
+
+// ExtractLeaderWorkerSetOperatorStatus extracts the applied configuration owned by fieldManager from
+// leaderWorkerSetOperator for the status subresource.
+func ExtractLeaderWorkerSetOperatorStatus(leaderWorkerSetOperator *leaderworkersetoperatorv1.LeaderWorkerSetOperator, fieldManager string) (*LeaderWorkerSetOperatorApplyConfiguration, error) {
+	return ExtractLeaderWorkerSetOperatorFrom(leaderWorkerSetOperator, fieldManager, "status")
+}
+
 func (b LeaderWorkerSetOperatorApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
