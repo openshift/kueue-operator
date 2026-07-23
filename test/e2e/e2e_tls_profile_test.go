@@ -88,7 +88,7 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 	When("the default Intermediate TLS profile is configured", func() {
 		It("should have Intermediate TLS settings in the initial operand ConfigMap", func(ctx context.Context) {
 			By("Verifying the initial ConfigMap captured in BeforeAll contains Intermediate TLS settings")
-			expectedTLSOpts, _, err := tlsprofile.TLSOptionsFromProfile(nil)
+			expectedTLSOpts, _, _, err := tlsprofile.TLSOptionsFromProfile(nil)
 			Expect(err).NotTo(HaveOccurred(), "failed to resolve default TLS profile")
 
 			tlsOpts, err := extractTLSOptions(initialConfigMapData)
@@ -99,9 +99,12 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 			Expect(tlsOpts.CipherSuites).To(HaveLen(len(expectedTLSOpts.CipherSuites)),
 				fmt.Sprintf("initial ConfigMap should have %d Intermediate cipher suites, got %v",
 					len(expectedTLSOpts.CipherSuites), tlsOpts.CipherSuites))
+			Expect(tlsOpts.CurvePreferences).To(Equal(expectedTLSOpts.CurvePreferences),
+				fmt.Sprintf("initial ConfigMap should have Intermediate curve preferences %v, got %v",
+					expectedTLSOpts.CurvePreferences, tlsOpts.CurvePreferences))
 
-			klog.Infof("Initial ConfigMap has correct Intermediate TLS settings: minVersion=%s, %d cipherSuites",
-				tlsOpts.MinVersion, len(tlsOpts.CipherSuites))
+			klog.Infof("Initial ConfigMap has correct Intermediate TLS settings: minVersion=%s, %d cipherSuites, curvePreferences=%v",
+				tlsOpts.MinVersion, len(tlsOpts.CipherSuites), tlsOpts.CurvePreferences)
 		})
 	})
 
@@ -163,8 +166,20 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 					return fmt.Errorf("expected empty CipherSuites for TLS 1.3 Modern profile, got %v", tlsOpts.CipherSuites)
 				}
 
-				klog.Infof("Operand ConfigMap has correct TLS 1.3 settings: minVersion=%s, cipherSuites=%v",
-					tlsOpts.MinVersion, tlsOpts.CipherSuites)
+				// Curve preferences are independent of TLS version, so the Modern
+				// profile's default groups (X25519MLKEM768, X25519, secp256r1, secp384r1)
+				// should still be mapped to Kueue's CurvePreferences.
+				expectedTLSOpts, _, _, err := tlsprofile.TLSOptionsFromProfile(modernProfile)
+				if err != nil {
+					return fmt.Errorf("failed to resolve expected Modern TLS profile: %w", err)
+				}
+				if len(expectedTLSOpts.CurvePreferences) > 0 && !equalInt32Slices(tlsOpts.CurvePreferences, expectedTLSOpts.CurvePreferences) {
+					return fmt.Errorf("expected curvePreferences %v for Modern profile, got %v",
+						expectedTLSOpts.CurvePreferences, tlsOpts.CurvePreferences)
+				}
+
+				klog.Infof("Operand ConfigMap has correct TLS 1.3 settings: minVersion=%s, cipherSuites=%v, curvePreferences=%v",
+					tlsOpts.MinVersion, tlsOpts.CipherSuites, tlsOpts.CurvePreferences)
 				return nil
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"operand ConfigMap should contain TLS 1.3 settings")
@@ -317,6 +332,97 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 		})
 	})
 
+	When("the cluster TLS profile is set to Custom with explicit curve preferences", func() {
+		It("should propagate the curve preferences to the operand ConfigMap", func(ctx context.Context) {
+			if isHyperShift {
+				Skip("APIServer TLS profile mutation is not supported on HyperShift clusters")
+			}
+
+			By("Checking if TLS group preferences are supported on this cluster")
+			if enabled, err := isTLSGroupPreferencesFeatureGateEnabled(ctx, configClient); err != nil {
+				klog.Warningf("failed to determine TLSGroupPreferences feature gate state, falling back to round-trip check: %v", err)
+			} else if !enabled {
+				Skip("TLS group preferences (spec.tlsSecurityProfile.custom.groups) require the TLSGroupPreferences feature gate, which is not enabled on this cluster")
+			}
+
+			customProfile := &configv1.TLSSecurityProfile{
+				Type: configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{
+					TLSProfileSpec: configv1.TLSProfileSpec{
+						Ciphers: []string{
+							"ECDHE-ECDSA-AES128-GCM-SHA256",
+							"ECDHE-RSA-AES128-GCM-SHA256",
+						},
+						MinTLSVersion: configv1.VersionTLS12,
+						Groups: []configv1.TLSGroup{
+							configv1.TLSGroupX25519,
+							configv1.TLSGroupSecP256r1,
+						},
+					},
+				},
+			}
+			apiServer, err := configClient.APIServers().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred(), "failed to get APIServer CR")
+
+			dryRunAPIServer := apiServer.DeepCopy()
+			dryRunAPIServer.Spec.TLSSecurityProfile = customProfile
+			dryRunResult, err := configClient.APIServers().Update(ctx, dryRunAPIServer, metav1.UpdateOptions{
+				DryRun: []string{metav1.DryRunAll},
+			})
+			if err != nil {
+				Skip(fmt.Sprintf("TLS group preferences (spec.tlsSecurityProfile.custom.groups) are not supported on this cluster: %v", err))
+			}
+			// The API server silently prunes unrecognized fields (e.g. when the
+			// TLSGroupPreferences feature gate is disabled) instead of returning
+			// an error, so we must also verify the field actually round-tripped.
+			if dryRunResult.Spec.TLSSecurityProfile == nil ||
+				dryRunResult.Spec.TLSSecurityProfile.Custom == nil ||
+				len(dryRunResult.Spec.TLSSecurityProfile.Custom.Groups) == 0 {
+				Skip("TLS group preferences (spec.tlsSecurityProfile.custom.groups) are not supported on this cluster: field was silently pruned (TLSGroupPreferences feature gate likely disabled)")
+			}
+
+			expectedTLSOpts, _, _, err := tlsprofile.TLSOptionsFromProfile(customProfile)
+			Expect(err).NotTo(HaveOccurred(), "failed to resolve expected Custom TLS profile with curve preferences")
+			Expect(expectedTLSOpts.CurvePreferences).To(Equal([]int32{29, 23}),
+				"expected X25519 (29) and secp256r1/P-256 (23) to be resolved from the Custom profile groups")
+
+			By("Setting APIServer TLS profile to Custom with X25519 and secp256r1 groups")
+			err = updateAPIServerTLSProfile(ctx, configClient, customProfile)
+			Expect(err).NotTo(HaveOccurred(), "failed to set Custom TLS profile with curve preferences")
+
+			By("Waiting for the operand ConfigMap to reflect the curve preferences")
+			Eventually(func() error {
+				configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(
+					ctx, "kueue-manager-config", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get ConfigMap: %w", err)
+				}
+
+				configData, ok := configMap.Data["controller_manager_config.yaml"]
+				if !ok {
+					return fmt.Errorf("controller_manager_config.yaml key not found in ConfigMap")
+				}
+
+				tlsOpts, err := extractTLSOptions(configData)
+				if err != nil {
+					return fmt.Errorf("failed to extract TLS options: %w", err)
+				}
+
+				if tlsOpts == nil {
+					return fmt.Errorf("TLS options not found in operand ConfigMap")
+				}
+
+				if !equalInt32Slices(tlsOpts.CurvePreferences, expectedTLSOpts.CurvePreferences) {
+					return fmt.Errorf("expected curvePreferences %v, got %v", expectedTLSOpts.CurvePreferences, tlsOpts.CurvePreferences)
+				}
+
+				klog.Infof("Operand ConfigMap has correct curve preferences: %v", tlsOpts.CurvePreferences)
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"operand ConfigMap should contain the configured curve preferences")
+		})
+	})
+
 	When("the cluster TLS profile is set to Custom with invalid cipher suites", func() {
 		It("should emit an InvalidTLSCipherSuites warning event for unmapped ciphers", func(ctx context.Context) {
 			if isHyperShift {
@@ -394,6 +500,50 @@ var _ = Describe("TLS Security Profile", Label("tls-profile"), Ordered, func() {
 	})
 })
 
+// tlsGroupPreferencesFeatureGateName is the name of the OpenShift FeatureGate that gates
+// spec.tlsSecurityProfile.custom.groups on the APIServer CR (see openshift/api).
+const tlsGroupPreferencesFeatureGateName = "TLSGroupPreferences"
+
+// isTLSGroupPreferencesFeatureGateEnabled checks the cluster FeatureGate CR to determine
+// whether the TLSGroupPreferences feature gate is enabled for the current cluster version.
+// It returns an error if the FeatureGate CR or the current version's gate list cannot be
+// determined, so callers can fall back to another detection mechanism.
+func isTLSGroupPreferencesFeatureGateEnabled(ctx context.Context, configClient *configclientv1.ConfigV1Client) (bool, error) {
+	fg, err := configClient.FeatureGates().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to get FeatureGate CR: %w", err)
+	}
+
+	clusterVersionClient, err := configclientv1.NewForConfig(clients.RestConfig)
+	if err != nil {
+		return false, fmt.Errorf("failed to create config client: %w", err)
+	}
+	clusterVersion, err := clusterVersionClient.ClusterVersions().Get(ctx, "version", metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to get ClusterVersion CR: %w", err)
+	}
+	currentVersion := clusterVersion.Status.Desired.Version
+
+	for _, details := range fg.Status.FeatureGates {
+		if details.Version != currentVersion {
+			continue
+		}
+		for _, enabled := range details.Enabled {
+			if string(enabled.Name) == tlsGroupPreferencesFeatureGateName {
+				return true, nil
+			}
+		}
+		for _, disabled := range details.Disabled {
+			if string(disabled.Name) == tlsGroupPreferencesFeatureGateName {
+				return false, nil
+			}
+		}
+		return false, fmt.Errorf("TLSGroupPreferences gate not found in FeatureGate status for version %q", currentVersion)
+	}
+
+	return false, fmt.Errorf("no FeatureGate status found for cluster version %q", currentVersion)
+}
+
 // updateAPIServerTLSProfile updates the TLS security profile on the cluster APIServer CR.
 func updateAPIServerTLSProfile(ctx context.Context, configClient *configclientv1.ConfigV1Client, profile *configv1.TLSSecurityProfile) error {
 	apiServer, err := configClient.APIServers().Get(ctx, "cluster", metav1.GetOptions{})
@@ -418,6 +568,19 @@ func profileTypeString(profile *configv1.TLSSecurityProfile) string {
 		return "nil (default Intermediate)"
 	}
 	return string(profile.Type)
+}
+
+// equalInt32Slices returns true if both int32 slices contain the same elements in the same order.
+func equalInt32Slices(a, b []int32) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // extractTLSOptions parses the kueue controller manager config YAML and extracts the TLS options.
