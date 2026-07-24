@@ -55,6 +55,18 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 					{
 						Name: "vstatefulset.kb.io",
 					},
+					{
+						Name: "vcohort.kb.io",
+					},
+					{
+						Name: "vclusterqueue.kb.io",
+					},
+					{
+						Name: "vworkload.kb.io",
+					},
+					{
+						Name: "vresourceflavor.kb.io",
+					},
 				},
 			},
 			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
@@ -95,6 +107,19 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 								},
 							},
 						},
+					},
+					{
+						Name: "vcohort.kb.io",
+					},
+					{
+						Name: "vclusterqueue.kb.io",
+					},
+					{
+						Name:              "vworkload.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+					{
+						Name: "vresourceflavor.kb.io",
 					},
 				},
 			},
@@ -275,6 +300,32 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+		"core webhooks always included even with no frameworks enabled": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vcohort.kb.io"},
+					{Name: "vclusterqueue.kb.io"},
+					{Name: "vworkload.kb.io"},
+					{Name: "vresourceflavor.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vcohort.kb.io"},
+					{Name: "vclusterqueue.kb.io"},
+					{
+						Name:              "vworkload.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+					{Name: "vresourceflavor.kb.io"},
 				},
 			},
 		},
@@ -529,6 +580,32 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+		"core webhooks always included even with no frameworks enabled": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mcohort.kb.io"},
+					{Name: "mclusterqueue.kb.io"},
+					{Name: "mworkload.kb.io"},
+					{Name: "mresourceflavor.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mcohort.kb.io"},
+					{Name: "mclusterqueue.kb.io"},
+					{
+						Name:              "mworkload.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+					{Name: "mresourceflavor.kb.io"},
 				},
 			},
 		},
