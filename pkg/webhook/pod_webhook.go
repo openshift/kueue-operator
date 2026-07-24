@@ -254,5 +254,12 @@ func buildEnabledFrameworks(kueueCfg kueue.KueueConfiguration) map[string]bool {
 		enabledFrameworks[string(kueue.KueueIntegrationPod)] = true
 	}
 
+	// Core Kueue webhooks must always be registered — they use
+	// annotation-based keys not in Integrations.Frameworks
+	enabledFrameworks[annotationCohort] = true
+	enabledFrameworks[annotationClusterQueue] = true
+	enabledFrameworks[annotationWorkload] = true
+	enabledFrameworks[annotationResourceFlavor] = true
+
 	return enabledFrameworks
 }
