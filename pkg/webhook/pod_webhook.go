@@ -254,5 +254,13 @@ func buildEnabledFrameworks(kueueCfg kueue.KueueConfiguration) map[string]bool {
 		enabledFrameworks[string(kueue.KueueIntegrationPod)] = true
 	}
 
+	// Core Kueue webhooks use annotation-based keys (kueue.x-k8s.io/*)
+	// that never appear in Integrations.Frameworks, so always enable them.
+	for key := range webhooksList {
+		if strings.HasPrefix(key, "kueue.x-k8s.io/") {
+			enabledFrameworks[key] = true
+		}
+	}
+
 	return enabledFrameworks
 }
