@@ -5,8 +5,6 @@ exclude:
   global:
     # sync generation script
     - hack/sync_manifests.py
-    # upstream ignores
-    - upstream/kueue/src/hack/internal/tools/**
     # Disable kueue-viz as openshift does not support.
     - upstream/kueue/src/cmd/experimental/kueue-viz/**
     # Disable kueuectl as openshift does not support.
@@ -14,8 +12,8 @@ exclude:
     - upstream/kueue/src/site/**
     - upstream/kueue/src/vendor/**
     - upstream/kueue/src/"**/*_test.go"
-    # Disable tools
-    - upstream/kueue/src/hack/tools/**
+    # Disable all hack scripts
+    - upstream/kueue/src/hack/**
     # sha1 hash not used for cryptographic purposes
     - upstream/kueue/src/pkg/controller/admissionchecks/provisioning/controller.go
     - upstream/kueue/src/pkg/controller/jobframework/workload_names.go
