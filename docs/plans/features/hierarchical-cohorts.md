@@ -40,7 +40,7 @@ Previously, cohorts were implicit — two ClusterQueues sharing the same `spec.c
 
 For this feature, the strategy is two-tiered:
 
-- **Upstream:** e2e tests developed and contributed to `kubernetes-sigs/kueue`, running on KIND clusters. These cover CRD lifecycle and KEP-79 scheduling stories.
+- **Upstream:** e2e and integration tests developed and contributed to `kubernetes-sigs/kueue`, running on KIND clusters. One e2e smoke test (T1) proves the full stack on a real cluster; the remaining scenarios run as integration tests to minimize CI cost.
 - **Downstream:** operator-specific tests in the `kueue-operator` repo, targeting the Kueue Operator + Operand on OCP (development branch `main`, Kueue 1.5 / RHBoK release). These cover scenarios that only apply to the RHBoK distribution.
 
 ## Test Scope
@@ -108,15 +108,15 @@ The following downstream scenarios were evaluated during test planning and exclu
 
 ## Test Deliverables
 
-- Upstream PRs with e2e tests in `kubernetes-sigs/kueue` (Prow CI)
+- Upstream PRs with e2e and integration tests in `kubernetes-sigs/kueue` (Prow CI)
 - Downstream PRs with operator tests in `kueue-operator` (Prow CI)
 - Test report with information for Docs team
 
 ## Test Tasks
 
 1. Manual exploratory testing during spike ([OCPKUEUE-718](https://redhat.atlassian.net/browse/OCPKUEUE-718))
-2. Create and automate upstream e2e tests (T1-T7) in `kubernetes-sigs/kueue` repo ([OCPKUEUE-726](https://redhat.atlassian.net/browse/OCPKUEUE-726))
-3. Port upstream e2e tests to downstream CI ([OCPKUEUE-748](https://redhat.atlassian.net/browse/OCPKUEUE-748))
+2. Create and automate upstream tests in `kubernetes-sigs/kueue` repo — e2e smoke test (T1) and integration tests (T2-T7) ([OCPKUEUE-726](https://redhat.atlassian.net/browse/OCPKUEUE-726))
+3. Port upstream e2e smoke test to downstream CI ([OCPKUEUE-748](https://redhat.atlassian.net/browse/OCPKUEUE-748))
 4. Create downstream-specific automated tests (D1-D2) in `kueue-operator` repo ([OCPKUEUE-727](https://redhat.atlassian.net/browse/OCPKUEUE-727))
 5. Fix bugs found during testing (e.g. [OCPBUGS-99316](https://redhat.atlassian.net/browse/OCPBUGS-99316) — webhook bug)
 6. Execute automated tests on downstream (Prow) builds regularly (frequency TBD)
@@ -126,13 +126,14 @@ The following downstream scenarios were evaluated during test planning and exclu
 - No critical or major defects remain open
 - Administrators can create multi-level cohort hierarchies with correct borrowing, lending, and preemption behavior
 - Supporting documentation material for Docs team is created
-- Upstream and downstream CI jobs for cohort tests pass consistently
+- Upstream and downstream CI jobs for cohort tests pass consistently (T4 is non-gating until upstream [#13553](https://github.com/kubernetes-sigs/kueue/issues/13553) is resolved)
 
 ## Risks
 
 | Risk | Impact |
 |------|--------|
 | [OCPBUGS-99316](https://redhat.atlassian.net/browse/OCPBUGS-99316) — kueue-operator drops `vcohort.kb.io` webhook | Cohort CRD validation may not work downstream until fixed |
+| T4 (Cycle Detection) blocked on upstream [#13553](https://github.com/kubernetes-sigs/kueue/issues/13553) — controller panic on cohort cycles | Cycle detection test cannot be added until the fix lands; gap in upstream test coverage |
 | Development scope not fully defined — spike revealed implementation gaps (e.g. webhook bug) beyond the initial assumption of a test-only effort | Test timelines cannot be committed until full implementation scope is aligned |
 
 ---
