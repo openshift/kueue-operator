@@ -308,12 +308,11 @@ type LabelKeys struct {
 	Key string `json:"key,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=ByWorkload;None;""
+// +kubebuilder:validation:Enum=ByWorkload;""
 type GangSchedulingPolicy string
 
 const (
 	GangSchedulingPolicyByWorkload GangSchedulingPolicy = "ByWorkload"
-	GangSchedulingPolicyNone       GangSchedulingPolicy = "None"
 )
 
 // +kubebuilder:validation:Enum="";Parallel;Sequential
@@ -329,26 +328,25 @@ const (
 // +kubebuilder:validation:XValidation:rule="has(self.policy) && self.policy == 'ByWorkload' ?  has(self.byWorkload) : !has(self.byWorkload)",message="byWorkload is required when policy is byWorkload, and forbidden otherwise"
 // +union
 type GangScheduling struct {
-	// policy allows you to enable and configure gang scheduling.
-	// The allowed values are ByWorkload, None and "".
+	// policy allows you to configure gang scheduling.
+	// The allowed values are ByWorkload and "".
 	// When set to ByWorkload, this means each workload is processed and considered
 	// for admission as a single unit.
 	// Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
-	// None means gang scheduling is disabled.
 	// When set to "", this means no opinion and the operator is left
 	// to choose a reasonable default, which is subject to change over time.
-	// The current default is None.
+	// The current default is "".
 	// policy is a required field.
 	// +required
 	// +unionDiscriminator
 	Policy GangSchedulingPolicy `json:"policy"`
-	// byWorkload configures how Kueue will process workloads for admission.
+	// byWorkload configures how Kueue will handle workloads that are not ready within a timeout.
 	// byWorkload is required when policy is ByWorkload, and forbidden otherwise.
 	// +optional
 	ByWorkload *ByWorkload `json:"byWorkload,omitempty"`
 }
 
-// ByWorkload controls how admission is done
+// ByWorkload allows to configure how to handle workloads that are not ready within a timeout.
 type ByWorkload struct {
 	// admission controls how Kueue will process workloads.
 	// admission is required.
@@ -365,6 +363,73 @@ type ByWorkload struct {
 	// The current default is Parallel.
 	// +required
 	Admission GangSchedulingWorkloadAdmission `json:"admission"`
+
+	// timeoutSeconds defines the time for an admitted workload to have it's pods scheduled.
+	// When the timeoutSeconds is expired, the workload is evicted and requeued.
+	// The value must be between 1 and 31536000 (one year in seconds). Defaults to 1800 seconds.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=31536000
+	// +optional
+	TimeoutSeconds int32 `json:"timeoutSeconds,omitempty"`
+
+	// recoveryTimeoutSeconds defines a timeout measured since the last transition to the
+	// PodsReady=false condition after a Workload is admitted and running. This transition
+	// may happen when a Pod failed and the replacement Pod is awaited to be scheduled.
+	// The value must be between 1 and 31536000 (one year in seconds).
+	// Defaults to the value of timeoutSeconds. Set to 0 to disable recovery timeout.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=31536000
+	// +optional
+	RecoveryTimeoutSeconds *int32 `json:"recoveryTimeoutSeconds,omitempty"`
+
+	// requeuingStrategy defines the strategy for requeuing a Workload that was evicted
+	// due to Pod readiness timeout.
+	// +optional
+	RequeuingStrategy *RequeuingStrategy `json:"requeuingStrategy,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Eviction;Creation
+type RequeuingTimeReference string
+
+const (
+	// EvictionTimestamp requeues the workload based on the time of the Evicted condition
+	// with PodsReadyTimeout reason.
+	EvictionTimestamp RequeuingTimeReference = "Eviction"
+	// CreationTimestamp requeues the workload based on its .metadata.creationTimestamp.
+	CreationTimestamp RequeuingTimeReference = "Creation"
+)
+
+// RequeuingStrategy defines the strategy for requeuing a Workload evicted due to Pod readiness.
+type RequeuingStrategy struct {
+	// timeReference defines which point in time is used as the reference for re-queuing a Workload
+	// that was evicted due to Pod readiness. Allowed values are Eviction and Creation.
+	// Eviction (default) uses the time of the Evicted condition with PodsReadyTimeout reason.
+	// Creation uses the Workload .metadata.creationTimestamp.
+	// +optional
+	TimeReference RequeuingTimeReference `json:"timeReference,omitempty"`
+
+	// backoffLimitCount defines the maximum number of re-queuing retries.
+	// Once the number is reached, the workload is deactivated (spec.active set to false).
+	// When not set, the workload is requeued indefinitely.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2000
+	// +optional
+	BackoffLimitCount int32 `json:"backoffLimitCount,omitempty"`
+
+	// backoffBaseSeconds defines the base for the exponential backoff for re-queuing an evicted workload.
+	// The consecutive requeue delays are computed as backoffBaseSeconds * 2^(retryCount-1) + jitter.
+	// Defaults to 60.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3600
+	// +optional
+	BackoffBaseSeconds int32 `json:"backoffBaseSeconds,omitempty"`
+
+	// backoffMaxSeconds defines the maximum backoff time to re-queue an evicted workload.
+	// Defaults to 3600.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=86400
+	// +optional
+	BackoffMaxSeconds int32 `json:"backoffMaxSeconds,omitempty"`
 }
 
 // +kubebuilder:validation:Enum="";QueueName;None
