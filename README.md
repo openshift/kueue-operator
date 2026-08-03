@@ -14,9 +14,10 @@ The Kueue Operator needs CertManager installed to operate correctly
 
 ## Releases
 
-| ko version   | ocp version         |kueue version  | k8s version | golang |
-| ------------ | ------------------- |---------------| ----------- | ------ |
-| 1.0.0        | 4.19 - 4.20         |0.11.z         | 1.32        | 1.23   |
+| ko version   | ocp version                          |kueue version  | k8s version | golang |
+| ------------ | ------------------------------------- |---------------| ----------- | ------ |
+| 1.0.0        | 4.19 - 4.20                          |0.11.z         | 1.32        | 1.23   |
+| 1.4.1        | 4.18, 4.20, 4.21, 4.22, 4.23, 5.0     |0.18.z         | 1.36        | 1.26   |
 
 Kueue releases around 6 times a year.
 For the latest Openshift version, we will take the latest version that was build with that underlying
