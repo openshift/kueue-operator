@@ -35,8 +35,8 @@ LABEL io.k8s.display-name="Kueue"
 LABEL io.openshift.tags="openshift,operand,kueue"
 LABEL cpe="cpe:/a:redhat:kueue_operator:1.4::el9"
 LABEL distribution-scope="public"
-LABEL version="1.4.0"
-LABEL release="1.4.0"
+LABEL version="1.4.1"
+LABEL release="1.4.1"
 
 # Licenses
 

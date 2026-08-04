@@ -4,13 +4,13 @@ Bumps the kueue-operator version in all the necessary files.
 
 ## Process
 
-1. **Show to the user the current kueue-operator version defined in the files in the bundle folder**
+1. **Show to the user the current kueue-operator version defined in the files in the bundle folder (`bundle/`) as well as the root-level `bundle.Dockerfile` and `bundle.developer.Dockerfile` files (note: these are distinct from the `bundle/` folder despite the similar name)**
 
 2. **Ask the user the value of the new kueue-operator version using semver format and give examples**
 
 3. **Ask the user the values of the OpenShift versions that the new kueue-operator version should support**
 
-4. **Update any files that mentions the current kueue-operator version with the new kueue-operator version**
+4. **Update any files that mentions the current kueue-operator version with the new kueue-operator version. Search the entire repository (e.g. `grep -rn "<old-version>"`), not just the `bundle/` folder — this must include the root-level `bundle.Dockerfile` and `bundle.developer.Dockerfile` files, which have historically been missed because of their similar name to the `bundle/` folder**
 
 5. **Update any files that mentions the OpenShift versions with the new OpenShift version to be supported**
 
