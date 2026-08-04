@@ -185,6 +185,15 @@ func (cqw *ClusterQueueWrapper) WithDRAResource(name, quota string) *ClusterQueu
 	return cqw
 }
 
+// WithFairSharingWeight sets the FairSharing weight for the ClusterQueue.
+func (cqw *ClusterQueueWrapper) WithFairSharingWeight(weight int32) *ClusterQueueWrapper {
+	w := resource.MustParse(fmt.Sprintf("%d", weight))
+	cqw.Spec.FairSharing = &kueuev1beta2.FairSharing{
+		Weight: &w,
+	}
+	return cqw
+}
+
 // WithBorrowingLimit sets the borrowing limit for a specific resource.
 // resourceName is the name of the resource (e.g., "cpu", "memory").
 // limit is the maximum amount that can be borrowed from the cohort.
@@ -420,6 +429,94 @@ func (rfw *ResourceFlavorWrapper) CreateWithObject(ctx context.Context, client *
 	}
 
 	return createdRF, cleanup, nil
+}
+
+// CohortWrapper wraps a Cohort and provides builder methods.
+type CohortWrapper struct {
+	kueuev1beta2.Cohort
+}
+
+// NewCohort creates a new wrapper with the given name and empty spec.
+func NewCohort(name string) *CohortWrapper {
+	return &CohortWrapper{
+		Cohort: kueuev1beta2.Cohort{
+			ObjectMeta: v1.ObjectMeta{
+				Name: name,
+			},
+		},
+	}
+}
+
+// WithGenerateName switches to using GenerateName with "cohort-" prefix.
+func (cw *CohortWrapper) WithGenerateName() *CohortWrapper {
+	cw.Name = ""
+	cw.GenerateName = "cohort-"
+	return cw
+}
+
+// WithParentName sets the parent cohort name.
+func (cw *CohortWrapper) WithParentName(parent string) *CohortWrapper {
+	cw.Spec.ParentName = kueuev1beta2.CohortReference(parent)
+	return cw
+}
+
+// WithCPU adds a ResourceGroup with the given CPU quota on the "default" flavor.
+func (cw *CohortWrapper) WithCPU(cpu string) *CohortWrapper {
+	cw.Spec.ResourceGroups = []kueuev1beta2.ResourceGroup{{
+		CoveredResources: []corev1.ResourceName{"cpu"},
+		Flavors: []kueuev1beta2.FlavorQuotas{{
+			Name: kueuev1beta2.ResourceFlavorReference("default"),
+			Resources: []kueuev1beta2.ResourceQuota{
+				{Name: "cpu", NominalQuota: resource.MustParse(cpu)},
+			},
+		}},
+	}}
+	return cw
+}
+
+// WithFlavorName sets the resource flavor name for the Cohort's resource group.
+func (cw *CohortWrapper) WithFlavorName(flavorName string) *CohortWrapper {
+	if len(cw.Spec.ResourceGroups) > 0 && len(cw.Spec.ResourceGroups[0].Flavors) > 0 {
+		cw.Spec.ResourceGroups[0].Flavors[0].Name = kueuev1beta2.ResourceFlavorReference(flavorName)
+	}
+	return cw
+}
+
+// Create creates the Cohort in the cluster and returns cleanup function.
+func (cw *CohortWrapper) Create(ctx context.Context, client *upstreamkueueclient.Clientset) (func(), error) {
+	_, cleanup, err := cw.CreateWithObject(ctx, client)
+	return cleanup, err
+}
+
+// CreateWithObject creates the Cohort in the cluster and returns the created object, cleanup function, and error.
+func (cw *CohortWrapper) CreateWithObject(ctx context.Context, client *upstreamkueueclient.Clientset) (*kueuev1beta2.Cohort, func(), error) {
+	createdCohort, err := client.KueueV1beta2().Cohorts().Create(ctx, &cw.Cohort, v1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		ctx := context.TODO()
+		By(fmt.Sprintf("Destroying Cohort %s", createdCohort.Name))
+		removeFinalizersWithPatch(func() error {
+			_, err := client.KueueV1beta2().Cohorts().Patch(ctx, createdCohort.Name, types.MergePatchType, removeFinalizersMergePatch, metav1.PatchOptions{})
+			return err
+		})
+		err := client.KueueV1beta2().Cohorts().Delete(ctx, createdCohort.Name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := client.KueueV1beta2().Cohorts().Get(ctx, createdCohort.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("cohort %s still exists: %w", createdCohort.Name, err)
+		}, DeletionTime, DeletionPoll).Should(Succeed(), fmt.Sprintf("Cohort %s was not cleaned up", createdCohort.Name))
+	}
+
+	return createdCohort, cleanup, nil
 }
 
 // TopologyWrapper wraps a Topology and provides builder methods.
