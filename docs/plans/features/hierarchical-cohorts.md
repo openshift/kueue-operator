@@ -77,8 +77,9 @@ Operator-specific scenarios that don't exist upstream:
 
 | ID | Scenario | Sub-task | Why downstream-specific |
 |----|----------|----------|------------------------|
-| D1 | Preemption with Hierarchical Cohorts | TBD | The existing downstream preemption test covers only flat cohorts. Preemption policy (`Classical` / `FairSharing`) is configured via the operator CR (`spec.config.preemption.preemptionPolicy`), which is a downstream-specific configuration path. Tests both modes. |
-| D2 | TLS Metrics — Cohort Metrics via Secured Service | [OCPKUEUE-744](https://redhat.atlassian.net/browse/OCPKUEUE-744) | New cohort metrics need to surface through TLS-secured endpoint. Downstream uses TLS-secured metrics service with ServiceMonitor; upstream uses plain HTTP port-forward. |
+| D1 | Classical Preemption — Reclaim Succeeds | [OCPKUEUE-727](https://redhat.atlassian.net/browse/OCPKUEUE-727) | Preemption policy (`Classical`) is configured via the operator CR (`spec.config.preemption.preemptionPolicy`). Validates `reclaimWithinCohort: Any` reclaims quota across the cohort tree; `fairSharing` status is nil. |
+| D2 | FairSharing Preemption — Weights Protect Borrower | [OCPKUEUE-727](https://redhat.atlassian.net/browse/OCPKUEUE-727) | Preemption policy (`FairSharing`) is configured via the operator CR. Without `reclaimWithinCohort`, weights (3:1) protect the higher-weight borrower from preemption — ML job stays pending. |
+| D3 | TLS Metrics — Cohort Hierarchy Metrics | [OCPKUEUE-744](https://redhat.atlassian.net/browse/OCPKUEUE-744) | All 7 hierarchy-specific metrics (`kueue_cohort_subtree_admitted_active_workloads`, `kueue_cohort_subtree_admitted_workloads_total`, `kueue_cohort_subtree_quota`, `kueue_cohort_subtree_resource_reservations`, `kueue_cohort_info`, `kueue_cohort_weighted_share`, `kueue_cluster_queue_info` with `parent_cohort`/`root_cohort`) must surface through the TLS-secured endpoint. |
 
 ## Out of Scope
 
