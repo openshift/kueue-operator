@@ -705,6 +705,68 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"with TLS curve preferences": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+			},
+			tlsOpts: &configapi.TLSOptions{
+				MinVersion:       "VersionTLS12",
+				CurvePreferences: []int32{4588, 29, 23, 24},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+tls:
+  curvePreferences:
+  - 4588
+  - 29
+  - 23
+  - 24
+  minVersion: VersionTLS12
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"multikueue with external frameworks and gvr mapping": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
