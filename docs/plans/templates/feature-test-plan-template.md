@@ -92,6 +92,14 @@ _If downstream scenarios were evaluated and removed during planning, document th
 
 ## Test Tasks
 
+_List testing-related work items for this feature. These are tasks focused on test planning, authoring, and validation — distinct from the implementation stories used to build the feature itself. Typical tasks include:_
+
+- _Exploratory testing and spike investigations_
+- _Test plan creation and review_
+- _Upstream test automation (e2e, integration, unit)_
+- _Downstream test automation (e2e, integration, unit)_
+- _Additional validation (acceptance criteria, edge cases, environment-specific checks)_
+
 1. _Task description ([JIRA link](https://redhat.atlassian.net/browse/OCPKUEUE-XXX))_
 2. _Task description ([JIRA link](https://redhat.atlassian.net/browse/OCPKUEUE-XXX))_
 3. _Task description ([JIRA link](https://redhat.atlassian.net/browse/OCPKUEUE-XXX))_
