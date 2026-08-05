@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: tas-dc-block-job-
+  namespace: kueue-tas-demo
+  labels:
+    kueue.x-k8s.io/queue-name: tas-datacenter-lq
+spec:
+  parallelism: 2
+  completions: 2
+  template:
+    metadata:
+      annotations:
+        # Every pod in this job must land in the same block. With only
+        # block+rack+hostname levels and 2 pods requesting 100m/64Mi each,
+        # Kueue can satisfy this by picking 2 hosts in the same block.
+        kueue.x-k8s.io/podset-required-topology: cloud.provider.com/topology-block
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: test-container
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command: ["sh", "-c", "echo Hello Kueue; sleep 3600"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]

@@ -1,0 +1,7 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: Topology
+metadata:
+  name: hostname-topology
+spec:
+  levels:
+  - nodeLabel: kubernetes.io/hostname
