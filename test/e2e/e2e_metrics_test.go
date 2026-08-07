@@ -182,7 +182,7 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 			Expect(sm).NotTo(BeNil())
 			Expect(sm.Spec.Endpoints).To(HaveLen(1))
 			Expect(sm.Spec.Endpoints[0].Port).To(Equal("https"))
-			Expect(sm.Spec.Endpoints[0].Scheme).To(Equal(ptr.To(monitoringv1.SchemeHTTPS)))
+			Expect(sm.Spec.Endpoints[0].Scheme).To(Equal(ptr.To(monitoringv1.Scheme("https"))))
 		})
 
 		It("should have metrics network policy with correct namespace selectors", func() {
