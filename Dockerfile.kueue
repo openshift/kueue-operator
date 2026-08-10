@@ -9,7 +9,7 @@ COPY . .
 WORKDIR /workspace/upstream/kueue
 RUN ./build.sh
 
-FROM registry.redhat.io/ubi9/ubi-minimal@sha256:dd334afa72444fa46238fcf9e6bd399245adf746378735348cf84b9dfdca38f1
+FROM registry.redhat.io/ubi9/ubi-minimal@sha256:57c8151c51445a07e503dab9dc9211dc3cdeac9d45ed81a10954b7d770659b3b
 WORKDIR /
 COPY --from=build /workspace/upstream/kueue/src/bin/manager /
 USER 65532:65532
