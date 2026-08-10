@@ -85,17 +85,17 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				})
 
 			By("Admitting a Job that consumes partial quota")
-			cleanupJob1, job1, err := createJobGang(ctx, "job-1", namespace.Name, gangLocalQueueName, "250m", "128Mi", 1)
+			job1, err := createJobGang(ctx, "job-1", namespace.Name, gangLocalQueueName, "250m", "128Mi", 1)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first job")
-			DeferCleanup(cleanupJob1)
+			defer testutils.CleanUpJob(ctx, kubeClient, job1.Namespace, job1.Name)
 
 			By("Verifying first job workload is created and admitted")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job1.UID))
 
 			By("Creating a gang job (parallelism=2) that exceeds remaining quota")
-			cleanupJob2, job2, err := createJobGang(ctx, "job-gang", namespace.Name, gangLocalQueueName, "150m", "128Mi", 2)
+			job2, err := createJobGang(ctx, "job-gang", namespace.Name, gangLocalQueueName, "150m", "128Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create gang job")
-			DeferCleanup(cleanupJob2)
+			defer testutils.CleanUpJob(ctx, kubeClient, job2.Namespace, job2.Name)
 
 			By("Verifying the gang job workload is created but NOT admitted (not enough quota for all pods)")
 			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespace.Name, job2.UID)
@@ -139,17 +139,17 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				})
 
 			By("Creating the first gang job (parallelism=2) with delayed pod readiness")
-			cleanupJob1, createdJob1, err := createJobGang(ctx, "job-sequential-1", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
+			createdJob1, err := createJobGang(ctx, "job-sequential-1", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first gang job")
-			DeferCleanup(cleanupJob1)
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
 
 			By("Verifying first gang job workload is admitted")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
 
 			By("Creating the second gang job (parallelism=2) while first gang job pods are not yet ready")
-			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-sequential-2", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
+			createdJob2, err := createJobGang(ctx, "job-sequential-2", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second gang job")
-			DeferCleanup(cleanupJob2)
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
 
 			By("Verifying second gang job is NOT admitted because sequential admission waits for first gang job pods to be ready")
 			verifyWorkloadCreatedNotAdmitted(clients.UpstreamKueueClient, namespace.Name, createdJob2.UID)
@@ -230,17 +230,17 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				})
 
 			By("Creating the first gang job (parallelism=2) with delayed pod readiness")
-			cleanupJob1, createdJob1, err := createJobGang(ctx, "job-parallel-1", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
+			createdJob1, err := createJobGang(ctx, "job-parallel-1", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first gang job")
-			DeferCleanup(cleanupJob1)
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
 
 			By("Verifying first gang job workload is admitted")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob1.UID))
 
 			By("Creating the second gang job (parallelism=2) while first gang job pods are not yet ready")
-			cleanupJob2, createdJob2, err := createJobGang(ctx, "job-parallel-2", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
+			createdJob2, err := createJobGang(ctx, "job-parallel-2", namespace.Name, gangLocalQueueName, "100m", "100Mi", 2)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second gang job")
-			DeferCleanup(cleanupJob2)
+			defer testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
 
 			By("Verifying second gang job is admitted immediately despite first gang job pods not being ready (parallel admission)")
 			verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdJob2.UID))
@@ -264,7 +264,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 // createJobGang creates a job with an init container that delays pod readiness by 10 seconds.
 // Parallelism specifies how many pods should run in parallel (for gang scheduling tests).
 // CPU and memory specify the resource requests per pod.
-func createJobGang(ctx context.Context, name, namespace, queueName, cpu, memory string, parallelism int32) (func(context.Context), *batchv1.Job, error) {
+func createJobGang(ctx context.Context, name, namespace, queueName, cpu, memory string, parallelism int32) (*batchv1.Job, error) {
 	builder := testutils.NewTestResourceBuilder(namespace, queueName)
 	job := builder.NewJob()
 	job.Name = name
@@ -291,12 +291,8 @@ func createJobGang(ctx context.Context, name, namespace, queueName, cpu, memory 
 
 	createdJob, err := kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	cleanup := func(ctx context.Context) {
-		_ = kubeClient.BatchV1().Jobs(namespace).Delete(ctx, createdJob.Name, metav1.DeleteOptions{})
-	}
-
-	return cleanup, createdJob, nil
+	return createdJob, nil
 }
