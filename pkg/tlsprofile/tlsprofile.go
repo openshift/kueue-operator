@@ -39,14 +39,17 @@ func FetchAPIServerTLSProfile(ctx context.Context, client configclient.Interface
 
 // TLSOptionsFromProfile resolves an OpenShift TLSSecurityProfile to kueue TLSOptions.
 // If profile is nil, the Intermediate profile is used as the default.
-// Cipher suites are converted from OpenSSL names to IANA format.
-// Returns the TLS options, a list of cipher suite names that could not be mapped
-// to IANA format (unmapped ciphers), and an error if the profile uses a TLS
-// version below 1.2, which is not supported by Kueue.
-func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLSOptions, []string, error) {
+// Cipher suites are converted from OpenSSL names to IANA format, and groups
+// (supported TLS key-exchange curves) are converted to the numeric IANA
+// Supported Group IDs expected by Kueue's CurvePreferences field.
+// Returns the TLS options, a list of cipher suite names that could not be
+// mapped to IANA format (unmapped ciphers), a list of group names that could
+// not be mapped to a curve ID (unmapped groups), and an error if the profile
+// uses a TLS version below 1.2, which is not supported by Kueue.
+func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLSOptions, []string, []string, error) {
 	profileSpec, err := getProfileSpec(profile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if profileSpec.MinTLSVersion == configv1.VersionTLS10 || profileSpec.MinTLSVersion == configv1.VersionTLS11 {
@@ -54,7 +57,7 @@ func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLS
 		if profile != nil {
 			profileType = string(profile.Type)
 		}
-		return nil, nil, fmt.Errorf("TLS profile %q uses minimum version %s which is not supported by Kueue (minimum supported: VersionTLS12)", profileType, profileSpec.MinTLSVersion)
+		return nil, nil, nil, fmt.Errorf("TLS profile %q uses minimum version %s which is not supported by Kueue (minimum supported: VersionTLS12)", profileType, profileSpec.MinTLSVersion)
 	}
 
 	opts := &configapi.TLSOptions{
@@ -69,7 +72,13 @@ func TLSOptionsFromProfile(profile *configv1.TLSSecurityProfile) (*configapi.TLS
 		unmappedCiphers = findUnmappedCiphers(profileSpec.Ciphers)
 	}
 
-	return opts, unmappedCiphers, nil
+	// Groups (curve preferences) apply regardless of TLS version.
+	var unmappedGroups []string
+	if len(profileSpec.Groups) > 0 {
+		opts.CurvePreferences, unmappedGroups = convertGroupsToCurvePreferences(profileSpec.Groups)
+	}
+
+	return opts, unmappedCiphers, unmappedGroups, nil
 }
 
 // findUnmappedCiphers returns cipher suite names from the input that cannot be
@@ -83,6 +92,26 @@ func findUnmappedCiphers(ciphers []string) []string {
 		}
 	}
 	return unmapped
+}
+
+// convertGroupsToCurvePreferences converts a list of OpenShift TLSGroup names
+// to their corresponding numeric IANA TLS Supported Group IDs, as expected by
+// Kueue's TLSOptions.CurvePreferences. Groups that cannot be mapped are
+// returned separately so callers can surface a warning without failing.
+func convertGroupsToCurvePreferences(groups []configv1.TLSGroup) ([]int32, []string) {
+	curveIDs, unmappedGroups := crypto.TLSGroupsToCurveIDs(groups)
+
+	curves := make([]int32, len(curveIDs))
+	for i, id := range curveIDs {
+		curves[i] = int32(id)
+	}
+
+	unmapped := make([]string, len(unmappedGroups))
+	for i, g := range unmappedGroups {
+		unmapped[i] = string(g)
+	}
+
+	return curves, unmapped
 }
 
 // getProfileSpec resolves a TLSSecurityProfile to its TLSProfileSpec.
