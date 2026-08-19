@@ -26,7 +26,7 @@
 | Upstream tests | _JIRA story + upstream PR/issue link_ |
 | Upstream docs | _link to upstream documentation_ |
 | Downstream tests | _JIRA story link_ |
-| Downstream docs | TBD |
+| Downstream docs | _link to downstream docs if applicable_ |
 | Bugs | _known bugs affecting this feature_ |
 
 ## Introduction
@@ -53,12 +53,12 @@ _List upstream test scenarios with IDs, descriptions, and what each validates._
 
 ### Downstream Tests
 
-_List downstream-specific scenarios. Include JIRA sub-tasks and explain why each is downstream-specific._
+_List downstream-specific scenarios with IDs, descriptions, and what each validates. Explain in the Test Strategy section why each is downstream-specific._
 
-| ID | Scenario | Sub-task | Why downstream-specific |
-|----|----------|----------|------------------------|
-| D1 | _Scenario name_ | _JIRA link_ | _Why this can't be tested upstream_ |
-| D2 | _Scenario name_ | _JIRA link_ | _Why this can't be tested upstream_ |
+| ID | Scenario | What It Validates |
+|----|----------|-------------------|
+| D1 | _Scenario name_ | _What it proves_ |
+| D2 | _Scenario name_ | _What it proves_ |
 
 ## Out of Scope
 
@@ -85,6 +85,8 @@ _If downstream scenarios were evaluated and removed during planning, document th
 - _Any feature-specific environment requirements_
 
 ## Test Deliverables
+
+_Describe the tangible outputs from test planning and execution — what PRs, test reports, and documentation will be produced._
 
 - _Upstream PRs with tests in `kubernetes-sigs/kueue` (Prow CI)_
 - _Downstream PRs with operator tests in `kueue-operator` (Prow CI)_
