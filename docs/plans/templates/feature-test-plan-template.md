@@ -100,10 +100,6 @@ _List testing-related work items for this feature. These are tasks focused on te
 - _Downstream test automation (e2e, integration, unit)_
 - _Additional validation (acceptance criteria, edge cases, environment-specific checks)_
 
-1. _Task description ([JIRA link](https://redhat.atlassian.net/browse/OCPKUEUE-XXX))_
-2. _Task description ([JIRA link](https://redhat.atlassian.net/browse/OCPKUEUE-XXX))_
-3. _Task description ([JIRA link](https://redhat.atlassian.net/browse/OCPKUEUE-XXX))_
-
 ## Pass/Fail Criteria
 
 - No critical or major defects remain open
