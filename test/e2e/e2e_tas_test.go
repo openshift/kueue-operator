@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,12 +27,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
+	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
 )
 
 func newTASJob(builder *testutils.TestResourceBuilder, queueName, topologyAnnotationKey, topologyLevel string) *batchv1.Job {
@@ -122,6 +126,40 @@ func newTASDeployment(builder *testutils.TestResourceBuilder, queueName, topolog
 		corev1.ResourceMemory: resource.MustParse("64Mi"),
 	}
 	return deploy
+}
+
+func newTASStatefulSet(builder *testutils.TestResourceBuilder, queueName, topologyAnnotationKey, topologyLevel string) *appsv1.StatefulSet {
+	ss := builder.NewStatefulSet()
+	ss.GenerateName = "tas-ss-"
+	ss.Labels[testutils.QueueLabel] = queueName
+	ss.Spec.Template.ObjectMeta.Annotations = map[string]string{
+		topologyAnnotationKey: topologyLevel,
+	}
+	ss.Spec.Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("100m"),
+		corev1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	return ss
+}
+
+func newTASLeaderWorkerSet(builder *testutils.TestResourceBuilder, queueName, topologyAnnotationKey, topologyLevel string) *lwsapi.LeaderWorkerSet {
+	lws := builder.NewLeaderWorkerSet(testutils.LeaderWorkerSetOptions{
+		QueueName: queueName,
+		Size:      2,
+	})
+	lws.GenerateName = "tas-lws-"
+
+	// The topology requirement is expressed on the pod templates so that both
+	// the leader and worker pods are placed within the requested topology domain.
+	if lws.Spec.LeaderWorkerTemplate.LeaderTemplate != nil {
+		lws.Spec.LeaderWorkerTemplate.LeaderTemplate.ObjectMeta.Annotations = map[string]string{
+			topologyAnnotationKey: topologyLevel,
+		}
+	}
+	lws.Spec.LeaderWorkerTemplate.WorkerTemplate.ObjectMeta.Annotations = map[string]string{
+		topologyAnnotationKey: topologyLevel,
+	}
+	return lws
 }
 
 var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
@@ -333,6 +371,123 @@ var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
 				g.Expect(d.Status.AvailableReplicas).To(Equal(int32(2)), "Deployment not fully available")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 		})
+
+		It("should admit a StatefulSet via TAS", func(ctx context.Context) {
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			ss := newTASStatefulSet(builder, localQueue.Name, kueuev1beta2.PodSetRequiredTopologyAnnotation, corev1.LabelHostname)
+
+			By("Creating the StatefulSet")
+			createdSS, err := kubeClient.AppsV1().StatefulSets(namespace.Name).Create(ctx, ss, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanUpObject(ctx, genericClient, createdSS)
+			})
+
+			By("Waiting for StatefulSet pod to be created")
+			Eventually(func(g Gomega) {
+				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: "app=test-statefulset",
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).NotTo(BeEmpty(), "no pods found for statefulset")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying scheduling gates are removed and nodeSelector is set on the StatefulSet pod")
+			Eventually(func(g Gomega) {
+				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: "app=test-statefulset",
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				for _, pod := range pods.Items {
+					g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(),
+						fmt.Sprintf("pod %s still has scheduling gates", pod.Name))
+					g.Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("instance-type", "on-demand"),
+						fmt.Sprintf("pod %s missing expected nodeSelector", pod.Name))
+				}
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying StatefulSet is ready")
+			Eventually(func(g Gomega) {
+				s, err := kubeClient.AppsV1().StatefulSets(namespace.Name).Get(ctx, createdSS.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(s.Status.ReadyReplicas).To(Equal(int32(1)), "StatefulSet not ready")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+		})
+
+		It("should admit a LeaderWorkerSet via TAS", func(ctx context.Context) {
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			lws := newTASLeaderWorkerSet(builder, localQueue.Name, kueuev1beta2.PodSetRequiredTopologyAnnotation, corev1.LabelHostname)
+
+			By("Creating the LeaderWorkerSet")
+			Expect(genericClient.Create(ctx, lws)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanUpObject(ctx, genericClient, lws)
+			})
+
+			podSelector := fmt.Sprintf("leaderworkerset.sigs.k8s.io/name=%s", lws.Name)
+
+			By("Waiting for LeaderWorkerSet pods to be created")
+			// A single replica with size 2 produces one leader pod and one worker pod.
+			Eventually(func(g Gomega) {
+				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: podSelector,
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).To(HaveLen(2), "expected 2 pods (leader + worker) for LeaderWorkerSet")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+
+			By("Verifying scheduling gates are removed and nodeSelector is set on all LeaderWorkerSet pods")
+			Eventually(func(g Gomega) {
+				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: podSelector,
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				for _, pod := range pods.Items {
+					g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(),
+						fmt.Sprintf("pod %s still has scheduling gates", pod.Name))
+					g.Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("instance-type", "on-demand"),
+						fmt.Sprintf("pod %s missing expected nodeSelector", pod.Name))
+				}
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+		})
+	})
+
+	When("Verifying operator-delivered Topology CRD and RBAC", func() {
+		// D4: The Topology CRD and its editor/viewer ClusterRoles are shipped
+		// entirely by the operator and are not exercised by the upstream Kueue
+		// suite, so this coverage lives only here. These resources must be
+		// present after operator install and survive an upgrade.
+		It("should have the Topology CRD established", func(ctx context.Context) {
+			Eventually(func(g Gomega) {
+				crd, err := clients.APIExtClient.CustomResourceDefinitions().Get(ctx, "topologies.kueue.x-k8s.io", metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred(), "Topology CRD not found")
+
+				established := false
+				for _, condition := range crd.Status.Conditions {
+					if condition.Type == apiextensionsv1.Established && condition.Status == apiextensionsv1.ConditionTrue {
+						established = true
+						break
+					}
+				}
+				g.Expect(established).To(BeTrue(), "Topology CRD is not established")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+		})
+
+		It("should have the topology editor and viewer ClusterRoles", func(ctx context.Context) {
+			Eventually(func(g Gomega) {
+				editor, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, "kueue-topology-editor-role", metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred(), "topology editor ClusterRole not found")
+				g.Expect(topologyRuleVerbs(editor)).To(ContainElements("create", "delete", "get", "list", "patch", "update", "watch"),
+					"topology editor ClusterRole missing expected verbs on topologies")
+
+				viewer, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, "kueue-topology-viewer-role", metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred(), "topology viewer ClusterRole not found")
+				g.Expect(topologyRuleVerbs(viewer)).To(ContainElements("get", "list", "watch"),
+					"topology viewer ClusterRole missing expected verbs on topologies")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+		})
 	})
 
 	When("Using a datacenter topology with block and rack levels", func() {
@@ -436,6 +591,46 @@ var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
 
 			By("Verifying workload is admitted with TopologyAssignment")
 			verifyWorkloadAdmittedWithTopologyLevels(ctx, namespace.Name, string(createdJob.UID), []string{
+				corev1.LabelHostname,
+			})
+		})
+
+		It("should admit a StatefulSet with block-level required topology", func(ctx context.Context) {
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			ss := newTASStatefulSet(builder, localQueue.Name, kueuev1beta2.PodSetRequiredTopologyAnnotation, "cloud.provider.com/topology-block")
+			ss.GenerateName = "tas-dc-ss-"
+			ss.Spec.Replicas = ptr.To[int32](2)
+
+			By("Creating the StatefulSet with block-level topology requirement")
+			createdSS, err := kubeClient.AppsV1().StatefulSets(namespace.Name).Create(ctx, ss, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanUpObject(ctx, genericClient, createdSS)
+			})
+
+			By("Verifying workload is admitted with TopologyAssignment")
+			// When kubernetes.io/hostname is the leaf level, Kueue optimizes
+			// the TopologyAssignment to only include the hostname level.
+			verifyWorkloadAdmittedWithTopologyLevels(ctx, namespace.Name, string(createdSS.UID), []string{
+				corev1.LabelHostname,
+			})
+		})
+
+		It("should admit a LeaderWorkerSet with block-level required topology", func(ctx context.Context) {
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			lws := newTASLeaderWorkerSet(builder, localQueue.Name, kueuev1beta2.PodSetRequiredTopologyAnnotation, "cloud.provider.com/topology-block")
+			lws.GenerateName = "tas-dc-lws-"
+
+			By("Creating the LeaderWorkerSet with block-level topology requirement")
+			Expect(genericClient.Create(ctx, lws)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanUpObject(ctx, genericClient, lws)
+			})
+
+			By("Verifying workload is admitted with TopologyAssignment on leader and worker PodSets")
+			// When kubernetes.io/hostname is the leaf level, Kueue optimizes
+			// the TopologyAssignment to only include the hostname level.
+			verifyWorkloadAdmittedWithTopologyLevelsN(ctx, namespace.Name, string(lws.UID), 2, []string{
 				corev1.LabelHostname,
 			})
 		})
@@ -547,6 +742,50 @@ var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
 				"cloud.provider.com/topology-rack",
 			})
 		})
+
+		It("should place block-required StatefulSet pods within the same block", func(ctx context.Context) {
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			ss := newTASStatefulSet(builder, localQueue.Name, kueuev1beta2.PodSetRequiredTopologyAnnotation, "cloud.provider.com/topology-block")
+			ss.GenerateName = "tas-2l-ss-"
+			ss.Spec.Replicas = ptr.To[int32](2)
+
+			By("Creating the StatefulSet with block-level required topology")
+			createdSS, err := kubeClient.AppsV1().StatefulSets(namespace.Name).Create(ctx, ss, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanUpObject(ctx, genericClient, createdSS)
+			})
+
+			By("Verifying workload has block and rack levels in TopologyAssignment")
+			verifyWorkloadAdmittedWithTopologyLevels(ctx, namespace.Name, string(createdSS.UID), []string{
+				"cloud.provider.com/topology-block",
+				"cloud.provider.com/topology-rack",
+			})
+
+			By("Verifying all domains share the same block")
+			verifyDomainsShareBlockValue(ctx, namespace.Name, string(createdSS.UID))
+		})
+
+		It("should place block-required LeaderWorkerSet pods within the same block", func(ctx context.Context) {
+			builder := testutils.NewTestResourceBuilder(namespace.Name, localQueue.Name)
+			lws := newTASLeaderWorkerSet(builder, localQueue.Name, kueuev1beta2.PodSetRequiredTopologyAnnotation, "cloud.provider.com/topology-block")
+			lws.GenerateName = "tas-2l-lws-"
+
+			By("Creating the LeaderWorkerSet with block-level required topology")
+			Expect(genericClient.Create(ctx, lws)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanUpObject(ctx, genericClient, lws)
+			})
+
+			By("Verifying workload has block and rack levels on leader and worker PodSets")
+			verifyWorkloadAdmittedWithTopologyLevelsN(ctx, namespace.Name, string(lws.UID), 2, []string{
+				"cloud.provider.com/topology-block",
+				"cloud.provider.com/topology-rack",
+			})
+
+			By("Verifying leader and worker pods share the same block")
+			verifyDomainsShareBlockValue(ctx, namespace.Name, string(lws.UID))
+		})
 	})
 })
 
@@ -640,6 +879,22 @@ func labelWorkerNodesForDatacenterTopology(ctx context.Context) func(context.Con
 	}
 }
 
+// topologyRuleVerbs returns the verbs granted on the kueue.x-k8s.io/topologies
+// resource by the given ClusterRole.
+func topologyRuleVerbs(role *rbacv1.ClusterRole) []string {
+	var verbs []string
+	for _, rule := range role.Rules {
+		if !slices.Contains(rule.APIGroups, "kueue.x-k8s.io") {
+			continue
+		}
+		if !slices.Contains(rule.Resources, "topologies") {
+			continue
+		}
+		verbs = append(verbs, rule.Verbs...)
+	}
+	return verbs
+}
+
 func labelsToJSONFields(labels map[string]string) string {
 	result := ""
 	for k, v := range labels {
@@ -699,6 +954,14 @@ func createTASResources(ctx context.Context, namespaceName string) (
 // verifyWorkloadAdmittedWithTopologyLevels checks that a workload for the given job UID
 // is admitted with a single TopologyAssignment whose levels match the expected levels.
 func verifyWorkloadAdmittedWithTopologyLevels(ctx context.Context, namespace, jobUID string, expectedLevels []string) {
+	verifyWorkloadAdmittedWithTopologyLevelsN(ctx, namespace, jobUID, 1, expectedLevels)
+}
+
+// verifyWorkloadAdmittedWithTopologyLevelsN checks that a workload for the given job UID
+// is admitted with the expected number of PodSetAssignments, each carrying a
+// TopologyAssignment whose levels match the expected levels. This supports
+// multi-PodSet workloads such as LeaderWorkerSet (leader + worker).
+func verifyWorkloadAdmittedWithTopologyLevelsN(ctx context.Context, namespace, jobUID string, expectedPodSets int, expectedLevels []string) {
 	kueueClient := clients.UpstreamKueueClient
 
 	Eventually(func(g Gomega) {
@@ -720,7 +983,7 @@ func verifyWorkloadAdmittedWithTopologyLevels(ctx context.Context, namespace, jo
 		}
 		g.Expect(found).NotTo(BeNil(), "workload not found for job UID %s", jobUID)
 		g.Expect(found.Status.Admission).NotTo(BeNil(), "workload not admitted")
-		g.Expect(found.Status.Admission.PodSetAssignments).To(HaveLen(1))
+		g.Expect(found.Status.Admission.PodSetAssignments).To(HaveLen(expectedPodSets))
 
 		for i, psa := range found.Status.Admission.PodSetAssignments {
 			g.Expect(psa.TopologyAssignment).NotTo(BeNil(),
@@ -733,8 +996,10 @@ func verifyWorkloadAdmittedWithTopologyLevels(ctx context.Context, namespace, jo
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 }
 
-// verifyDomainsShareBlockValue checks that all domains in the first PodSetAssignment's
-// TopologyAssignment share the same block value (index 0 in the levels).
+// verifyDomainsShareBlockValue checks that all domains across every PodSetAssignment's
+// TopologyAssignment share the same block value (index 0 in the levels). Collecting
+// across all PodSetAssignments ensures multi-PodSet workloads (e.g. LeaderWorkerSet's
+// leader + worker) are co-located in the same block, not just the pods within one PodSet.
 // This is only meaningful for topologies where block is in the levels (e.g., 2-level [block, rack]).
 func verifyDomainsShareBlockValue(ctx context.Context, namespace, jobUID string) {
 	kueueClient := clients.UpstreamKueueClient
@@ -760,21 +1025,23 @@ func verifyDomainsShareBlockValue(ctx context.Context, namespace, jobUID string)
 		g.Expect(found.Status.Admission).NotTo(BeNil(), "workload not admitted")
 		g.Expect(found.Status.Admission.PodSetAssignments).NotTo(BeEmpty())
 
-		ta := found.Status.Admission.PodSetAssignments[0].TopologyAssignment
-		g.Expect(ta).NotTo(BeNil())
-		g.Expect(ta.Slices).NotTo(BeEmpty())
-
-		// Collect all block values (level index 0) across all slices.
+		// Collect all block values (level index 0) across all slices of all PodSetAssignments.
 		blockValues := map[string]bool{}
-		for _, slice := range ta.Slices {
-			g.Expect(slice.ValuesPerLevel).NotTo(BeEmpty(),
-				"slice has no valuesPerLevel")
-			blockLevel := slice.ValuesPerLevel[0]
-			if blockLevel.Universal != nil {
-				blockValues[*blockLevel.Universal] = true
-			} else if blockLevel.Individual != nil {
-				for _, root := range blockLevel.Individual.Roots {
-					blockValues[root] = true
+		for _, psa := range found.Status.Admission.PodSetAssignments {
+			ta := psa.TopologyAssignment
+			g.Expect(ta).NotTo(BeNil())
+			g.Expect(ta.Slices).NotTo(BeEmpty())
+
+			for _, slice := range ta.Slices {
+				g.Expect(slice.ValuesPerLevel).NotTo(BeEmpty(),
+					"slice has no valuesPerLevel")
+				blockLevel := slice.ValuesPerLevel[0]
+				if blockLevel.Universal != nil {
+					blockValues[*blockLevel.Universal] = true
+				} else if blockLevel.Individual != nil {
+					for _, root := range blockLevel.Individual.Roots {
+						blockValues[root] = true
+					}
 				}
 			}
 		}
