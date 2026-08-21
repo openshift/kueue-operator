@@ -52,6 +52,20 @@ func newTASJob(builder *testutils.TestResourceBuilder, queueName, topologyAnnota
 	return job
 }
 
+func verifyPodsUngatedWithNodeSelector(ctx context.Context, g Gomega, namespace, labelSelector string) {
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(pods.Items).NotTo(BeEmpty())
+	for _, pod := range pods.Items {
+		g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(),
+			fmt.Sprintf("pod %s still has scheduling gates", pod.Name))
+		g.Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("instance-type", "on-demand"),
+			fmt.Sprintf("pod %s missing expected nodeSelector", pod.Name))
+	}
+}
+
 func newTASPod(builder *testutils.TestResourceBuilder, queueName, topologyAnnotationKey, topologyLevel string) *corev1.Pod {
 	pod := builder.NewPod()
 	pod.GenerateName = "tas-pod-"
@@ -394,17 +408,7 @@ var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
 
 			By("Verifying scheduling gates are removed and nodeSelector is set on the StatefulSet pod")
 			Eventually(func(g Gomega) {
-				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: "app=test-statefulset",
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(pods.Items).NotTo(BeEmpty())
-				for _, pod := range pods.Items {
-					g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(),
-						fmt.Sprintf("pod %s still has scheduling gates", pod.Name))
-					g.Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("instance-type", "on-demand"),
-						fmt.Sprintf("pod %s missing expected nodeSelector", pod.Name))
-				}
+				verifyPodsUngatedWithNodeSelector(ctx, g, namespace.Name, "app=test-statefulset")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 
 			By("Verifying StatefulSet is ready")
@@ -439,17 +443,7 @@ var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
 
 			By("Verifying scheduling gates are removed and nodeSelector is set on all LeaderWorkerSet pods")
 			Eventually(func(g Gomega) {
-				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: podSelector,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(pods.Items).NotTo(BeEmpty())
-				for _, pod := range pods.Items {
-					g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(),
-						fmt.Sprintf("pod %s still has scheduling gates", pod.Name))
-					g.Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("instance-type", "on-demand"),
-						fmt.Sprintf("pod %s missing expected nodeSelector", pod.Name))
-				}
+				verifyPodsUngatedWithNodeSelector(ctx, g, namespace.Name, podSelector)
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 		})
 	})
@@ -479,12 +473,12 @@ var _ = Describe("TopologyAwareScheduling", Label("tas"), func() {
 			Eventually(func(g Gomega) {
 				editor, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, "kueue-topology-editor-role", metav1.GetOptions{})
 				g.Expect(err).NotTo(HaveOccurred(), "topology editor ClusterRole not found")
-				g.Expect(topologyRuleVerbs(editor)).To(ContainElements("create", "delete", "get", "list", "patch", "update", "watch"),
+				g.Expect(topologyRuleVerbs(editor)).To(ConsistOf("create", "delete", "get", "list", "patch", "update", "watch"),
 					"topology editor ClusterRole missing expected verbs on topologies")
 
 				viewer, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, "kueue-topology-viewer-role", metav1.GetOptions{})
 				g.Expect(err).NotTo(HaveOccurred(), "topology viewer ClusterRole not found")
-				g.Expect(topologyRuleVerbs(viewer)).To(ContainElements("get", "list", "watch"),
+				g.Expect(topologyRuleVerbs(viewer)).To(ConsistOf("get", "list", "watch"),
 					"topology viewer ClusterRole missing expected verbs on topologies")
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 		})
