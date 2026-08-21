@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.20.1
   name: kueues.kueue.openshift.io
 spec:
   group: kueue.openshift.io
@@ -156,7 +156,7 @@ spec:
                     properties:
                       byWorkload:
                         description: |-
-                          byWorkload configures how Kueue will process workloads for admission.
+                          byWorkload configures how Kueue will handle workloads that are not ready within a timeout.
                           byWorkload is required when policy is ByWorkload, and forbidden otherwise.
                         properties:
                           admission:
@@ -179,23 +179,102 @@ spec:
                             - Parallel
                             - Sequential
                             type: string
+                          recoveryTimeoutSeconds:
+                            description: |-
+                              recoveryTimeoutSeconds is the maximum time allowed for a running Workload to recover
+                              after its pods transition to PodsReady=false, for example when a Pod fails and its
+                              replacement has not yet been scheduled.
+                              The value must be between 0 and 86400 (one day in seconds).
+                              When set to 0, recovery timeout is disabled.
+                              When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+                              The current default is the value of timeoutSeconds.
+                            format: int32
+                            maximum: 86400
+                            minimum: 0
+                            type: integer
+                          requeuingStrategy:
+                            description: |-
+                              requeuingStrategy defines the strategy for requeuing an evicted Workload
+                              due to Pod readiness timeout.
+                            minProperties: 1
+                            properties:
+                              backoffBaseSeconds:
+                                description: |-
+                                  backoffBaseSeconds defines the base for the exponential backoff for re-queuing an evicted workload.
+                                  The consecutive requeue delays are computed as backoffBaseSeconds * 2^(retryCount-1) + jitter.
+                                  When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+                                  The current default is 60 seconds.
+                                format: int32
+                                maximum: 3600
+                                minimum: 30
+                                type: integer
+                              backoffMaxSeconds:
+                                description: |-
+                                  backoffMaxSeconds defines the maximum backoff time to re-queue an evicted workload.
+                                  When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+                                  The current default is 3600 seconds.
+                                format: int32
+                                maximum: 7200
+                                minimum: 30
+                                type: integer
+                              retryLimit:
+                                description: |-
+                                  retryLimit defines the maximum number of re-queuing retries.
+                                  Once the number is reached, the workload is deactivated (spec.active set to false).
+                                  When omitted, no retry limit will be enforced and the workload will be re-queued infinitely until it has reached a ready state.
+                                format: int32
+                                maximum: 200
+                                minimum: 1
+                                type: integer
+                              timeReference:
+                                description: |-
+                                  timeReference defines which point in time is used as the reference for re-queuing a Workload
+                                  that was evicted. Allowed values are Eviction and Creation.
+                                  When set to 'Eviction', kueue will be configured to use the time of the Evicted condition with PodsReadyTimeout reason.
+                                  When set to 'Creation', kueue will be configured to use the Workload .metadata.creationTimestamp.
+                                  When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+                                  The current default is Eviction.
+                                enum:
+                                - Eviction
+                                - Creation
+                                type: string
+                            type: object
+                            x-kubernetes-validations:
+                            - message: backoffBaseSeconds must be less than or equal
+                                to backoffMaxSeconds
+                              rule: self.backoffBaseSeconds == 0 || self.backoffMaxSeconds
+                                == 0 || self.backoffBaseSeconds <= self.backoffMaxSeconds
+                          timeoutSeconds:
+                            description: |-
+                              timeoutSeconds defines the maximum time an admitted workload is given to reach condition PodsReady=true.
+                              When the timeoutSeconds is expired, the workload is evicted and requeued.
+                              The value must be between 30 and 86400 (one day in seconds).
+                              When omitted, this means no opinion and the operator is left to choose a reasonable default, which is subject to change over time.
+                              The current default is 1800 seconds.
+                            format: int32
+                            maximum: 86400
+                            minimum: 30
+                            type: integer
                         required:
                         - admission
                         type: object
                       policy:
                         description: |-
-                          policy allows you to enable and configure gang scheduling.
-                          The allowed values are ByWorkload, None and "".
+                          policy allows you to configure gang scheduling.
+                          The allowed values are ByWorkload, ByWorkloadDefaults, None and "".
                           When set to ByWorkload, this means each workload is processed and considered
                           for admission as a single unit.
                           Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
-                          None means gang scheduling is disabled.
+                          When set to ByWorkloadDefaults, this means each workload is processed and considered
+                          for admission as a single unit, with the default values of the byWorkload field.
+                          None means gang scheduling sets a really high admission timeout and does not block admission, which effectively disables gang scheduling.
                           When set to "", this means no opinion and the operator is left
                           to choose a reasonable default, which is subject to change over time.
-                          The current default is None.
+                          The current default is ByWorkloadDefaults.
                           policy is a required field.
                         enum:
                         - ByWorkload
+                        - ByWorkloadDefaults
                         - None
                         - ""
                         type: string

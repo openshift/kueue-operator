@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
@@ -143,7 +144,7 @@ metrics:
 namespace: test
 waitForPodsReady:
   blockAdmission: false
-  timeout: 5m0s
+  timeout: 0s
 webhook:
   port: 9443
 `,
@@ -151,65 +152,6 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"ibm example": {
-			configuration: kueue.KueueConfiguration{
-				Integrations: kueue.Integrations{
-					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationAppWrapper},
-				},
-				GangScheduling:     kueue.GangScheduling{Policy: kueue.GangSchedulingPolicyNone},
-				WorkloadManagement: kueue.WorkloadManagement{LabelPolicy: kueue.LabelPolicyNone},
-				Preemption:         kueue.Preemption{PreemptionPolicy: kueue.PreemptionStrategyFairsharing},
-			},
-			wantCfgMap: &corev1.ConfigMap{
-				Data: map[string]string{
-					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
-clientConnection:
-  burst: 100
-  qps: 50
-controller:
-  groupKindConcurrency:
-    ClusterQueue.kueue.x-k8s.io: 1
-    Job.batch: 5
-    LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
-    ResourceFlavor.kueue.x-k8s.io: 1
-    Workload.kueue.x-k8s.io: 5
-fairSharing:
-  preemptionStrategies:
-  - LessThanOrEqualToFinalShare
-  - LessThanInitialShare
-health:
-  healthProbeBindAddress: :8081
-integrations:
-  frameworks:
-  - workload.codeflare.dev/appwrapper
-internalCertManagement:
-  enable: false
-kind: Configuration
-leaderElection:
-  leaderElect: true
-  leaseDuration: 2m17s
-  renewDeadline: 1m47s
-  resourceLock: ""
-  resourceName: ""
-  resourceNamespace: ""
-  retryPeriod: 26s
-manageJobsWithoutQueueName: true
-managedJobsNamespaceSelector:
-  matchLabels:
-    kueue.openshift.io/managed: "true"
-metrics:
-  bindAddress: :8443
-  enableClusterQueueResources: true
-namespace: test
-webhook:
-  port: 9443
-`,
-				},
-			},
-			wantErr: nil,
-		},
-
 		"serving workloads": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
@@ -321,7 +263,253 @@ metrics:
 namespace: test
 waitForPodsReady:
   blockAdmission: true
-  timeout: 5m0s
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with requeuing strategy and recovery timeout": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission:              kueue.GangSchedulingWorkloadAdmissionParallel,
+						RecoveryTimeoutSeconds: ptr.To(int32(1800)),
+						RequeuingStrategy: kueue.RequeuingStrategy{
+							TimeReference:      kueue.EvictionTimestamp,
+							RetryLimit:         5,
+							BackoffBaseSeconds: 120,
+							BackoffMaxSeconds:  7200,
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  recoveryTimeout: 30m0s
+  requeuingStrategy:
+    backoffBaseSeconds: 120
+    backoffLimitCount: 5
+    backoffMaxSeconds: 7200
+    timestamp: Eviction
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with recovery timeout disabled": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission:              kueue.GangSchedulingWorkloadAdmissionParallel,
+						RecoveryTimeoutSeconds: ptr.To(int32(0)),
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  recoveryTimeout: 0s
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission disabled": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyNone,
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  timeout: 8760h0m0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with defaults": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkloadDefaults,
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
 webhook:
   port: 9443
 `,
