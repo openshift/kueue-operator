@@ -1,0 +1,9 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: Topology
+metadata:
+  name: datacenter-topology
+spec:
+  levels:
+  - nodeLabel: cloud.provider.com/topology-block
+  - nodeLabel: cloud.provider.com/topology-rack
+  - nodeLabel: kubernetes.io/hostname
