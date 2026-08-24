@@ -1,0 +1,49 @@
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  generateName: tas-jobset-
+  namespace: kueue-tas-demo
+  labels:
+    kueue.x-k8s.io/queue-name: tas-hostname-lq
+spec:
+  replicatedJobs:
+  - name: rj1
+    replicas: 1
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        template:
+          metadata:
+            annotations:
+              kueue.x-k8s.io/podset-required-topology: kubernetes.io/hostname
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: test
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command: ["sh", "-c", "echo Hello Kueue; sleep 3600"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+  - name: rj2
+    replicas: 1
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        template:
+          metadata:
+            annotations:
+              kueue.x-k8s.io/podset-required-topology: kubernetes.io/hostname
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: test
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command: ["sh", "-c", "echo Hello Kueue; sleep 3600"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 64Mi

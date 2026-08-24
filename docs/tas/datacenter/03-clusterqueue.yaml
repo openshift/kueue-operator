@@ -1,0 +1,17 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: tas-datacenter-cq
+spec:
+  namespaceSelector:
+    matchLabels:
+      kueue.openshift.io/managed: "true"
+  resourceGroups:
+  - coveredResources: ["cpu", "memory"]
+    flavors:
+    - name: tas-datacenter-flavor
+      resources:
+      - name: "cpu"
+        nominalQuota: 4
+      - name: "memory"
+        nominalQuota: 4Gi
