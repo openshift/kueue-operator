@@ -9,7 +9,7 @@ COPY . .
 WORKDIR /workspace/upstream/kueue
 RUN ./build.sh
 
-FROM registry.redhat.io/ubi9/ubi-minimal@sha256:580752f96d36c4132bffd30f9c34865bf4bd87f6aa161c969d117f21732e50f7
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:8a842ac769de709143e4edeace516f2008dfdc431b64670ad3353fa323b44736
 RUN microdnf install -y lsof && microdnf clean all && rm -rf /var/cache/{dnf,yum}
 WORKDIR /
 COPY --from=build /workspace/upstream/kueue/src/bin/manager /
