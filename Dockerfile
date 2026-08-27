@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/openshift/kueue-operator
 COPY . .
 RUN make build --warn-undefined-variables
 
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:8a842ac769de709143e4edeace516f2008dfdc431b64670ad3353fa323b44736
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:ef0438e9f078e71a7317c247fdf1d09644441fefe1fe26efbde5f4fa201435fb
 RUN microdnf install -y lsof && microdnf clean all && rm -rf /var/cache/{dnf,yum}
 COPY --from=builder /go/src/github.com/openshift/kueue-operator/kueue-operator /usr/bin/
 RUN mkdir /licenses
