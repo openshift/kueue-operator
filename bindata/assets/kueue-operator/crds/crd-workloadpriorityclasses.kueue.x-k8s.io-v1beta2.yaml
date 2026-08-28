@@ -65,7 +65,7 @@ spec:
         required:
         - value
         type: object
-    served: true
+    served: false
     storage: false
     subresources: {}
   - additionalPrinterColumns:

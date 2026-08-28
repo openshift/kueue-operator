@@ -470,7 +470,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 			// Wait for all workloads to be created before checking pending status
 			By("Waiting for job-high-a workload to be created")
 			Eventually(func() error {
-				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(namespaceA.Name).List(ctx, metav1.ListOptions{
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespaceA.Name).List(ctx, metav1.ListOptions{
 					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobHighA.UID),
 				})
 				if err != nil {
@@ -484,7 +484,7 @@ var _ = Describe("VisibilityOnDemand", Label("visibility-on-demand"), Ordered, f
 
 			By("Waiting for job-low-b workload to be created")
 			Eventually(func() error {
-				workloads, err := clients.UpstreamKueueClient.KueueV1beta1().Workloads(namespaceB.Name).List(ctx, metav1.ListOptions{
+				workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespaceB.Name).List(ctx, metav1.ListOptions{
 					LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobLowB.UID),
 				})
 				if err != nil {
