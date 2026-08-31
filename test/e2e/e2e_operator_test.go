@@ -33,6 +33,7 @@ import (
 	kueueclient "github.com/openshift/kueue-operator/pkg/generated/clientset/versioned"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
@@ -1452,6 +1453,8 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 	kueueInstance, err := kueueClientset.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 
+	configChanged := !equality.Semantic.DeepEqual(kueueInstance.Spec.Config, config)
+
 	oldCM, err := kClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to fetch kueue-manager-config ConfigMap")
 	oldConfigData := oldCM.Data["controller_manager_config.yaml"]
@@ -1461,24 +1464,28 @@ func applyKueueConfig(ctx context.Context, config ssv1.KueueConfiguration, kClie
 	_, err = kueueClientset.KueueV1().Kueues().Update(ctx, kueueInstance, metav1.UpdateOptions{})
 	Expect(err).ToNot(HaveOccurred(), "Failed to update Kueue config")
 
-	// Wait for the ConfigMap content to reflect the CR update. Compare
-	// rendered ConfigMap content (not CR spec equality) because the operator
-	// normalizes defaults and the ResyncEvery(5m) can delay propagation.
-	By("Waiting for kueue-manager-config ConfigMap content to change")
-	Eventually(func() error {
-		cm, err := kClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("unable to fetch ConfigMap: %v", err)
-		}
-		data, ok := cm.Data["controller_manager_config.yaml"]
-		if !ok {
-			return fmt.Errorf("controller_manager_config.yaml key missing from ConfigMap")
-		}
-		if data == oldConfigData {
-			return fmt.Errorf("ConfigMap content has not changed yet")
-		}
-		return nil
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-manager-config ConfigMap did not update after CR change")
+	// Only wait for the ConfigMap to change when the config actually changed.
+	// Compare rendered ConfigMap content (not CR spec equality) because the
+	// operator normalizes defaults and the ResyncEvery(5m) can delay propagation.
+	if configChanged {
+		By("Waiting for kueue-manager-config ConfigMap content to change")
+		Eventually(func() error {
+			cm, err := kClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("unable to fetch ConfigMap: %v", err)
+			}
+			data, ok := cm.Data["controller_manager_config.yaml"]
+			if !ok {
+				return fmt.Errorf("controller_manager_config.yaml key missing from ConfigMap")
+			}
+			if data == oldConfigData {
+				return fmt.Errorf("ConfigMap content has not changed yet")
+			}
+			return nil
+		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue-manager-config ConfigMap did not update after CR change")
+	} else {
+		By("Skipping ConfigMap content-change wait as config is unchanged")
+	}
 
 	Eventually(func() error {
 		managerDeployment, err := kClient.AppsV1().Deployments(testutils.OperatorNamespace).Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
