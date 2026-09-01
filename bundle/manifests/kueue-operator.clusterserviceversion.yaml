@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2026-08-03T20:53:18Z"
+    createdAt: "2026-09-01T03:33:33Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -50,7 +50,7 @@ metadata:
     operatorframework.io/arch.arm64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: kueue-operator.v1.4.1
+  name: kueue-operator.v1.4.2
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -349,4 +349,4 @@ spec:
     name: operand-image
   - image: registry.redhat.io/kueue/kueue-must-gather-rhel9:latest
     name: must-gather
-  version: 1.4.1
+  version: 1.4.2
