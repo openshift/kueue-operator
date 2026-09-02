@@ -24,7 +24,7 @@
 |------|------|
 | Testing Epic | [OCPKUEUE-722](https://redhat.atlassian.net/browse/OCPKUEUE-722) — Testing waitForPodsReady Configuration in Kueue Operator |
 | Test Plan Story | [OCPKUEUE-799](https://redhat.atlassian.net/browse/OCPKUEUE-799) — Create waitForPodsReady test plan |
-| RFE | [RFE-9252 — Configure WaitForPodsReady Timeout](https://redhat.atlassian.net/browse/RFE-9252) |
+| KEP-349 | [All-or-nothing semantics for job resource assignment](https://github.com/kubernetes-sigs/kueue/tree/main/keps/349-all-or-nothing) |
 | Implementation Story | [OCPKUEUE-700](https://redhat.atlassian.net/browse/OCPKUEUE-700) — Adapt GangScheduling API in the kueue-operator to include timeout field |
 | Implementation PR | [#2140](https://github.com/openshift/kueue-operator/pull/2140) — Add waitForPodsReady timeout config |
 | Related (future) | OCPKUEUE-701 — Per-workload timeout config (requires upstream KEP) |
@@ -43,10 +43,14 @@ This feature exposes these settings on the Kueue CR under `spec.config.gangSched
 
 ## Test Strategy
 
-- **Upstream:** Controller behavior (timeout enforcement, backoff calculation, requeue and queue-ordering logic) is already covered in `kubernetes-sigs/kueue` by e2e, integration, and unit tests running in upstream CI, so downstream relies on these rather than re-implementing timeout math. The upstream tests are not re-run downstream: they configure the feature by writing the controller ConfigMap directly, bypassing the operator's job (CR validation, reconciliation, ConfigMap generation) — the exact thing downstream must verify — and they use sub-second timeouts (for example `timeout: 10ms`) that downstream CEL validation rejects at its 30-second minimum.
-- **Downstream:** Because the operator layer is untested upstream, downstream adds operator-specific coverage across three layers: CEL validation tests (API-level admission of the new CR fields via envtest), unit tests (CR → ConfigMap generation logic), and e2e tests (full path CR → operator reconciliation → ConfigMap → controller behavior, including quota release on eviction). The e2e tests re-verify behavior that upstream also checks, but through the operator-managed path and with CEL-legal values, so they confirm the configuration a user actually sets on the CR produces the expected runtime behavior.
+For this feature, downstream does not re-run upstream tests, but relies on them for controller-owned behavior:
+
+- **Upstream:** Controller-owned behavior is covered in `kubernetes-sigs/kueue` by e2e, integration, and unit tests. These tests are not enabled downstream because they bypass the operator-managed CR → ConfigMap path, and some use sub-second timeout values that downstream CEL validation rejects.
+- **Downstream:** Operator-specific tests in the `kueue-operator` repo, targeting the Kueue Operator + Operand on OCP. Tests cover the full path from Kueue CR (`spec.config.gangScheduling.byWorkload`) through operator reconciliation to controller ConfigMap generation and behavior, across four layers: CEL validation tests, unit tests, e2e tests, and manual tests.
 
 ## Test Scope
+
+Downstream testing covers four levels: CEL validation tests (API admission), unit tests (CR → ConfigMap generation), e2e tests (end-to-end operator-managed behavior), and manual tests (soak testing and scenarios not suitable for automation).
 
 ### Downstream Tests
 
@@ -78,15 +82,23 @@ CR → ConfigMap generation logic. Location: `pkg/configmap/configmap_test.go`.
 
 #### E2E Tests
 
-Full path CR → operator reconciliation → ConfigMap → controller behavior. Location: `test/e2e/e2e_waitforpodsready_test.go`. All proposed (to be automated).
+Full path CR → operator reconciliation → ConfigMap → controller behavior. Location: `test/e2e/e2e_waitforpodsready_test.go`.
+
+| ID | Scenario | What It Validates |
+|----|----------|-------------------|
+| E1 | Gang timeout lifecycle: evict → release quota → requeue → succeed | A Job is evicted when any of its Pods are not ready at `timeoutSeconds` (all-or-nothing). Eviction emits `kueue_evicted_workloads_once_total{reason="PodsReadyTimeout"}` and returns ClusterQueue usage to 0. Once un-gated, the workload becomes Ready on requeue and stays active with `requeueState.count` below `retryLimit`. |
+| E2 | Readiness lost, recovery disabled → stays admitted, quota retained | With `recoveryTimeoutSeconds: 0`, a workload that reached Ready and then lost readiness triggers no recovery-timeout eviction for the duration of the observation window — it stays admitted and retains its quota throughout. |
+| E3 | Requeues exhaust retry limit → workload deactivated | An always-failing workload is requeued with exponential backoff (capped by `backoffMaxSeconds`) until `requeueState.count` reaches `retryLimit`, after which the workload is deactivated (`spec.active=false`). |
+| E4 | Timeout enforced across all workload types | End-to-end verification that the configured waitForPodsReady timeout is enforced for every supported workload type, through the operator-managed path. |
+| E5 | Recovery eviction releases quota | A JobSet (`restartStrategy: Recreate`) reaches Ready, loses readiness, and is evicted at `recoveryTimeoutSeconds` (`underlyingCause=WaitForRecovery`); ClusterQueue usage returns to 0. Regression guard for [#14811](https://github.com/kubernetes-sigs/kueue/issues/14811). |
+
+#### Manual Tests
+
+Scenarios verified by hand (not automated in CI).
 
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
-| E1 | Gang timeout lifecycle: evict → release quota → requeue → succeed | A gang Job (parallelism 3) with 2/3 pods Ready and 1 gated is evicted as a whole at `timeoutSeconds` (all-or-nothing). Eviction emits `kueue_evicted_workloads_once_total{reason="PodsReadyTimeout"}` and returns ClusterQueue usage to 0. Once un-gated, the workload becomes Ready on requeue and stays active with `requeueState.count` below `retryLimit`. | Proposed |
-| E2 | Readiness lost, recovery disabled → stays admitted, quota retained | With `recoveryTimeoutSeconds: 0`, a workload that reached Ready and then lost readiness triggers no recovery-timeout eviction for the duration of the observation window — it stays admitted and retains its quota throughout. | Proposed |
-| E3 | Requeues exhaust retry limit → workload deactivated | An always-failing workload is requeued with exponential backoff (capped by `backoffMaxSeconds`) until `requeueState.count` reaches `retryLimit`, after which the workload is deactivated (`spec.active=false`). | Proposed |
-| E4 | Timeout enforced across all workload types | The configured timeout is enforced for every supported workload type: Job, Pod, Deployment, StatefulSet, JobSet, and LeaderWorkerSet. | Proposed |
-| E5 | Recovery eviction releases quota | A JobSet (`restartStrategy: Recreate`) reaches Ready, loses readiness, and is evicted at `recoveryTimeoutSeconds` (`underlyingCause=WaitForRecovery`); ClusterQueue usage returns to 0. Regression guard for [#14811](https://github.com/kubernetes-sigs/kueue/issues/14811). | Proposed (blocked on #14811) |
+| M1 | Policy None disables gang scheduling → no eviction, no admission blocking | With `gangScheduling.policy: None`, waitForPodsReady is effectively disabled (the operator sets the controller timeout to one year and `blockAdmission: false`). A Job whose pods never all become Ready is not evicted or requeued on a `PodsReadyTimeout`, and it does not block admission of other workloads sharing the ClusterQueue — they are admitted normally. Run as a soak test: leave the cluster running for about a day to confirm that disabling truly has no effect over time (no delayed evictions, requeues, or admission blocking). | Proposed |
 
 ## Out of Scope
 
@@ -94,19 +106,6 @@ Full path CR → operator reconciliation → ConfigMap → controller behavior. 
 - `blockAdmission` CR input — the operator exposes no user-facing `blockAdmission` field; the value is derived from the gang admission mode (Sequential → true, otherwise false) and its generated form is covered by U1, so there is no separate input to test
 - Gang scheduling policy configuration — already covered by the existing operator e2e suite
 - Timeout math and backoff calculation — verified by upstream integration/e2e tests
-
-### Scenarios considered and excluded
-
-| Scenario | Reason |
-|----------|--------|
-| Preemption during timeout window | Upstream controller behavior; high fixture cost; resolved manually (evicted with reason Preempted, start clock keyed to Admitted timestamp) |
-| Cohort quota release on timeout eviction | Quota release already asserted downstream in E1; dedicated cohort borrowing case deferred |
-| FairSharing usage accounting after eviction | Usage accounting owned by upstream; not operator-specific |
-| Priority inversion during backoff | Upstream scheduling behavior; not operator-specific |
-| Managed vs unmanaged namespace scoping | Covered by existing operator webhook/namespace-selector tests |
-| Maximum timeout workaround (86400s) | Documented workaround; the timeoutSeconds→duration conversion is covered generically by U6, and the max bound is enforced by CEL — no special operator behavior at 86400 |
-| Policy None disables end-to-end | Checkable portion covered by unit test U4 |
-| timeoutSeconds boundary validation (CEL, e.g. reject 29) | Dropped; the CEL min/max bounds are enforced by the API and exercised implicitly, no dedicated downstream test |
 
 ## Target Environments
 
@@ -125,11 +124,11 @@ Full path CR → operator reconciliation → ConfigMap → controller behavior. 
 ## Test Tasks
 
 - Test plan creation and review
-- Implement downstream unit test suite
-- Automate downstream e2e workflow
+- Implement downstream unit test suite (one story for all unit tests)
+- Automate downstream e2e tests (each e2e test will have a JIRA story)
 - Remediate testing defects
 - Automate and validate recurring Prow CI executions
-- Publish technical documentation and code examples
+- Write technical documentation and code examples
 
 ## Pass/Fail Criteria
 
