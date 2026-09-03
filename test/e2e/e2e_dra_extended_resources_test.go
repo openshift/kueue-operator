@@ -1454,6 +1454,10 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 			By("Creating Job with extended resource request nvidia.com/gpu")
 			builder := testutils.NewTestResourceBuilder(ns.Name, erLocalQueueName)
 			job := builder.NewDRAExtendedResourceJob("er-no-deviceclass", erLocalQueueName, extendedResourceName, 1)
+			// Keep only CPU as the covered resource. The shared DRA job also requests
+			// memory, but multiple covered resources trigger an upstream scheduler
+			// NoFitReason issue when the extended resource's DeviceClass is missing.
+			delete(job.Spec.Template.Spec.Containers[0].Resources.Requests, corev1.ResourceMemory)
 			createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func(cleanupCtx context.Context) {
