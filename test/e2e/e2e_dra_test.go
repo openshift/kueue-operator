@@ -1043,7 +1043,14 @@ var _ = Describe("DRA Structured Parameters", Label("operator", "dra"), Ordered,
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(testutils.CleanUpJob, kubeClient, createdJobCPUCompete.Namespace, createdJobCPUCompete.Name)
 
-			By("Verifying both contender jobs are suspended")
+			By("Waiting for both contender jobs to become suspended")
+			Eventually(func() bool {
+				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobCPUCompete.Name) &&
+					testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobGPUCompete.Name)
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue(),
+				"both contender jobs should become suspended while placeholder holds CPU quota")
+
+			By("Verifying both contender jobs remain suspended")
 			Consistently(func() bool {
 				return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobCPUCompete.Name) &&
 					testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJobGPUCompete.Name)
