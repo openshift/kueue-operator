@@ -553,12 +553,15 @@ type DeviceClassMapping struct {
 
 	// sources configures resource accounting sources for this mapping.
 	// Each source defines how quota is tracked for this DeviceClass.
-	// Currently only counter sources are supported (for partitionable devices).
+	// Counter and capacity sources are supported for DRA quota accounting.
+	// Counter sources are used for partitionable devices.
+	// Capacity sources are used for consumable capacity devices that allow multiple allocations.
 	// Extended resource requests that resolve to a DeviceClass with sources
 	// configured are marked inadmissible.
 	// The operator automatically enables the required kueue feature gate when
-	// sources are configured and the Kubernetes DRAPartitionableDevices
-	// feature gate is enabled on the cluster.
+	// sources are configured and the corresponding Kubernetes feature gate is
+	// enabled on the cluster: DRAPartitionableDevices for Counter sources, and
+	// DRAConsumableCapacity for Capacity sources.
 	// +listType=map
 	// +listMapKey=type
 	// +kubebuilder:validation:MinItems=1
@@ -570,6 +573,7 @@ type DeviceClassMapping struct {
 // DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
 // Exactly one of the source types must be set.
 // +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'Counter' ? has(self.counter) : !has(self.counter)",message="counter is required when type is Counter, and forbidden otherwise"
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'Capacity' ? has(self.capacity) : !has(self.capacity)",message="capacity is required when type is Capacity, and forbidden otherwise"
 // +union
 type DeviceClassSourceConfig struct {
 	// type selects the source type for resource accounting.
@@ -583,14 +587,44 @@ type DeviceClassSourceConfig struct {
 	// counter is required when type is Counter, and forbidden otherwise.
 	// +optional
 	Counter DeviceClassCounterSource `json:"counter,omitzero"`
+
+	// capacity configures capacity-based quota for consumable capacity devices.
+	// capacity is required when type is Capacity, and forbidden otherwise.
+	// +optional
+	Capacity DeviceClassCapacitySource `json:"capacity,omitzero"`
 }
 
-// +kubebuilder:validation:Enum=Counter
+// +kubebuilder:validation:Enum=Counter;Capacity
 type DeviceClassSourceType string
 
 const (
-	DeviceClassSourceTypeCounter DeviceClassSourceType = "Counter"
+	DeviceClassSourceTypeCounter  DeviceClassSourceType = "Counter"
+	DeviceClassSourceTypeCapacity DeviceClassSourceType = "Capacity"
 )
+
+// HasCounterSources returns true when the Kueue configuration contains at least one Counter source.
+func HasCounterSources(resources Resources) bool {
+	for _, m := range resources.DeviceClassMappings {
+		for _, s := range m.Sources {
+			if s.Type == DeviceClassSourceTypeCounter {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// HasCapacitySources returns true when the Kueue configuration contains at least one Capacity source.
+func HasCapacitySources(resources Resources) bool {
+	for _, m := range resources.DeviceClassMappings {
+		for _, s := range m.Sources {
+			if s.Type == DeviceClassSourceTypeCapacity {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // DeviceClassCounterSource identifies where to read counter data from and which counter to track.
 type DeviceClassCounterSource struct {
@@ -627,6 +661,31 @@ type DeviceClassCounterSource struct {
 	// ResourceClaimTemplate selector, which narrows to the requested profile.
 	// The selector is compiled at config load time using the upstream dracel
 	// compiler.
+	// +required
+	DeviceSelector DeviceSelector `json:"deviceSelector,omitzero"`
+}
+
+// DeviceClassCapacitySource identifies where to read consumable capacity data from.
+type DeviceClassCapacitySource struct {
+	// name is the capacity dimension within ResourceSlice device capacity
+	// to track for quota, for example "memory" or "gpu.example.com/memory".
+	// It is a DRA qualified name: an optional DNS subdomain, a "/", then a
+	// plain identifier of letters, digits and underscore (no "-" or ".").
+	// +kubebuilder:validation:MaxLength=96
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches('^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z_][A-Za-z0-9_]*$')",message="must be [<dns-subdomain>/]<identifier>, e.g. 'memory' or 'gpu.example.com/memory'; the identifier part allows only letters, digits and underscore"
+	// +required
+	Name string `json:"name,omitempty"`
+
+	// driver is the DRA driver name used to filter relevant ResourceSlices.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.dns1123Subdomain().validate(self).hasValue()",message="must be a valid DNS subdomain, for example 'gpu.example.com'"
+	// +required
+	Driver string `json:"driver,omitempty"`
+
+	// deviceSelector scopes which devices are eligible for capacity-based
+	// quota accounting.
 	// +required
 	DeviceSelector DeviceSelector `json:"deviceSelector,omitzero"`
 }
