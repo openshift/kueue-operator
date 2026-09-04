@@ -4,9 +4,31 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openshift/kueue-operator/bindata"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestMutatingWebhookReinvocationPolicyAsset(t *testing.T) {
+	configuration := resourceread.ReadMutatingWebhookConfigurationV1OrDie(
+		bindata.MustAsset("assets/kueue-operator/mutatingwebhook.yaml"),
+	)
+	if len(configuration.Webhooks) == 0 {
+		t.Fatal("expected at least one mutating webhook")
+	}
+
+	for _, webhook := range configuration.Webhooks {
+		if webhook.ReinvocationPolicy == nil {
+			t.Errorf("mutating webhook %q has no reinvocation policy", webhook.Name)
+			continue
+		}
+		if *webhook.ReinvocationPolicy != admissionregistrationv1.IfNeededReinvocationPolicy {
+			t.Errorf("mutating webhook %q has reinvocation policy %q, want %q", webhook.Name, *webhook.ReinvocationPolicy, admissionregistrationv1.IfNeededReinvocationPolicy)
+		}
+	}
+}
 
 func TestKueueCRDNames(t *testing.T) {
 	names, err := kueueCRDNames()
