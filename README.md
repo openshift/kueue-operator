@@ -8,6 +8,13 @@
 
 Kueue Operator provides the ability to deploy kueue using different configurations
 
+## Reporting Issues and Requesting Features
+
+This project tracks bugs and feature requests through Red Hat Jira. GitHub Issues on this repository are not actively monitored.
+
+- **Bug reports:** File bugs in the [OCPBUGS](https://issues.redhat.com/projects/OCPBUGS) project with the component set to **Kueue**.
+- **Feature requests / enhancements:** File RFEs in the [RFE](https://issues.redhat.com/projects/RFE) project.
+
 ## Dependencies
 
 The Kueue Operator needs CertManager installed to operate correctly
