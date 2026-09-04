@@ -47,12 +47,15 @@ type DeviceClassMappingApplyConfiguration struct {
 	DeviceClassNames []kueueoperatorv1.DeviceClassName `json:"deviceClassNames,omitempty"`
 	// sources configures resource accounting sources for this mapping.
 	// Each source defines how quota is tracked for this DeviceClass.
-	// Currently only counter sources are supported (for partitionable devices).
+	// Counter and capacity sources are supported for DRA quota accounting.
+	// Counter sources are used for partitionable devices.
+	// Capacity sources are used for consumable capacity devices that allow multiple allocations.
 	// Extended resource requests that resolve to a DeviceClass with sources
 	// configured are marked inadmissible.
 	// The operator automatically enables the required kueue feature gate when
-	// sources are configured and the Kubernetes DRAPartitionableDevices
-	// feature gate is enabled on the cluster.
+	// sources are configured and the corresponding Kubernetes feature gate is
+	// enabled on the cluster: DRAPartitionableDevices for Counter sources, and
+	// DRAConsumableCapacity for Capacity sources.
 	Sources []DeviceClassSourceConfigApplyConfiguration `json:"sources,omitempty"`
 }
 

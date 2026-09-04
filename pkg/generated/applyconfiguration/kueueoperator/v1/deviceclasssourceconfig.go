@@ -34,6 +34,9 @@ type DeviceClassSourceConfigApplyConfiguration struct {
 	// Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.
 	// counter is required when type is Counter, and forbidden otherwise.
 	Counter *DeviceClassCounterSourceApplyConfiguration `json:"counter,omitempty"`
+	// capacity configures capacity-based quota for consumable capacity devices.
+	// capacity is required when type is Capacity, and forbidden otherwise.
+	Capacity *DeviceClassCapacitySourceApplyConfiguration `json:"capacity,omitempty"`
 }
 
 // DeviceClassSourceConfigApplyConfiguration constructs a declarative configuration of the DeviceClassSourceConfig type for use with
@@ -55,5 +58,13 @@ func (b *DeviceClassSourceConfigApplyConfiguration) WithType(value kueueoperator
 // If called multiple times, the Counter field is set to the value of the last call.
 func (b *DeviceClassSourceConfigApplyConfiguration) WithCounter(value *DeviceClassCounterSourceApplyConfiguration) *DeviceClassSourceConfigApplyConfiguration {
 	b.Counter = value
+	return b
+}
+
+// WithCapacity sets the Capacity field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Capacity field is set to the value of the last call.
+func (b *DeviceClassSourceConfigApplyConfiguration) WithCapacity(value *DeviceClassCapacitySourceApplyConfiguration) *DeviceClassSourceConfigApplyConfiguration {
+	b.Capacity = value
 	return b
 }

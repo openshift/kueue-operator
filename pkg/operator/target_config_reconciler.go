@@ -79,21 +79,22 @@ const (
 	KueueConfigMap = "kueue-manager-config"
 	KueueFinalizer = "kueue.openshift.io/finalizer"
 
-	groupCertManager                = "cert-manager.io"
-	kindIssuer                      = "Issuer"
-	certManagerAPIVersion           = "cert-manager.io/v1"
-	kueueAPIVersion                 = "kueue.openshift.io/v1"
-	kindKueue                       = "Kueue"
-	secretMetricsServerCert         = "metrics-server-cert"
-	certMetricsCerts                = "metrics-certs"
-	secretKueueVisibilityServerCert = "kueue-visibility-server-cert"
-	appLabelName                    = "app.kubernetes.io/name"
-	appLabelComponent               = "app.kubernetes.io/component"
-	appComponentController          = "controller"
-	appNameKueue                    = "kueue"
-	keyCaCrt                        = "ca.crt"
-	keyTlsCrt                       = "tls.crt"
-	keyTlsKey                       = "tls.key"
+	groupCertManager                       = "cert-manager.io"
+	kindIssuer                             = "Issuer"
+	certManagerAPIVersion                  = "cert-manager.io/v1"
+	kueueAPIVersion                        = "kueue.openshift.io/v1"
+	kindKueue                              = "Kueue"
+	draConsumableCapacityMissingDependency = "DRA Consumable Capacity requires the DRAConsumableCapacity Kubernetes feature gate to be enabled"
+	secretMetricsServerCert                = "metrics-server-cert"
+	certMetricsCerts                       = "metrics-certs"
+	secretKueueVisibilityServerCert        = "kueue-visibility-server-cert"
+	appLabelName                           = "app.kubernetes.io/name"
+	appLabelComponent                      = "app.kubernetes.io/component"
+	appComponentController                 = "controller"
+	appNameKueue                           = "kueue"
+	keyCaCrt                               = "ca.crt"
+	keyTlsCrt                              = "tls.crt"
+	keyTlsKey                              = "tls.key"
 
 	kueueManagerRoleName                    = "kueue-manager-role"
 	kueueMutatingWebhookConfigurationName   = "kueue-mutating-webhook-configuration"
@@ -125,6 +126,7 @@ type TargetConfigReconciler struct {
 	isOpenShift                    bool
 	draExtendedResourceEnabled     bool
 	draPartitionableDevicesEnabled bool
+	draConsumableCapacityEnabled   bool
 }
 
 // computeSpecHash computes a SHA256 hash of the given object's spec.
@@ -361,17 +363,26 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		missingDependencies = append(missingDependencies, "DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)")
 	}
 
-	// Check if the K8s DRAExtendedResource and DRAPartitionableDevices feature gates
-	// are enabled on the cluster. These are alpha K8s feature gates not yet in openshift/api,
-	// so they can only be enabled via CustomNoUpgrade. We check spec.customNoUpgrade.enabled
-	// on the FeatureGate CR to determine if the corresponding kueue gates should be enabled.
+	// Check whether DRA feature gates are enabled on the cluster.
+	// DRAConsumableCapacity is beta/default-on in Kubernetes 1.36+.
+	// DRAExtendedResource and DRAPartitionableDevices are alpha Kubernetes feature
+	// gates not yet in openshift/api, so they can only be enabled via CustomNoUpgrade.
+	// We check spec.customNoUpgrade.enabled on the FeatureGate CR to determine if
+	// the corresponding kueue gates should be enabled.
+	versionEnablesConsumableCapacity := draAPIsAvailable && isKubernetesMinorAtLeast(c.discoveryClient, 36)
+	previousConsumableCapacityEnabled := c.draConsumableCapacityEnabled
+	c.draConsumableCapacityEnabled = versionEnablesConsumableCapacity
 	if c.isOpenShift && draAPIsAvailable {
 		fg, err := c.openshiftConfigClient.ConfigV1().FeatureGates().Get(ctx, "cluster", metav1.GetOptions{})
 		if err != nil {
 			klog.Warningf("unable to read FeatureGate CR, preserving previous state: %v", err)
+			if !versionEnablesConsumableCapacity {
+				c.draConsumableCapacityEnabled = previousConsumableCapacityEnabled
+			}
 		} else {
 			c.draExtendedResourceEnabled = false
 			c.draPartitionableDevicesEnabled = false
+			c.draConsumableCapacityEnabled = versionEnablesConsumableCapacity
 			if fg.Spec.FeatureSet == configv1.CustomNoUpgrade && fg.Spec.CustomNoUpgrade != nil {
 				for _, gate := range fg.Spec.CustomNoUpgrade.Enabled {
 					switch string(gate) {
@@ -379,21 +390,24 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 						c.draExtendedResourceEnabled = true
 					case "DRAPartitionableDevices":
 						c.draPartitionableDevicesEnabled = true
+					case "DRAConsumableCapacity":
+						c.draConsumableCapacityEnabled = true
 					}
 				}
 			}
 		}
 	}
 
-	if !c.draPartitionableDevicesEnabled {
-		for _, m := range kueue.Spec.Config.Resources.DeviceClassMappings {
-			if len(m.Sources) > 0 {
-				klog.Warningf("DRAPartitionableDevices K8s feature gate is not enabled. Sources configuration will not take effect")
-				c.eventRecorder.Eventf("DRAPartitionableDevicesUnsupported", "DRAPartitionableDevices K8s feature gate is not enabled, sources will not take effect until the feature gate is enabled")
-				missingDependencies = append(missingDependencies, "DRA Partitionable Devices requires the DRAPartitionableDevices K8s feature gate to be enabled")
-				break
-			}
-		}
+	resources := kueue.Spec.Config.Resources
+	if kueuev1.HasCounterSources(resources) && !c.draPartitionableDevicesEnabled {
+		klog.Warningf("DRAPartitionableDevices K8s feature gate is not enabled. Counter sources configuration will not take effect")
+		c.eventRecorder.Eventf("DRAPartitionableDevicesUnsupported", "DRAPartitionableDevices K8s feature gate is not enabled, counter sources will not take effect until the feature gate is enabled")
+		missingDependencies = append(missingDependencies, "DRA Partitionable Devices requires the DRAPartitionableDevices K8s feature gate to be enabled")
+	}
+	if deps := missingConsumableCapacityDependencies(resources, c.draConsumableCapacityEnabled); len(deps) > 0 {
+		klog.Warningf("DRAConsumableCapacity K8s feature gate is not enabled. Capacity sources configuration will not take effect")
+		c.eventRecorder.Eventf("DRAConsumableCapacityUnsupported", "DRAConsumableCapacity K8s feature gate is not enabled, capacity sources will not take effect until the feature gate is enabled")
+		missingDependencies = append(missingDependencies, deps...)
 	}
 
 	if len(missingDependencies) > 0 {
@@ -1357,7 +1371,7 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 }
 
 func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string, tlsOpts *kueueconfigapi.TLSOptions) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draExtendedResourceEnabled, c.draPartitionableDevicesEnabled, tlsOpts)
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draExtendedResourceEnabled, c.draPartitionableDevicesEnabled, c.draConsumableCapacityEnabled, tlsOpts)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr
@@ -2419,6 +2433,31 @@ func (c *TargetConfigReconciler) eventHandler(item queueItem) cache.ResourceEven
 		UpdateFunc: func(old, new interface{}) { c.queue.Add(item) },
 		DeleteFunc: func(obj interface{}) { c.queue.Add(item) },
 	}
+}
+
+// isKubernetesMinorAtLeast reports whether the Kubernetes server minor version
+// is greater than or equal to the requested minor. This is used for feature gates
+// that are default-enabled starting in a known Kubernetes version, such as
+// DRAConsumableCapacity in Kubernetes 1.36+.
+func isKubernetesMinorAtLeast(discoveryClient discovery.DiscoveryInterface, minor int) bool {
+	version, err := discoveryClient.ServerVersion()
+	if err != nil {
+		klog.Warningf("unable to read Kubernetes server version")
+		return false
+	}
+	parsedMinor, err := strconv.Atoi(strings.TrimRight(version.Minor, "+"))
+	if err != nil {
+		klog.Warningf("unable to parse Kubernetes minor version %q: %v", version.Minor, err)
+		return false
+	}
+	return parsedMinor >= minor
+}
+
+func missingConsumableCapacityDependencies(resources kueuev1.Resources, enabled bool) []string {
+	if kueuev1.HasCapacitySources(resources) && !enabled {
+		return []string{draConsumableCapacityMissingDependency}
+	}
+	return nil
 }
 
 func isResourceRegistered(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (bool, error) {
