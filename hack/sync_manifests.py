@@ -193,6 +193,11 @@ def main():
                                     )
                                     for v in expr.get("values", [])
                                 ]
+                    # Allow Kueue webhooks to be reinvoked when another admission
+                    # plugin mutates the workload later in the admission chain.
+                    if kind == "MutatingWebhookConfiguration":
+                        webhook["reinvocationPolicy"] = "IfNeeded"
+
                     # Update clientConfig service namespace.
                     client_config = webhook.get("clientConfig", {})
                     service_config = client_config.get("service", {})
