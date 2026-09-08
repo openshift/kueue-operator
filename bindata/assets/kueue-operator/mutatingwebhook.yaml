@@ -16,6 +16,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-workload-codeflare-dev-v1beta2-appwrapper
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mappwrapper.kb.io
   namespaceSelector:
     matchExpressions:
@@ -42,6 +43,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kueue-x-k8s-io-v1beta2-clusterqueue
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mclusterqueue.kb.io
   rules:
   - apiGroups:
@@ -61,6 +63,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-apps-v1-deployment
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mdeployment.kb.io
   namespaceSelector:
     matchExpressions:
@@ -88,6 +91,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-jaxjob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mjaxjob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -114,6 +118,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-batch-v1-job
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mjob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -140,6 +145,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-jobset-x-k8s-io-v1alpha2-jobset
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mjobset.kb.io
   namespaceSelector:
     matchExpressions:
@@ -166,6 +172,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-leaderworkerset-x-k8s-io-v1-leaderworkerset
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mleaderworkerset.kb.io
   namespaceSelector:
     matchExpressions:
@@ -193,6 +200,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v2beta1-mpijob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mmpijob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -219,6 +227,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-paddlejob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mpaddlejob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -245,6 +254,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate--v1-pod
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mpod.kb.io
   namespaceSelector:
     matchExpressions:
@@ -271,6 +281,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-pytorchjob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mpytorchjob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -297,6 +308,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-ray-io-v1-raycluster
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mraycluster.kb.io
   namespaceSelector:
     matchExpressions:
@@ -323,6 +335,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-ray-io-v1-rayjob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mrayjob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -349,6 +362,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-ray-io-v1-rayservice
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mrayservice.kb.io
   namespaceSelector:
     matchExpressions:
@@ -375,6 +389,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kueue-x-k8s-io-v1beta2-resourceflavor
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mresourceflavor.kb.io
   rules:
   - apiGroups:
@@ -394,6 +409,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-sparkoperator-k8s-io-v1beta2-sparkapplication
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: msparkapplication.kb.io
   namespaceSelector:
     matchExpressions:
@@ -420,6 +436,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-apps-v1-statefulset
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mstatefulset.kb.io
   namespaceSelector:
     matchExpressions:
@@ -447,6 +464,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-tfjob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mtfjob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -473,6 +491,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-trainer-kubeflow-org-v1alpha1-trainjob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mtrainjob.kb.io
   namespaceSelector:
     matchExpressions:
@@ -499,6 +518,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kueue-x-k8s-io-v1beta2-workload
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mworkload.kb.io
   rules:
   - apiGroups:
@@ -518,6 +538,7 @@ webhooks:
       namespace: openshift-kueue-operator
       path: /mutate-kubeflow-org-v1-xgboostjob
   failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
   name: mxgboostjob.kb.io
   namespaceSelector:
     matchExpressions:

@@ -308,6 +308,50 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "webhook configurations are not ready")
 		})
 
+		It("configures mutating webhook reinvocation for supported workload resources", func(ctx context.Context) {
+			expectedResources := []string{
+				"jobs",
+				"jobsets",
+				"deployments",
+				"pods",
+				"statefulsets",
+				"leaderworkersets",
+			}
+
+			Eventually(func() error {
+				configuration, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(
+					ctx,
+					"kueue-mutating-webhook-configuration",
+					metav1.GetOptions{},
+				)
+				if err != nil {
+					return err
+				}
+
+				for _, resource := range expectedResources {
+					found := false
+					for _, webhook := range configuration.Webhooks {
+						for _, rule := range webhook.Rules {
+							if !slices.Contains(rule.Resources, resource) {
+								continue
+							}
+							found = true
+							if webhook.ReinvocationPolicy == nil {
+								return fmt.Errorf("mutating webhook %q for resource %q has no reinvocation policy", webhook.Name, resource)
+							}
+							if *webhook.ReinvocationPolicy != admissionregistrationv1.IfNeededReinvocationPolicy {
+								return fmt.Errorf("mutating webhook %q for resource %q has reinvocation policy %q, want %q", webhook.Name, resource, *webhook.ReinvocationPolicy, admissionregistrationv1.IfNeededReinvocationPolicy)
+							}
+						}
+					}
+					if !found {
+						return fmt.Errorf("no mutating webhook found for resource %q", resource)
+					}
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+		})
+
 		It("verify that deny-all network policy is present", func() {
 			// Skip this test if not running on OpenShift
 			_, err := kubeClient.Discovery().ServerResourcesForGroupVersion("route.openshift.io/v1")
