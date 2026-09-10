@@ -1,8 +1,8 @@
 diff --git a/test/util/e2e.go b/test/util/e2e.go
-index 77572d8fe..85503da67 100644
+index 3e527e5e6..48711ca06 100644
 --- a/test/util/e2e.go
 +++ b/test/util/e2e.go
-@@ -631,8 +631,13 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
+@@ -718,8 +718,13 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
  }
  
  func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
@@ -18,18 +18,18 @@ index 77572d8fe..85503da67 100644
  	return ns
  }
  
-@@ -654,7 +659,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
- 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
- 		g.Expect(err).NotTo(gomega.HaveOccurred())
+@@ -753,7 +758,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
+ 		metricsOutput, stderr, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred(), "stderr: %s", stderr)
  		g.Expect(metricsOutput).Should(utiltesting.ContainMetrics(metrics))
 -	}, LongTimeout, Interval).Should(gomega.Succeed())
 +	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
  }
  
  func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restClient *rest.RESTClient, curlPodName, curlContainerName string, metrics [][]string) {
-@@ -663,7 +668,7 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
- 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
- 		g.Expect(err).NotTo(gomega.HaveOccurred())
+@@ -762,7 +767,7 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
+ 		metricsOutput, stderr, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred(), "stderr: %s", stderr)
  		g.Expect(metricsOutput).Should(utiltesting.ExcludeMetrics(metrics))
 -	}, LongTimeout, Interval).Should(gomega.Succeed())
 +	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
