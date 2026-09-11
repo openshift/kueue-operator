@@ -31,6 +31,7 @@ import (
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
+	"github.com/openshift/kueue-operator/pkg/util"
 )
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
@@ -281,11 +282,11 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceE
 	// KueueDRAIntegrationPartitionableDevices is Alpha in Kueue. Enable it when
 	// the K8s DRAPartitionableDevices feature gate is enabled on the cluster
 	// AND counter sources are configured in deviceClassMappings.
-	if draPartitionableDevicesEnabled && kueue.HasCounterSources(resources) {
+	if draPartitionableDevicesEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCounter) {
 		featureGates["KueueDRAIntegrationPartitionableDevices"] = true
 	}
 
-	if draConsumableCapacityEnabled && kueue.HasCapacitySources(resources) {
+	if draConsumableCapacityEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCapacity) {
 		featureGates["KueueDRAIntegrationConsumableCapacity"] = true
 	}
 

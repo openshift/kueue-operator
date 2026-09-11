@@ -562,6 +562,10 @@ type DeviceClassMapping struct {
 	// sources are configured and the corresponding Kubernetes feature gate is
 	// enabled on the cluster: DRAPartitionableDevices for Counter sources, and
 	// DRAConsumableCapacity for Capacity sources.
+	// Limited to one source per mapping in this release. Future releases may support
+	// multiple capacity sources per mapping to enable multi-dimensional quota accounting
+	// (e.g., tracking both GPU memory and compute cores as separate dimensions within a
+	// single resource pool, as described in KEP-2941).
 	// +listType=map
 	// +listMapKey=type
 	// +kubebuilder:validation:MinItems=1
@@ -578,6 +582,7 @@ type DeviceClassMapping struct {
 type DeviceClassSourceConfig struct {
 	// type selects the source type for resource accounting.
 	// Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
+	// Capacity uses DRA consumable capacity data from ResourceSlices to compute quota charges.
 	// +unionDiscriminator
 	// +required
 	Type DeviceClassSourceType `json:"type,omitempty"`
@@ -601,30 +606,6 @@ const (
 	DeviceClassSourceTypeCounter  DeviceClassSourceType = "Counter"
 	DeviceClassSourceTypeCapacity DeviceClassSourceType = "Capacity"
 )
-
-// HasCounterSources returns true when the Kueue configuration contains at least one Counter source.
-func HasCounterSources(resources Resources) bool {
-	for _, m := range resources.DeviceClassMappings {
-		for _, s := range m.Sources {
-			if s.Type == DeviceClassSourceTypeCounter {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasCapacitySources returns true when the Kueue configuration contains at least one Capacity source.
-func HasCapacitySources(resources Resources) bool {
-	for _, m := range resources.DeviceClassMappings {
-		for _, s := range m.Sources {
-			if s.Type == DeviceClassSourceTypeCapacity {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 // DeviceClassCounterSource identifies where to read counter data from and which counter to track.
 type DeviceClassCounterSource struct {
@@ -669,16 +650,19 @@ type DeviceClassCounterSource struct {
 type DeviceClassCapacitySource struct {
 	// name is the capacity dimension within ResourceSlice device capacity
 	// to track for quota, for example "memory" or "gpu.example.com/memory".
-	// It is a DRA qualified name: an optional DNS subdomain, a "/", then a
-	// plain identifier of letters, digits and underscore (no "-" or ".").
+	// It is a DRA qualified name: an optional DNS subdomain (max 63 chars), a "/", then a
+	// plain identifier (max 32 chars) of letters, digits and underscore (no "-" or ".").
+	// Must be between 1 and 96 characters total.
 	// +kubebuilder:validation:MaxLength=96
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="self.matches('^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z_][A-Za-z0-9_]*$')",message="must be [<dns-subdomain>/]<identifier>, e.g. 'memory' or 'gpu.example.com/memory'; the identifier part allows only letters, digits and underscore"
+	// +kubebuilder:validation:XValidation:rule="!self.contains('/') ? self.size() <= 32 : (self.split('/')[0].size() <= 63 && self.split('/')[1].size() <= 32)",message="domain part must be at most 63 characters, identifier part must be at most 32 characters"
 	// +required
 	Name string `json:"name,omitempty"`
 
 	// driver is the DRA driver name used to filter relevant ResourceSlices.
-	// +kubebuilder:validation:MaxLength=253
+	// Must be a valid DNS subdomain up to 63 characters, for example 'gpu.example.com'.
+	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="!format.dns1123Subdomain().validate(self).hasValue()",message="must be a valid DNS subdomain, for example 'gpu.example.com'"
 	// +required
