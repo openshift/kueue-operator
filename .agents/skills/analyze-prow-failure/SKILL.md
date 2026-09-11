@@ -1,3 +1,9 @@
+---
+name: analyze-prow-failure
+description: Investigates failed kueue-operator Prow CI jobs using PR checks, build logs, must-gather artifacts, operator and operand state, and branch changes to identify a root cause and suggest a fix. Use when asked to diagnose a failing Prow job, PR check, or downstream E2E CI run.
+user-invocable: true
+---
+
 # Analyze Prow CI Job Failures
 
 Analyze failing Prow CI jobs on a PR by digging into the must-gather artifacts to find the root cause from operator and operand logs.

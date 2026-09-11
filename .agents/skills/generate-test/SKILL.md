@@ -1,3 +1,9 @@
+---
+name: generate-test
+description: Generates comprehensive HTML manual testing documentation from downstream kueue-operator or upstream Kueue Ginkgo E2E test files. Use when asked to turn an E2E test into a manual OCP test plan or HTML test document.
+user-invocable: true
+---
+
 # Generate Manual Testing Documentation
 
 Generate an HTML manual testing document from a Ginkgo E2E test file.
