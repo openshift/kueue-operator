@@ -651,9 +651,10 @@ spec:
                                           rule: 'has(self.type) && self.type == ''CEL''
                                             ? has(self.cel) : !has(self.cel)'
                                       driver:
-                                        description: driver is the DRA driver name
-                                          used to filter relevant ResourceSlices.
-                                        maxLength: 253
+                                        description: |-
+                                          driver is the DRA driver name used to filter relevant ResourceSlices.
+                                          Must be a valid DNS subdomain up to 63 characters, for example 'gpu.example.com'.
+                                        maxLength: 63
                                         minLength: 1
                                         type: string
                                         x-kubernetes-validations:
@@ -664,8 +665,9 @@ spec:
                                         description: |-
                                           name is the capacity dimension within ResourceSlice device capacity
                                           to track for quota, for example "memory" or "gpu.example.com/memory".
-                                          It is a DRA qualified name: an optional DNS subdomain, a "/", then a
-                                          plain identifier of letters, digits and underscore (no "-" or ".").
+                                          It is a DRA qualified name: an optional DNS subdomain (max 63 chars), a "/", then a
+                                          plain identifier (max 32 chars) of letters, digits and underscore (no "-" or ".").
+                                          Must be between 1 and 96 characters total.
                                         maxLength: 96
                                         minLength: 1
                                         type: string
@@ -675,6 +677,12 @@ spec:
                                             the identifier part allows only letters,
                                             digits and underscore
                                           rule: self.matches('^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z_][A-Za-z0-9_]*$')
+                                        - message: domain part must be at most 63
+                                            characters, identifier part must be at
+                                            most 32 characters
+                                          rule: '!self.contains(''/'') ? self.size()
+                                            <= 32 : (self.split(''/'')[0].size() <=
+                                            63 && self.split(''/'')[1].size() <= 32)'
                                     required:
                                     - deviceSelector
                                     - driver
@@ -773,6 +781,7 @@ spec:
                                     description: |-
                                       type selects the source type for resource accounting.
                                       Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
+                                      Capacity uses DRA consumable capacity data from ResourceSlices to compute quota charges.
                                     enum:
                                     - Counter
                                     - Capacity

@@ -24,10 +24,12 @@ package v1
 type DeviceClassCapacitySourceApplyConfiguration struct {
 	// name is the capacity dimension within ResourceSlice device capacity
 	// to track for quota, for example "memory" or "gpu.example.com/memory".
-	// It is a DRA qualified name: an optional DNS subdomain, a "/", then a
-	// plain identifier of letters, digits and underscore (no "-" or ".").
+	// It is a DRA qualified name: an optional DNS subdomain (max 63 chars), a "/", then a
+	// plain identifier (max 32 chars) of letters, digits and underscore (no "-" or ".").
+	// Must be between 1 and 96 characters total.
 	Name *string `json:"name,omitempty"`
 	// driver is the DRA driver name used to filter relevant ResourceSlices.
+	// Must be a valid DNS subdomain up to 63 characters, for example 'gpu.example.com'.
 	Driver *string `json:"driver,omitempty"`
 	// deviceSelector scopes which devices are eligible for capacity-based
 	// quota accounting.

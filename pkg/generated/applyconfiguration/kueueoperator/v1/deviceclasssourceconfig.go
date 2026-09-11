@@ -29,6 +29,7 @@ import (
 type DeviceClassSourceConfigApplyConfiguration struct {
 	// type selects the source type for resource accounting.
 	// Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
+	// Capacity uses DRA consumable capacity data from ResourceSlices to compute quota charges.
 	Type *kueueoperatorv1.DeviceClassSourceType `json:"type,omitempty"`
 	// counter configures counter-based quota for partitionable devices.
 	// Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.

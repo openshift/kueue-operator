@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
 	"github.com/openshift/kueue-operator/pkg/tlsprofile"
+	"github.com/openshift/kueue-operator/pkg/util"
 	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
 	"github.com/openshift/kueue-operator/pkg/webhook"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -84,7 +85,7 @@ const (
 	certManagerAPIVersion                  = "cert-manager.io/v1"
 	kueueAPIVersion                        = "kueue.openshift.io/v1"
 	kindKueue                              = "Kueue"
-	draConsumableCapacityMissingDependency = "DRA Consumable Capacity requires the DRAConsumableCapacity Kubernetes feature gate to be enabled"
+	draConsumableCapacityMissingDependency = "DRA Consumable Capacity requires Kubernetes 1.36+ (OCP 4.23+) and the DRAConsumableCapacity feature gate to be enabled"
 	secretMetricsServerCert                = "metrics-server-cert"
 	certMetricsCerts                       = "metrics-certs"
 	secretKueueVisibilityServerCert        = "kueue-visibility-server-cert"
@@ -399,7 +400,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	resources := kueue.Spec.Config.Resources
-	if kueuev1.HasCounterSources(resources) && !c.draPartitionableDevicesEnabled {
+	if util.HasSourceOfType(resources, kueuev1.DeviceClassSourceTypeCounter) && !c.draPartitionableDevicesEnabled {
 		klog.Warningf("DRAPartitionableDevices K8s feature gate is not enabled. Counter sources configuration will not take effect")
 		c.eventRecorder.Eventf("DRAPartitionableDevicesUnsupported", "DRAPartitionableDevices K8s feature gate is not enabled, counter sources will not take effect until the feature gate is enabled")
 		missingDependencies = append(missingDependencies, "DRA Partitionable Devices requires the DRAPartitionableDevices K8s feature gate to be enabled")
@@ -2454,7 +2455,7 @@ func isKubernetesMinorAtLeast(discoveryClient discovery.DiscoveryInterface, mino
 }
 
 func missingConsumableCapacityDependencies(resources kueuev1.Resources, enabled bool) []string {
-	if kueuev1.HasCapacitySources(resources) && !enabled {
+	if util.HasSourceOfType(resources, kueuev1.DeviceClassSourceTypeCapacity) && !enabled {
 		return []string{draConsumableCapacityMissingDependency}
 	}
 	return nil
