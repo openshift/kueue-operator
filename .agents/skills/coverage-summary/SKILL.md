@@ -1,5 +1,7 @@
 ---
-description: Generate a comprehensive code coverage summary for all test runs
+name: coverage-summary
+description: Runs kueue-operator unit tests with coverage and produces a comprehensive Markdown report covering package and function coverage, E2E test inventory, gaps, findings, and recommendations. Use when asked for a coverage report, summary, or analysis.
+user-invocable: true
 ---
 
 Run the unit tests with coverage and generate a comprehensive summary report.

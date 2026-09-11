@@ -1,3 +1,9 @@
+---
+name: bump-kueue-operator-version
+description: Bumps the kueue-operator release version and supported OpenShift versions across bundle metadata, labels, and README documentation, then regenerates the bundle. Use when preparing a new kueue-operator release or changing its supported OCP versions.
+user-invocable: true
+---
+
 # Bump kueue-operator version
 
 Bumps the kueue-operator version in all the necessary files.

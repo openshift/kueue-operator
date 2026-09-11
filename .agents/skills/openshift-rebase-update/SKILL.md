@@ -1,6 +1,7 @@
 ---
 name: openshift-rebase-update
 description: Bumps openshift/api, openshift/library-go, openshift/client-go, and other openshift/* Go module dependencies in kueue-operator to their latest commits, re-vendors, regenerates code/manifests, and runs the full verification suite (build, vet, unit tests, lint). Use whenever asked to "rebase", "bump openshift deps", "update openshift/api", or similar dependency-refresh requests for this repo.
+user-invocable: true
 ---
 
 # OpenShift Dependency Rebase/Update
