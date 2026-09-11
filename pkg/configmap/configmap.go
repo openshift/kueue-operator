@@ -31,6 +31,7 @@ import (
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
+	"github.com/openshift/kueue-operator/pkg/util"
 )
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
@@ -205,7 +206,7 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
-func buildResources(resources kueue.Resources) *configapi.Resources {
+func buildResources(resources kueue.Resources, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool) *configapi.Resources {
 	if len(resources.DeviceClassMappings) == 0 {
 		return nil
 	}
@@ -227,6 +228,9 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 		for _, s := range m.Sources {
 			switch s.Type {
 			case kueue.DeviceClassSourceTypeCounter:
+				if !draPartitionableDevicesEnabled {
+					continue
+				}
 				source := configapi.DeviceClassSourceConfig{
 					Counter: &configapi.DeviceClassCounterSource{
 						Name:   s.Counter.Name,
@@ -242,6 +246,9 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 				}
 				mapping.Sources = append(mapping.Sources, source)
 			case kueue.DeviceClassSourceTypeCapacity:
+				if !draConsumableCapacityEnabled {
+					continue
+				}
 				source := configapi.DeviceClassSourceConfig{
 					Capacity: &configapi.DeviceClassCapacitySource{
 						Name:   resourcev1.QualifiedName(s.Capacity.Name),
@@ -274,11 +281,11 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draPartitionableDevi
 	// KueueDRAIntegrationPartitionableDevices is Alpha in Kueue. Enable it when
 	// the K8s DRAPartitionableDevices feature gate is enabled on the cluster
 	// AND counter sources are configured in deviceClassMappings.
-	if draPartitionableDevicesEnabled && kueue.HasCounterSources(resources) {
+	if draPartitionableDevicesEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCounter) {
 		featureGates["KueueDRAIntegrationPartitionableDevices"] = true
 	}
 
-	if draConsumableCapacityEnabled && kueue.HasCapacitySources(resources) {
+	if draConsumableCapacityEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCapacity) {
 		featureGates["KueueDRAIntegrationConsumableCapacity"] = true
 	}
 
@@ -389,7 +396,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
-		Resources:                  buildResources(kueueCfg.Resources),
+		Resources:                  buildResources(kueueCfg.Resources, draPartitionableDevicesEnabled, draConsumableCapacityEnabled),
 		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draPartitionableDevicesEnabled, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
