@@ -271,6 +271,329 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"gang scheduling admission with custom timeout": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission:      kueue.GangSchedulingWorkloadAdmissionParallel,
+						TimeoutSeconds: 600,
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  timeout: 10m0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with retry limit requeuing strategy": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionParallel,
+						RequeuingStrategy: kueue.RequeuingStrategy{
+							RetryLimit: 5,
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  requeuingStrategy:
+    backoffLimitCount: 5
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with time reference requeuing strategy": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionParallel,
+						RequeuingStrategy: kueue.RequeuingStrategy{
+							TimeReference: kueue.CreationTimestamp,
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  requeuingStrategy:
+    timestamp: Creation
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with requeuing strategy without retry limit": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionParallel,
+						RequeuingStrategy: kueue.RequeuingStrategy{
+							BackoffBaseSeconds: 120,
+							BackoffMaxSeconds:  7200,
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  requeuingStrategy:
+    backoffBaseSeconds: 120
+    backoffMaxSeconds: 7200
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"gang scheduling admission with max backoff requeuing strategy": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationPod},
+				},
+				GangScheduling: kueue.GangScheduling{
+					Policy: kueue.GangSchedulingPolicyByWorkload,
+					ByWorkload: &kueue.ByWorkload{
+						Admission: kueue.GangSchedulingWorkloadAdmissionParallel,
+						RequeuingStrategy: kueue.RequeuingStrategy{
+							BackoffMaxSeconds: 7200,
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - pod
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+waitForPodsReady:
+  blockAdmission: false
+  requeuingStrategy:
+    backoffMaxSeconds: 7200
+  timeout: 0s
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"gang scheduling admission with requeuing strategy and recovery timeout": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
