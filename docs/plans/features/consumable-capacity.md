@@ -7,7 +7,7 @@
 ## Overview
 
 - [References](#references) — KEPs, JIRA tickets, upstream/downstream PRs, and implementation docs
-- [Introduction](#introduction) — Feature overview and scope for Kueue 1.5
+- [Introduction](#introduction) — Feature overview and scope for RHBoK 1.5
 - [Test Strategy](#test-strategy) — Upstream vs downstream approach and deduplication
 - [Test Scope](#test-scope) — Upstream and downstream test scenarios (required and optional)
 - [Out of Scope](#out-of-scope) — What is not being tested and why
@@ -29,34 +29,21 @@
 | Upstream Kueue implementation | [PR #13152](https://github.com/kubernetes-sigs/kueue/pull/13152) |
 | Downstream operator tests | [PR #2546](https://github.com/openshift/kueue-operator/pull/2546) (operator CRD, config rendering, e2e) |
 | Partitionable Devices reference | [PR #2069](https://github.com/openshift/kueue-operator/pull/2069) (operator integration) |
-| **Bugs** | [#14541](https://github.com/kubernetes-sigs/kueue/issues/14541) — Configuration accepts DRA capacity qualified names with multiple slashes |
+| **Bugs** | [#14846](https://github.com/kubernetes-sigs/kueue/issues/14846) (closed by [#14951](https://github.com/kubernetes-sigs/kueue/pull/14951)) — `validateQualifiedName` silently accepted multi-slash capacity names (e.g. `a/b/c`); covered by upstream C3 |
 
 ## Introduction
 
-**Consumable Capacity** enables Kueue to enforce quotas on fractional DRA (Dynamic Resource Allocation) device capacity. Previously, Kueue could only track whole-device allocations through the Counter source (Partitionable Devices). With Consumable Capacity, operators can define quota limits per device dimension (e.g., GPU memory, compute units), and Kueue tracks how much capacity each workload consumes, admitting or queueing requests based on available quota.
+**Consumable Capacity** enables Kueue to enforce quotas on fractional DRA (Dynamic Resource Allocation) device capacity. Previously, Kueue could only track whole-device allocations through the Counter source (Partitionable Devices). With Consumable Capacity, operators can define quota limits per device dimension (e.g., GPU memory, compute units), and Kueue tracks how much capacity each workload consumes, admitting or queueing requests based on available quota. This enables multiple workloads to share fractional portions of the same device—for example, two jobs each using half of a GPU's memory—rather than reserving entire devices.
 
-Administrators configure `capacitySources[]` in `ClusterQueue.spec.resourceGroups` to define which DRA device dimensions are quota-managed. Each `CapacitySource` specifies dimension names, CEL selectors (which devices apply), and how to calculate the charge for a workload. When a workload requests DRA capacity, Kueue calculates its charge against the quota and admits it only if capacity is available. This enables multiple workloads to share capacity on the same device—for example, two jobs splitting a GPU's memory—unlike Counter-based allocations which reserve whole devices.
+**How it works:** Consumable Capacity operates across four layers. First, a DRA driver publishes the total capacity available on each device (such as GPU memory or compute units) along with rules for how workloads can request and consume that capacity. Second, users define their capacity needs in ResourceClaimTemplates, specifying how much of each device dimension their workload requires. Third, the Kueue Configuration maps device capacity dimensions to quota resource names, defining which devices contribute to which quota pools. Finally, the ClusterQueue sets the total quota budget—the maximum capacity that can be consumed across all workloads. When a workload requests capacity, Kueue calculates how much it will consume, checks whether quota is available, and either admits the workload (charging its usage against the quota) or queues it until capacity is freed. Multiple workloads can share the same device's capacity pool, with each consuming only what they requested—this is fractional sharing.
 
-**Relationship to Partitionable Devices:** Both features use the same "charge a measured quantity, not a device count" principle. Partitionable Devices answers "how much of a *statically-sliced* device (MIG partition) does this workload use?" by reading counters. Consumable Capacity answers "how much of a *dynamically-shared* device does this workload use?" by reading device.Capacity—supporting time-slicing and MPS sharing where device capacity is advertised as fractional dimensions instead of partitions.
+**Relationship to Partitionable Devices:** Both features use the same "charge a measured quantity, not a device count" principle. Partitionable Devices answers "how much of a *statically-sliced* device (MIG partition) does this workload use?" by reading counters. Consumable Capacity answers "how much of a *dynamically-shared* device does this workload use?" by reading device capacity—supporting time-slicing and MPS sharing where device capacity is advertised as fractional dimensions instead of partitions.
 
-**The Three Moving Parts:**
+**RHBoK Version:** 1.5 (ships upstream Kueue 0.19; requires Kubernetes 1.36+ / OCP 4.23+)
 
-1. **Driver publishes** (in ResourceSlice, per device):
-   - `allowMultipleAllocations: true` — device can be shared by multiple independent claims
-   - `capacity: { gpu.example.com/memory: { value: 80Gi, requestPolicy: {...} } }` — total capacity and consumption rules
-   - `RequestPolicy` — rounding rules: Default (fallback if workload doesn't specify), and either ValidValues (discrete set) or ValidRange (min/max/step)
-
-2. **User asks** (in ResourceClaimTemplate):
-   - `capacity.requests: { memory: "20Gi" }` — request 20Gi of the device's memory dimension
-   - ℹ️ **Dimension naming:** Capacity dimension names can be bare (`memory`, `compute`) or driver-qualified (`gpu.example.com/memory`). Use the exact name published in the ResourceSlice capacity.
-
-3. **Kueue computes and charges:**
-   - Use explicit `capacity.requests` if given; else fall back to `RequestPolicy.Default`; else the full `Capacity.Value`
-   - Round the request up per `RequestPolicy` (ValidValues → smallest valid ≥ request; ValidRange with step → Min + n×Step)
-   - Take the max across all matched devices, then multiply by workload count
-   - Charge the result against the mapped quota resource (e.g., `gpu.memory`). Multiple workloads share that pool—that's fractional sharing.
-
-**Kueue Version:** 1.5 (requires Kubernetes 1.36+, part of DRA beta graduation)
+**Feature gates:**
+- Kubernetes `DRAConsumableCapacity` — beta, default-on at Kubernetes 1.36 (the DRA beta graduation).
+- Kueue `KueueDRAIntegrationConsumableCapacity` — alpha, default-off in Kueue 0.19.0 and main. The operator enables it only when a Capacity source is configured and the cluster dependency is available.
 
 **Supported OCP Versions:** 4.23+ and 5.0+ once both carry Kubernetes 1.36+ | **Unsupported:** 4.22 and earlier (Kubernetes 1.35 and below)
 
@@ -78,21 +65,21 @@ Upstream tests comprehensively validate **generic Kueue scheduling and quota sem
 
 **Unit Tests (U1–U3):** Charge calculation, rounding logic, and heterogeneous device handling
 **CEL Validation (C1–C9):** Configuration validation for capacity sources and feature-gate dependencies
-**Integration Tests (I1–I10):** Quota enforcement, device fallbacks, dynamic device arrival, heterogeneous devices
+**Integration Tests (I1–I13):** Quota enforcement, rounding (ValidValues/ValidRange), multiply-charge-by-count, device fallbacks, dynamic device arrival, heterogeneous devices
 **E2E Tests (E1–E7):** Full-stack end-to-end on KIND: admission, defaults, rounding, multi-device, quota exhaustion, shared capacity, missing dimensions
-**Optional Phase 2 (OPT1–OPT5):** Highest-value deferred semantics and observability scenarios
+**Optional Phase 2 (OPT1–OPT3):** Highest-value deferred semantics and observability scenarios
 
-**PR Status:** [#13274](https://github.com/kubernetes-sigs/kueue/pull/13274) (tests) and [#13152](https://github.com/kubernetes-sigs/kueue/pull/13152) (implementation) in review/pending
+**PR Status:** [#13274](https://github.com/kubernetes-sigs/kueue/pull/13274) (tests) and [#13152](https://github.com/kubernetes-sigs/kueue/pull/13152) (implementation) merged
 
 ### Downstream Operator (`openshift/kueue-operator`)
 
 Downstream tests validate **operator-specific and OpenShift-specific wiring**:
 
-**Unit Tests (U1–U4):** Config rendering, feature-gate wiring, Counter compatibility, and source detection
-**CEL Validation (C1–C7):** Downstream API rejects malformed Capacity source configurations before rendering
-**Controller Integration Tests (I1–I2):** Dependency/version detection and missing-dependency reporting
+**Unit Tests (U1–U6):** Config rendering, feature-gate wiring, Counter compatibility, source detection, and source filtering when gates are disabled
+**CEL Validation (C1–C8):** Downstream API rejects malformed Capacity source configurations before rendering
+**Controller Unit Tests (I1–I2):** Dependency/version detection and missing-dependency reporting
 **E2E / Manual Tests (E1–E9):** Operator-managed install, live ConfigMap verification, workload charging, count multiplication, inadmissibility, sharing, quota exhaustion, runtime update, and unsupported-version handling
-**Optional Phase 2 (OPT1–OPT5):** Lower-priority lifecycle, metrics, and upgrade coverage
+**Optional Phase 2 (OPT1–OPT4):** Lower-priority lifecycle, metrics, and upgrade coverage
 **E2E via Upstream Leverage (upstream E1–E7):** Pull upstream `test/e2e/dra/capacity` into downstream CI (OCPKUEUE-847) to prove operator-managed Kueue passes the same quota/admission/sharing tests on OCP
 
 **PR Status:** [#2546](https://github.com/openshift/kueue-operator/pull/2546) implements downstream unit/CEL/controller tests; downstream e2e/manual validation remains tracked in OCPKUEUE-847 and this manual guide.
@@ -101,7 +88,7 @@ Downstream tests validate **operator-specific and OpenShift-specific wiring**:
 
 ## Test Scope
 
-### Upstream Tests (Kueue 1.5)
+### Upstream Tests (Kueue 0.19)
 
 #### Unit Tests (Charge Calculation)
 
@@ -136,15 +123,18 @@ Downstream tests validate **operator-specific and OpenShift-specific wiring**:
 | ID | Test | What It Validates |
 |----|------|-------------------|
 | I1 | Should charge explicit capacity request | Charge calculation correctly uses workload's capacity.requests |
-| I2 | Should default to max capacity value when no request specified | Falls back to Capacity.Value when capacity.requests omitted |
-| I3 | Should default to RequestPolicy.Default when no request specified | Falls back to RequestPolicy.Default when capacity.requests omitted |
-| I4 | Should mark workload inadmissible when request exceeds ValidValues | Quota enforcement blocks oversized requests |
-| I5 | Should mark workload inadmissible when no devices have capacity dimension | Quota enforcement handles missing dimension gracefully |
-| I6 | Should skip device-count charge when capacity sources configured | Backward compatibility: device-count not charged when capacity source active |
-| I7 | Should requeue inadmissible workload when ResourceSlice appears | Supports dynamic device arrival (e.g., hot-add GPUs) |
-| I8 | Should use max Default across devices with heterogeneous Defaults | Multiple devices with different policies; uses maximum Default |
-| I9 | Should use max capacity across multiple devices | Charge calculation handles device heterogeneity correctly |
-| I10 | Should mark inadmissible without retry when all policies reject request | Handles edge case where no policy accepts request |
+| I2 | Should default to max capacity value when no request specified | Falls back to Capacity.Value when capacity.requests omitted and no RequestPolicy.Default is set |
+| I3 | Should default to RequestPolicy.Default when no request specified | Falls back to RequestPolicy.Default when capacity.requests omitted and RequestPolicy.Default is set |
+| I4 | Should round up capacity request to ValidValues | Rounding logic correctly rounds request to smallest valid value in ValidValues set |
+| I5 | Should round up capacity request to ValidRange with step | Rounding logic correctly rounds request to Min + n×Step per ValidRange policy |
+| I6 | Should multiply capacity charge by request count | Charge calculation correctly multiplies per-device charge by device request count |
+| I7 | Should mark workload inadmissible when request exceeds ValidValues | Quota enforcement blocks oversized requests |
+| I8 | Should mark workload inadmissible when no devices have capacity dimension | Quota enforcement handles missing dimension gracefully |
+| I9 | Should skip device-count charge when capacity sources configured | Backward compatibility: device-count not charged when capacity source active |
+| I10 | Should requeue inadmissible workload when ResourceSlice appears | Supports dynamic device arrival (e.g., hot-add GPUs) |
+| I11 | Should use max Default across devices with heterogeneous Defaults | Multiple devices with different policies; uses maximum Default |
+| I12 | Should mark inadmissible without retry when all policies reject request | Handles edge case where no policy accepts request |
+| I13 | Should use max capacity across multiple devices | Charge calculation handles device heterogeneity correctly |
 
 #### E2E Tests (Full Stack)
 
@@ -166,12 +156,13 @@ Downstream tests validate **operator-specific and OpenShift-specific wiring**:
 
 Downstream testing focuses on the operator-owned layers: CRD/API validation, CR-to-ConfigMap rendering, feature-gate/dependency wiring, and a small OpenShift smoke path. Upstream owns the detailed scheduler/quota semantics.
 
-OCP coverage is split by Kubernetes version. Do not schedule E1–E8 on 4.18–4.22; those clusters cannot run Consumable Capacity.
+The same e2e suite is invoked on each versioned Prow job (4.18–5.0). Specs `Skip` when the cluster cannot support them. Unit, CEL, and controller unit tests are not part of those jobs.
 
-| OCP version | Kubernetes | Tests to run |
-|-------------|------------|--------------|
-| 4.18–4.22 | 1.35 and below (unsupported) | **E9 only** — missing-dependency / fail-closed path |
-| 4.23, 5.0+ | 1.36+ (supported) | All other downstream tests (U1–U4, C1–C7, I1–I2, E1–E8) |
+| OCP version | Kubernetes | DRA APIs | E2E specs |
+|-------------|------------|----------|-----------|
+| 4.18–4.20 | 1.31–1.33 | absent | **E9** asserts the DRA missing-dependency message; E1–E8 `Skip` |
+| 4.21–4.22 | 1.34–1.35 | present | **E9** asserts the Consumable Capacity missing-dependency message; E1–E8 `Skip` |
+| 4.23, 5.0+ | 1.36+ | present | **E1–E8**; E9 `Skip` |
 
 #### Unit Tests (Operator Logic / Config Rendering)
 
@@ -185,6 +176,8 @@ Locations:
 | U2 | Capacity source enables only the consumable-capacity feature gate | `KueueDRAIntegrationConsumableCapacity` is emitted when a Capacity source is configured and the dependency is available | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | U3 | Counter source path remains independent | Existing Partitionable Devices `type: Counter` rendering and `KueueDRAIntegrationPartitionableDevices` behavior are unchanged | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | U4 | Shared DRA source detection helpers distinguish source types | `HasCapacitySources` and `HasCounterSources` return true only for their matching source type | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| U5 | Capacity source skipped when gate is disabled | When `draConsumableCapacityEnabled` is false, a configured Capacity source is not rendered into the ConfigMap, preventing upstream from rejecting the ungated source | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| U6 | Counter source skipped when gate is disabled | When `draPartitionableDevicesEnabled` is false, a configured Counter source is not rendered into the ConfigMap, preventing the same class of crashloop for Counter sources | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 
 #### CEL / CRD Validation Tests
 
@@ -199,24 +192,27 @@ Location:
 | C4 | Capacity/Counter union rules enforced | `type: Capacity` requires `capacity` and forbids `counter`; `type: Counter` requires `counter` and forbids `capacity` | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | C5 | Capacity required fields and names validated | Empty `capacity.name`, invalid qualified dimension names, and invalid `capacity.driver` values are rejected | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | C6 | Device selector validation enforced | Invalid `deviceSelector.type` and empty CEL expression are rejected | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
-| C7 | Single source per mapping enforced | More than one source per mapping remains rejected while downstream keeps `MaxItems=1` | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| C7 | Single source per mapping enforced | `MaxItems=1` is a deliberate limitation for this release ([#2546](https://github.com/openshift/kueue-operator/pull/2546) API godoc, [KEP-2941](https://github.com/kubernetes-sigs/kueue/blob/main/keps/2941-DRA/README.md)). Multi-dimensional quota (multiple capacity sources on one mapping, e.g. GPU memory and compute) is out of scope until a later release. CEL rejects a second Capacity source. | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| C8 | Mixed Counter + Capacity on one mapping rejected | `MaxItems=1` rejects a mapping that has both a Counter source and a Capacity source. Those use different `listMapKey=type` values, so this hits `MaxItems` rather than a duplicate map key. | To be automated |
 
-#### Controller Integration Tests
+#### Controller Unit Tests
 
 Location:
 - `pkg/operator/target_config_reconciler_test.go`
 
+These are `go test` helpers with no cluster. I1 fakes a Kubernetes minor; I2 passes an on/off boolean. OCP version bands are e2e-only (E9).
+
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
 | I1 | Kubernetes minor-version / dependency detection works | Kubernetes 1.36+ is treated as supporting default-on DRAConsumableCapacity; unsupported or unparseable versions fail closed | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
-| I2 | Missing DRAConsumableCapacity dependency reports clearly | Capacity source on an unsupported cluster produces the expected missing-dependency message; Counter-only and no-source configs do not | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| I2 | Capacity-only missing-dependency helper | When the Consumable Capacity gate is off, a Capacity source produces the CC missing-dependency string (`OCP 4.23+`). Counter-only and no-source configs do not. Does not cover OCP version bands (see E9). | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 
 #### E2E / Manual Tests (OpenShift Operator Path)
 
 Location:
 - `test/e2e/e2e_dra_consumable_capacity_test.go`
 
-E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked as a separate JIRA story; implementation depends on OCPKUEUE-847 (upstream e2e leverage) and subsequent Phase 2 epics. Run E1–E8 on OCP 4.23 and 5.0+. Run E9 only on OCP 4.18–4.22.
+E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked as a separate JIRA story; implementation depends on [OCPKUEUE-847](https://redhat.atlassian.net/browse/OCPKUEUE-847) (upstream e2e leverage) and those stories. The versioned Prow jobs run the same suite; specs `Skip` per the version matrix above. Implement E9 as two Ginkgo `It`s that `Skip` (DRA-absent vs DRA-present/CC-absent), both mapped to this one scenario ID.
 
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
@@ -225,10 +221,17 @@ E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked
 | E3 | Explicit capacity request Job admitted and charged | `dra-example-driver` publishes capacity, Job requests `memory: 20Gi`, Workload is admitted, and `resourceUsage["gpu.memory"] == 20Gi` | To be automated |
 | E4 | Capacity request count multiplication | ResourceClaimTemplate uses `count: 2` with `memory: 20Gi`; Workload is admitted and charged `gpu.memory=40Gi` | To be automated |
 | E5 | No matching capacity dimension or selector is inadmissible | Workload with a non-matching capacity dimension or device selector gets `QuotaReserved=False`, `Reason=Inadmissible` | To be automated |
-| E6 | Multiple workloads share consumable capacity | Two Jobs each request `memory: 20Gi`; both admit and ClusterQueue reservation reaches `gpu.memory=40Gi` | To be automated |
+| E6 | Multiple workloads share consumable capacity | ClusterQueue quota is `gpu.memory=2Gi`; two Jobs each request `memory: 1Gi`; both admit, reservation reaches `gpu.memory=2Gi`, and quota is fully used | To be automated |
 | E7 | Capacity quota exhaustion blocks admission | ClusterQueue quota is lower than the computed capacity charge; workload remains inadmissible/pending | To be automated |
 | E8 | Runtime CR update adding Capacity rolls controller | Adding Capacity config to an existing Kueue CR refreshes the ConfigMap and recovers controller readiness | To be automated |
-| E9 | Unsupported cluster reports missing dependency | On OCP 4.18–4.22 (Kubernetes <1.36 / unsupported DRAConsumableCapacity), operator reports `Degraded=True`, `Reason=MissingDependencies`, with a clear message | To be automated |
+| E9 | Unsupported cluster reports missing dependency without crashlooping the operand | Apply a Capacity source. Operator reports `Degraded=True`, `Reason=MissingDependencies`. The condition message contains the band-specific string below. `kueue-controller-manager` stays Available (not CrashLoopBackOff). Skip on 4.23/5.0+. | To be automated |
+
+E9 expected `Degraded` message substrings (from [#2546](https://github.com/openshift/kueue-operator/pull/2546)):
+
+- **4.18–4.20** (DRA APIs absent): `DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)`. Do not accept the Consumable Capacity string as a substitute.
+- **4.21–4.22** (DRA APIs present, CC not default-on): `DRA Consumable Capacity requires Kubernetes 1.36+ (OCP 4.23+) and the DRAConsumableCapacity feature gate to be enabled`.
+
+The operator wraps those strings as `Please install the following on your cluster: <dependency>`. Assert `Reason=MissingDependencies` and that the wrapped message contains the substring for the band.
 
 ---
 
@@ -238,17 +241,18 @@ E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked
 
 | Scenario | Reason |
 |----------|--------|
-| Exhaustive invalid field combinations | Covered by downstream Capacity source validation (C1–C7); CEL schema catches most invalid states |
-| Boundary variant: exact-fit quota admission | Edge case of quota exhaustion path (U2); lower priority |
+| Exhaustive invalid field combinations | Covered by downstream Capacity source validation (C1–C8); CEL schema catches most invalid states |
 | Boundary variant: single request > available quota | Covered by negative path in exhaustion (U2) |
 | Capacity increase unblocking pending workloads | Lower priority; similar to quota release (U3) |
 | Duplicate mappings in dimension spec | Validation detail; include only if schema requires uniqueness |
 | Mixed whole-device DRA + consumable capacity in single workload | Lower priority; Counter/Capacity coexistence (U4) is higher value |
+| Independent dimension tracking (same DeviceClass, different resource names, different mappings) | Deferred to beta per KEP-2941; requires relaxing DeviceClass uniqueness validation; multiple capacity sources currently sum into one quota resource, not tracked independently |
+| Multiple capacity sources per mapping (multi-dimensional quota) | Blocked by the MaxItems=1 release limit documented in C7 / KEP-2941; Counter + Capacity on one mapping is also impossible under that limit |
 | Downstream e2e matrix: borrowing/preemption/fairsharing | These are upstream Kueue semantics (U9, U11); no need to duplicate |
 | Downstream e2e: exhaustion and capacity release | Covered upstream (integration/e2e quota tests); downstream smoke test (E3) is sufficient |
 | Full uninstall/reinstall cleanup with Capacity CRs | Too broad unless upgrade testing uncovers resource leaks; defer to manual ops |
 | ConfigMap update timeout regression guard | Add only if this issue appears for Consumable Capacity; monitor during E2E |
-| Generated CRD schema regressions | Covered by downstream CEL/API validation (C1–C7); upstream OpenAPI schema testing handles schema specifics |
+| Generated CRD schema regressions | Covered by downstream CEL/API validation (C1–C8); upstream OpenAPI schema testing handles schema specifics |
 
 ---
 
@@ -257,7 +261,7 @@ E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked
 - **Disconnected**
 - **FIPS**
 - **ARCH:** x86_64, ARM
-- **OCP Versions:** 4.23+ and 5.0+ once both carry Kubernetes 1.36+ (Kubernetes 1.36+ required; 4.22 and earlier with Kubernetes 1.35 are unsupported)
+- **OCP Versions:** Happy path (E1–E8) on 4.23+ and 5.0+ once both carry Kubernetes 1.36+. Fail-closed (E9) on 4.18–4.22, with different expected messages for 4.18–4.20 vs 4.21–4.22.
 - **Hypershift:** HCP
 
 ---
@@ -271,7 +275,7 @@ E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked
 
 ### Downstream (Operator) Deliverables
 
-- **PR #2546** (or successor) — Unit tests, CEL/envtest API validation, and controller integration tests for config rendering, feature-gate wiring, and dependency handling
+- **PR #2546** (or successor) — Unit tests, CEL/envtest API validation, and controller unit tests for config rendering, feature-gate wiring, and dependency handling
 - **E2E tests automated**
 - **Downstream PRs with e2e tests in kueue-operator (Prow CI)**
 - **Test report with information for the Docs team**
@@ -292,22 +296,20 @@ E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked
 ## Pass/Fail Criteria
 
 - No critical or major defects remain open for the operator API, ConfigMap rendering, dependency handling, or downstream e2e automation.
-- Unit, CEL/envtest, and controller integration tests introduced in [#2546](https://github.com/openshift/kueue-operator/pull/2546) pass consistently.
+- Unit, CEL/envtest, and controller unit tests introduced in [#2546](https://github.com/openshift/kueue-operator/pull/2546) pass consistently.
 - A valid Capacity source is accepted by the downstream CRD, and invalid source type, union, required-field, and selector configurations are rejected.
 - The operator renders `type: Capacity` to the expected upstream `sources[].capacity` ConfigMap shape and enables `KueueDRAIntegrationConsumableCapacity` only when the cluster dependency is available.
 - Existing Counter/Partitionable Devices configuration and feature-gate behavior continue to work after Capacity support is added.
-- On unsupported clusters, the operator fails closed with a clear missing-dependency condition instead of silently rendering broken Consumable Capacity configuration.
-- Downstream e2e scenarios E1–E9 are automated or explicitly tracked, and the upstream DRA capacity e2e suite pulled into downstream runs successfully as a recurring periodic Prow job.
+- On unsupported clusters, E9 reports `Degraded=True`, `Reason=MissingDependencies`, with `DRA (Dynamic Resource Allocation) requires Kubernetes 1.34+ (OCP 4.21+)` on 4.18–4.20 or `DRA Consumable Capacity requires Kubernetes 1.36+ (OCP 4.23+) and the DRAConsumableCapacity feature gate to be enabled` on 4.21–4.22, and `kueue-controller-manager` stays Available (does not CrashLoopBackOff from ungated capacity config). **Note:** This requires [#2546](https://github.com/openshift/kueue-operator/pull/2546) to skip rendering capacity sources when the required feature gate cannot be enabled, preventing upstream Kueue from rejecting the configuration.
+- Downstream e2e scenarios E1–E9 are tracked in JIRA, implemented, and passing in downstream CI on their applicable OCP version bands (E1–E8 on 4.23+/5.0+; E9 on 4.18–4.22).
+- The upstream DRA capacity e2e suite (E1–E7 from `test/e2e/dra/capacity`) runs successfully in downstream CI as a recurring periodic Prow job, validating that operator-managed Kueue passes the same quota and admission tests as upstream.
 - Supporting test results and configuration examples are available for the Docs team.
 
 ---
 
 ## Risks
 
-
-1. **Kubernetes 1.36 availability** — DRA Consumable Capacity is beta in K8s 1.36. Test clusters must have 1.36+ with DRA beta gate enabled.
-
-2. **DRA scheduler plugin availability** — Tests require functional DRA scheduler; mock drivers are available but may not fully simulate production behavior.
+1. **DRA scheduler plugin availability** — Tests require functional DRA scheduler; mock drivers are available but may not fully simulate production behavior.
 
 ---
 
@@ -315,22 +317,19 @@ E2E scenarios (E1–E9) are deferred pending plan approval. Each will be tracked
 
 ### Deferred Upstream Scenarios (Phase 2)
 
-**Optional Tests (OPT1–OPT5):**
+**Optional Tests (OPT1–OPT3):**
 
 | ID | Scenario | Estimated Effort | Value | Why Deferred |
 |----|----------|------------------|-------|--------------|
 | OPT1 | Borrowing consumable capacity across cohorts | Medium | High | Highest-value quota semantics; defer to phase 2 or bundle with hierarchical cohorts coverage |
-| OPT2 | Capacity decrease below current usage safeguard | Low | Medium | Data consistency/safety edge case; validates no unsafe behavior when published capacity shrinks |
-| OPT3 | Workload status/events show insufficient capacity clearly | Medium | Medium | UX/support debugging; pending workloads should explain capacity exhaustion clearly |
-| OPT4 | Metrics expose capacity reservation/usage | Medium | Medium | Observability/support; tracked separately from quota enforcement |
-| OPT5 | Multiple capacity dimensions accounted independently | Medium | High | Multi-dimension behavior; validates dimensions such as `memory` and `compute` do not interfere |
+| OPT2 | Workload status/events show insufficient capacity clearly | Medium | Medium | UX/support debugging; pending workloads should explain capacity exhaustion clearly |
+| OPT3 | Metrics expose capacity reservation/usage | Medium | Medium | Observability/support; tracked separately from quota enforcement |
 
 ### Deferred Downstream Scenarios (Phase 2)
 
 | ID | Scenario | Estimated Effort | Value | Why Deferred | Status |
 |----|----------|------------------|-------|--------------|--------|
-| OPT1 | Operator renders Counter + Capacity sources together | Low | Medium | Useful but lower priority than single-source handling | Still needs implementation if requested |
-| OPT2 | Runtime CR update removing Capacity config triggers cleanup | Medium | Medium | Important lifecycle but lower priority than initial enable | Still needs implementation |
-| OPT3 | Downstream TLS metrics exposes capacity metrics via OpenShift auth | Medium | Medium | Observability for operators; important but not blocking | Still needs implementation |
-| OPT4 | Upgrade from non-Capacity version preserves Counter config | Medium | High | Backward compatibility; can be validated post-GA | Still needs implementation |
-| OPT5 | Upgrade, then enable Capacity; config renders + operand starts | Medium | High | Phased adoption scenario; lower immediate priority | Still needs implementation |
+| OPT1 | Runtime CR update removing Capacity config triggers cleanup | Medium | Medium | Important lifecycle but lower priority than initial enable | Still needs implementation |
+| OPT2 | Downstream TLS metrics exposes capacity metrics via OpenShift auth | Medium | Medium | Observability for operators; important but not blocking | Still needs implementation |
+| OPT3 | Upgrade from non-Capacity version preserves Counter config | Medium | High | Backward compatibility; can be validated post-GA | Still needs implementation |
+| OPT4 | Upgrade, then enable Capacity; config renders + operand starts | Medium | High | Phased adoption scenario; lower immediate priority | Still needs implementation |
