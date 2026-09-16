@@ -35,8 +35,8 @@ import (
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
-	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draExtendedResourceEnabled, draPartitionableDevicesEnabled, tlsOpts)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
+	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draPartitionableDevicesEnabled, tlsOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -249,18 +249,11 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draExtendedResourceEnabled bool, draPartitionableDevicesEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(frameworks []kueue.KueueIntegration, draPartitionableDevicesEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
-	// KueueDRAIntegration is Beta in Kueue 0.18+ and enabled by default.
-
-	// KueueDRAIntegrationExtendedResource is Alpha in Kueue. Enable it when the K8s
-	// DRAExtendedResource feature gate is enabled on the cluster. This allows
-	// workloads to request DRA devices using standard extended resource syntax
-	// (e.g., nvidia.com/gpu: 1) when a DeviceClass has extendedResourceName set.
-	if draExtendedResourceEnabled {
-		featureGates["KueueDRAIntegrationExtendedResource"] = true
-	}
+	// KueueDRAIntegration and KueueDRAIntegrationExtendedResource are enabled
+	// by default in Kueue 0.19+.
 
 	// KueueDRAIntegrationPartitionableDevices is Alpha in Kueue. Enable it when
 	// the K8s DRAPartitionableDevices feature gate is enabled on the cluster
@@ -326,7 +319,7 @@ func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) 
 	return result, nil
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draExtendedResourceEnabled bool, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
 	admissionFairSharing, err := buildAdmissionFairSharing(kueueCfg.AdmissionFairSharing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
@@ -382,7 +375,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draExtendedResourceEnabled, draPartitionableDevicesEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draPartitionableDevicesEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil

@@ -114,16 +114,13 @@ var _ = Describe("DRA Extended Resources", Label("operator", "dra", "dra-extende
 		kueueInstance.Spec.Config.Resources.DeviceClassMappings = nil
 		applyKueueConfig(ctx, kueueInstance.Spec.Config, kubeClient)
 
-		// Wait for DRA feature gates to be enabled and deviceClassMappings to be cleared
+		// Wait for deviceClassMappings to be cleared from the generated config.
 		Eventually(func() error {
 			configMap, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "KueueDRAIntegrationExtendedResource: true") {
-				return fmt.Errorf("KueueDRAIntegrationExtendedResource not enabled yet")
-			}
 			if strings.Contains(configData, draLogicalResource) {
 				return fmt.Errorf("deviceClassMappings still contains %s, waiting for config reconciliation", draLogicalResource)
 			}
