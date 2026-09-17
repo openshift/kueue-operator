@@ -54,7 +54,9 @@ type DeviceClassMappingApplyConfiguration struct {
 	// configured are marked inadmissible.
 	// Counter-based sources depend on the Kubernetes
 	// DRAPartitionableDevices feature gate for device-consumption tracking.
-	// Capacity sources depend on the Kubernetes DRAConsumableCapacity feature gate.
+	// The operator automatically enables the KueueDRAIntegrationConsumableCapacity
+	// feature gate for Capacity sources when the Kubernetes
+	// DRAConsumableCapacity feature gate is enabled.
 	Sources []DeviceClassSourceConfigApplyConfiguration `json:"sources,omitempty"`
 }
 

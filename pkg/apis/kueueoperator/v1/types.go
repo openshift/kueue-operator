@@ -560,7 +560,9 @@ type DeviceClassMapping struct {
 	// configured are marked inadmissible.
 	// Counter-based sources depend on the Kubernetes
 	// DRAPartitionableDevices feature gate for device-consumption tracking.
-	// Capacity sources depend on the Kubernetes DRAConsumableCapacity feature gate.
+	// The operator automatically enables the KueueDRAIntegrationConsumableCapacity
+	// feature gate for Capacity sources when the Kubernetes
+	// DRAConsumableCapacity feature gate is enabled.
 	// Limited to one source per mapping in this release. Future releases may support
 	// multiple capacity sources per mapping to enable multi-dimensional quota accounting
 	// (e.g., tracking both GPU memory and compute cores as separate dimensions within a

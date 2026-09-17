@@ -365,9 +365,10 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 
 	// Check whether DRA feature gates are enabled on the cluster.
 	// DRAConsumableCapacity is beta/default-on in Kubernetes 1.36+.
+	// DRAExtendedResource and DRAPartitionableDevices are alpha Kubernetes feature
+	// gates not yet in openshift/api, so they can only be enabled via CustomNoUpgrade.
 	// DRAPartitionableDevices is checked for degraded status reporting when
-	// counter-based sources are configured. The Kueue feature gates are enabled
-	// by default in Kueue 0.19+.
+	// counter-based sources are configured.
 	versionEnablesConsumableCapacity := draAPIsAvailable && isKubernetesMinorAtLeast(c.discoveryClient, 36)
 	previousConsumableCapacityEnabled := c.draConsumableCapacityEnabled
 	c.draConsumableCapacityEnabled = versionEnablesConsumableCapacity
