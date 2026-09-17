@@ -74,11 +74,11 @@ CR → ConfigMap generation logic. Location: `pkg/configmap/configmap_test.go`.
 | U3 | Recovery timeout disabled | recoveryTimeoutSeconds 0 → recoveryTimeout 0s | Implemented (PR #2140) |
 | U4 | Gang scheduling disabled (policy None) | Policy None → timeout 8760h (1 year), blockAdmission false | Implemented (PR #2140) |
 | U5 | Gang scheduling defaults (policy ByWorkloadDefaults) | ByWorkloadDefaults → waitForPodsReady omitted entirely | Implemented (PR #2140) |
-| U6 | Custom timeoutSeconds converts to duration | Positive timeoutSeconds → duration in ConfigMap | Proposed |
-| U7 | Requeuing strategy with only retryLimit | Only backoffLimitCount emitted; other requeuing fields omitted | Proposed |
-| U8 | Requeuing strategy with only timeReference | Only timestamp emitted; other requeuing fields omitted | Proposed |
-| U9 | Requeuing strategy without retryLimit | backoffLimitCount omitted (infinite retries) | Proposed |
-| U10 | Requeuing strategy with only backoffMaxSeconds | Only backoffMaxSeconds emitted; other requeuing fields omitted | Proposed |
+| U6 | Custom timeoutSeconds converts to duration | Positive timeoutSeconds → duration in ConfigMap | Implemented (PR #2587) |
+| U7 | Requeuing strategy with only retryLimit | Only backoffLimitCount emitted; other requeuing fields omitted | Implemented (PR #2587) |
+| U8 | Requeuing strategy with only timeReference | Only timestamp emitted; other requeuing fields omitted | Implemented (PR #2587) |
+| U9 | Requeuing strategy without retryLimit | backoffLimitCount omitted (infinite retries) | Implemented (PR #2587) |
+| U10 | Requeuing strategy with only backoffMaxSeconds | Only backoffMaxSeconds emitted; other requeuing fields omitted | Implemented (PR #2587) |
 
 #### E2E Tests
 
