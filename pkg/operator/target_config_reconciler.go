@@ -365,10 +365,9 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 
 	// Check whether DRA feature gates are enabled on the cluster.
 	// DRAConsumableCapacity is beta/default-on in Kubernetes 1.36+.
-	// DRAExtendedResource and DRAPartitionableDevices are alpha Kubernetes feature
-	// gates not yet in openshift/api, so they can only be enabled via CustomNoUpgrade.
-	// We check spec.customNoUpgrade.enabled on the FeatureGate CR to determine if
-	// the corresponding kueue gates should be enabled.
+	// DRAPartitionableDevices is checked for degraded status reporting when
+	// counter-based sources are configured. The Kueue feature gates are enabled
+	// by default in Kueue 0.19+.
 	versionEnablesConsumableCapacity := draAPIsAvailable && isKubernetesMinorAtLeast(c.discoveryClient, 36)
 	previousConsumableCapacityEnabled := c.draConsumableCapacityEnabled
 	c.draConsumableCapacityEnabled = versionEnablesConsumableCapacity
@@ -1368,7 +1367,7 @@ func (c *TargetConfigReconciler) resolveGVRsToKinds(frameworks []kueuev1.Externa
 }
 
 func (c *TargetConfigReconciler) buildAndApplyConfigMap(ctx context.Context, oldCfgMap *v1.ConfigMap, kueueCfg kueuev1.KueueConfiguration, gvrToKind map[string]string, tlsOpts *kueueconfigapi.TLSOptions) (*v1.ConfigMap, bool, error) {
-	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draPartitionableDevicesEnabled, c.draConsumableCapacityEnabled, tlsOpts)
+	cfgMap, buildErr := configmap.BuildConfigMap(c.operatorNamespace, kueueCfg, gvrToKind, c.draConsumableCapacityEnabled, tlsOpts)
 	if buildErr != nil {
 		klog.Errorf("Cannot build configmap %s for kueue", c.operatorNamespace)
 		return nil, false, buildErr

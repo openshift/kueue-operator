@@ -219,8 +219,8 @@ var _ = Describe("DRA Partitionable Devices", Label("operator", "dra-pd"), Order
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "KueueDRAIntegrationPartitionableDevices") {
-				return fmt.Errorf("PD feature gate not configured yet")
+			if !strings.Contains(configData, "sources:") {
+				return fmt.Errorf("deviceClassMappings sources not configured yet")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
@@ -429,8 +429,8 @@ var _ = Describe("DRA Partitionable Devices", Label("operator", "dra-pd"), Order
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if strings.Contains(configData, "KueueDRAIntegrationPartitionableDevices") {
-				return fmt.Errorf("PD feature gate still present")
+			if strings.Contains(configData, "sources:") {
+				return fmt.Errorf("deviceClassMappings sources still present")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
@@ -474,8 +474,8 @@ var _ = Describe("DRA Partitionable Devices", Label("operator", "dra-pd"), Order
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "KueueDRAIntegrationPartitionableDevices") {
-				return fmt.Errorf("PD feature gate not restored yet")
+			if !strings.Contains(configData, "sources:") {
+				return fmt.Errorf("deviceClassMappings sources not restored yet")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
