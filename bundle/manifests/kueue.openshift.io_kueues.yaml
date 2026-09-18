@@ -597,17 +597,86 @@ spec:
                               description: |-
                                 sources configures resource accounting sources for this mapping.
                                 Each source defines how quota is tracked for this DeviceClass.
-                                Currently only counter sources are supported (for partitionable devices).
+                                Counter and capacity sources are supported for DRA quota accounting.
+                                Counter sources are used for partitionable devices.
+                                Capacity sources are used for consumable capacity devices that allow multiple allocations.
                                 Extended resource requests that resolve to a DeviceClass with sources
                                 configured are marked inadmissible.
                                 The operator automatically enables the required kueue feature gate when
-                                sources are configured and the Kubernetes DRAPartitionableDevices
-                                feature gate is enabled on the cluster.
+                                sources are configured and the corresponding Kubernetes feature gate is
+                                enabled on the cluster: DRAPartitionableDevices for Counter sources, and
+                                DRAConsumableCapacity for Capacity sources.
                               items:
                                 description: |-
                                   DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
                                   Exactly one of the source types must be set.
                                 properties:
+                                  capacity:
+                                    description: |-
+                                      capacity configures capacity-based quota for consumable capacity devices.
+                                      capacity is required when type is Capacity, and forbidden otherwise.
+                                    properties:
+                                      deviceSelector:
+                                        description: |-
+                                          deviceSelector scopes which devices are eligible for capacity-based
+                                          quota accounting.
+                                        properties:
+                                          cel:
+                                            description: |-
+                                              cel contains a CEL expression for filtering devices.
+                                              cel is required when type is CEL, and forbidden otherwise.
+                                            properties:
+                                              expression:
+                                                description: expression is a CEL expression
+                                                  that evaluates against device attributes.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - expression
+                                            type: object
+                                          type:
+                                            description: |-
+                                              type selects the device selector type.
+                                              CEL uses a CEL expression to filter devices by attributes.
+                                            enum:
+                                            - CEL
+                                            type: string
+                                        required:
+                                        - type
+                                        type: object
+                                        x-kubernetes-validations:
+                                        - message: cel is required when type is CEL,
+                                            and forbidden otherwise
+                                          rule: 'has(self.type) && self.type == ''CEL''
+                                            ? has(self.cel) : !has(self.cel)'
+                                      driver:
+                                        description: driver is the DRA driver name
+                                          used to filter relevant ResourceSlices.
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: must be a valid DNS subdomain,
+                                            for example 'gpu.example.com'
+                                          rule: '!format.dns1123Subdomain().validate(self).hasValue()'
+                                      name:
+                                        description: |-
+                                          name is the capacity dimension within ResourceSlice device capacity
+                                          to track for quota, for example "memory".
+                                          Must match a capacity name published by the DRA driver.
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: must be a qualified name, for example
+                                            'memory' or 'gpu.example.com/memory'
+                                          rule: '!format.qualifiedName().validate(self).hasValue()'
+                                    required:
+                                    - deviceSelector
+                                    - driver
+                                    - name
+                                    type: object
                                   counter:
                                     description: |-
                                       counter configures counter-based quota for partitionable devices.
@@ -703,6 +772,7 @@ spec:
                                       Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
                                     enum:
                                     - Counter
+                                    - Capacity
                                     type: string
                                 required:
                                 - type
@@ -712,6 +782,10 @@ spec:
                                     and forbidden otherwise
                                   rule: 'has(self.type) && self.type == ''Counter''
                                     ? has(self.counter) : !has(self.counter)'
+                                - message: capacity is required when type is Capacity,
+                                    and forbidden otherwise
+                                  rule: 'has(self.type) && self.type == ''Capacity''
+                                    ? has(self.capacity) : !has(self.capacity)'
                               maxItems: 1
                               minItems: 1
                               type: array

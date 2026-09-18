@@ -31,12 +31,13 @@ import (
 	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 
 	kueue "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
+	"github.com/openshift/kueue-operator/pkg/util"
 )
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
-	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draPartitionableDevicesEnabled, tlsOpts)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
+	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draPartitionableDevicesEnabled, draConsumableCapacityEnabled, tlsOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +206,7 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
-func buildResources(resources kueue.Resources) *configapi.Resources {
+func buildResources(resources kueue.Resources, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool) *configapi.Resources {
 	if len(resources.DeviceClassMappings) == 0 {
 		return nil
 	}
@@ -225,20 +226,42 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 		}
 
 		for _, s := range m.Sources {
-			source := configapi.DeviceClassSourceConfig{
-				Counter: &configapi.DeviceClassCounterSource{
-					Name:   s.Counter.Name,
-					Driver: s.Counter.Driver,
-				},
-			}
-			if s.Counter.DeviceSelector.CEL.Expression != "" {
-				source.Counter.DeviceSelector = resourcev1.DeviceSelector{
-					CEL: &resourcev1.CELDeviceSelector{
-						Expression: s.Counter.DeviceSelector.CEL.Expression,
+			switch s.Type {
+			case kueue.DeviceClassSourceTypeCounter:
+				if !draPartitionableDevicesEnabled {
+					continue
+				}
+				source := configapi.DeviceClassSourceConfig{
+					Counter: &configapi.DeviceClassCounterSource{
+						Name:   s.Counter.Name,
+						Driver: s.Counter.Driver,
 					},
 				}
+				if s.Counter.DeviceSelector.CEL.Expression != "" {
+					source.Counter.DeviceSelector = resourcev1.DeviceSelector{
+						CEL: &resourcev1.CELDeviceSelector{
+							Expression: s.Counter.DeviceSelector.CEL.Expression,
+						},
+					}
+				}
+				mapping.Sources = append(mapping.Sources, source)
+			case kueue.DeviceClassSourceTypeCapacity:
+				if !draConsumableCapacityEnabled {
+					continue
+				}
+				source := configapi.DeviceClassSourceConfig{
+					Capacity: &configapi.DeviceClassCapacitySource{
+						Name:   resourcev1.QualifiedName(s.Capacity.Name),
+						Driver: s.Capacity.Driver,
+					},
+				}
+				if s.Capacity.DeviceSelector.CEL.Expression != "" {
+					source.Capacity.DeviceSelector = resourcev1.DeviceSelector{
+						CEL: &resourcev1.CELDeviceSelector{Expression: s.Capacity.DeviceSelector.CEL.Expression},
+					}
+				}
+				mapping.Sources = append(mapping.Sources, source)
 			}
-			mapping.Sources = append(mapping.Sources, source)
 		}
 
 		mappings = append(mappings, mapping)
@@ -249,7 +272,7 @@ func buildResources(resources kueue.Resources) *configapi.Resources {
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draPartitionableDevicesEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(frameworks []kueue.KueueIntegration, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// KueueDRAIntegration and KueueDRAIntegrationExtendedResource are enabled
@@ -257,14 +280,13 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draPartitionableDevi
 
 	// KueueDRAIntegrationPartitionableDevices is Alpha in Kueue. Enable it when
 	// the K8s DRAPartitionableDevices feature gate is enabled on the cluster
-	// AND sources are configured in deviceClassMappings.
-	if draPartitionableDevicesEnabled {
-		for _, m := range resources.DeviceClassMappings {
-			if len(m.Sources) > 0 {
-				featureGates["KueueDRAIntegrationPartitionableDevices"] = true
-				break
-			}
-		}
+	// AND counter sources are configured in deviceClassMappings.
+	if draPartitionableDevicesEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCounter) {
+		featureGates["KueueDRAIntegrationPartitionableDevices"] = true
+	}
+
+	if draConsumableCapacityEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCapacity) {
+		featureGates["KueueDRAIntegrationConsumableCapacity"] = true
 	}
 
 	// SparkApplicationIntegration is Alpha in Kueue, so we explicitly enable it
@@ -319,7 +341,7 @@ func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) 
 	return result, nil
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
 	admissionFairSharing, err := buildAdmissionFairSharing(kueueCfg.AdmissionFairSharing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
@@ -374,8 +396,8 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
-		Resources:                  buildResources(kueueCfg.Resources),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draPartitionableDevicesEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		Resources:                  buildResources(kueueCfg.Resources, draPartitionableDevicesEnabled, draConsumableCapacityEnabled),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draPartitionableDevicesEnabled, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil

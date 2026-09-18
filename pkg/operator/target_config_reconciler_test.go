@@ -5,10 +5,14 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openshift/kueue-operator/bindata"
+	kueuev1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/version"
+	fakediscovery "k8s.io/client-go/discovery/fake"
+	clientgotesting "k8s.io/client-go/testing"
 )
 
 func TestMutatingWebhookReinvocationPolicyAsset(t *testing.T) {
@@ -54,6 +58,66 @@ func TestKueueCRDNames(t *testing.T) {
 		if suffix != ".kueue.x-k8s.io" {
 			t.Errorf("CRD name %q does not end with .kueue.x-k8s.io", name)
 		}
+	}
+}
+
+func TestMissingConsumableCapacityDependencies(t *testing.T) {
+	capacityResources := kueuev1.Resources{DeviceClassMappings: []kueuev1.DeviceClassMapping{{Sources: []kueuev1.DeviceClassSourceConfig{{Type: kueuev1.DeviceClassSourceTypeCapacity}}}}}
+	counterResources := kueuev1.Resources{DeviceClassMappings: []kueuev1.DeviceClassMapping{{Sources: []kueuev1.DeviceClassSourceConfig{{Type: kueuev1.DeviceClassSourceTypeCounter}}}}}
+
+	tests := map[string]struct {
+		resources kueuev1.Resources
+		enabled   bool
+		want      []string
+	}{
+		"capacity source requires consumable capacity gate": {
+			resources: capacityResources,
+			want:      []string{draConsumableCapacityMissingDependency},
+		},
+		"capacity source with consumable capacity gate has no missing dependency": {
+			resources: capacityResources,
+			enabled:   true,
+		},
+		"counter source does not require consumable capacity gate": {
+			resources: counterResources,
+		},
+		"no sources have no missing dependency": {},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, missingConsumableCapacityDependencies(tc.resources, tc.enabled)); diff != "" {
+				t.Fatalf("unexpected dependencies (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsKubernetesMinorAtLeast(t *testing.T) {
+	tests := map[string]struct {
+		minor string
+		want  bool
+	}{
+		"below requested minor": {minor: "35", want: false},
+		"requested minor":       {minor: "36", want: true},
+		"above requested minor": {minor: "37", want: true},
+		"minor with plus":       {minor: "36+", want: true},
+		"invalid minor":         {minor: "36-beta.0", want: false},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := isKubernetesMinorAtLeast(&fakediscovery.FakeDiscovery{
+				Fake: &clientgotesting.Fake{},
+				FakedServerVersion: &version.Info{
+					Major: "1",
+					Minor: tc.minor,
+				},
+			}, 36)
+			if got != tc.want {
+				t.Fatalf("isKubernetesMinorAtLeast() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
