@@ -30,13 +30,12 @@ import (
 
 func TestBuildConfigMap(t *testing.T) {
 	testCases := map[string]struct {
-		configuration                  kueue.KueueConfiguration
-		gvrToKind                      map[string]string
-		draPartitionableDevicesEnabled bool
-		draConsumableCapacityEnabled   bool
-		tlsOpts                        *configapi.TLSOptions
-		wantCfgMap                     *corev1.ConfigMap
-		wantErr                        error
+		configuration                kueue.KueueConfiguration
+		gvrToKind                    map[string]string
+		draConsumableCapacityEnabled bool
+		tlsOpts                      *configapi.TLSOptions
+		wantCfgMap                   *corev1.ConfigMap
+		wantErr                      error
 	}{
 		"batch job example": {
 			configuration: kueue.KueueConfiguration{
@@ -1045,80 +1044,6 @@ webhook:
 			},
 			wantErr: nil,
 		},
-		"dra counter source skipped when gate disabled": {
-			draPartitionableDevicesEnabled: false,
-			configuration: kueue.KueueConfiguration{
-				Integrations: kueue.Integrations{
-					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
-				},
-				Resources: kueue.Resources{
-					DeviceClassMappings: []kueue.DeviceClassMapping{
-						{
-							Name:             "example.com/gpus",
-							DeviceClassNames: []kueue.DeviceClassName{"gpu.example.com"},
-							Sources: []kueue.DeviceClassSourceConfig{
-								{
-									Type: kueue.DeviceClassSourceTypeCounter,
-									Counter: kueue.DeviceClassCounterSource{
-										Name:   "gpus",
-										Driver: "gpu.example.com",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantCfgMap: &corev1.ConfigMap{
-				Data: map[string]string{
-					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
-clientConnection:
-  burst: 100
-  qps: 50
-controller:
-  groupKindConcurrency:
-    ClusterQueue.kueue.x-k8s.io: 1
-    Job.batch: 5
-    LocalQueue.kueue.x-k8s.io: 1
-    Pod: 5
-    ResourceFlavor.kueue.x-k8s.io: 1
-    Workload.kueue.x-k8s.io: 5
-health:
-  healthProbeBindAddress: :8081
-integrations:
-  frameworks:
-  - batch/job
-internalCertManagement:
-  enable: false
-kind: Configuration
-leaderElection:
-  leaderElect: true
-  leaseDuration: 2m17s
-  renewDeadline: 1m47s
-  resourceLock: ""
-  resourceName: ""
-  resourceNamespace: ""
-  retryPeriod: 26s
-manageJobsWithoutQueueName: false
-managedJobsNamespaceSelector:
-  matchLabels:
-    kueue.openshift.io/managed: "true"
-metrics:
-  bindAddress: :8443
-  enableClusterQueueResources: true
-namespace: test
-resources:
-  deviceClassMappings:
-  - deviceClassNames:
-    - gpu.example.com
-    name: example.com/gpus
-webhook:
-  port: 9443
-`,
-				},
-			},
-			wantErr: nil,
-		},
 		"dra capacity source skipped when gate disabled": {
 			draConsumableCapacityEnabled: false,
 			configuration: kueue.KueueConfiguration{
@@ -1778,7 +1703,7 @@ webhook:
 
 	for desc, tc := range testCases {
 		t.Run(desc, func(t *testing.T) {
-			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draPartitionableDevicesEnabled, tc.draConsumableCapacityEnabled, tc.tlsOpts)
+			got, err := BuildConfigMap("test", tc.configuration, tc.gvrToKind, tc.draConsumableCapacityEnabled, tc.tlsOpts)
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("Unexpected error: want=%v, got=%v", tc.wantErr, err)
 			}
@@ -1790,50 +1715,34 @@ webhook:
 }
 
 func TestBuildFeatureGatesForDRASources(t *testing.T) {
-	counterResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Sources: []kueue.DeviceClassSourceConfig{{Type: kueue.DeviceClassSourceTypeCounter}}}}}
 	capacityResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Sources: []kueue.DeviceClassSourceConfig{{Type: kueue.DeviceClassSourceTypeCapacity}}}}}
 	noSourceResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Name: "gpu.memory"}}}
 
 	testCases := map[string]struct {
-		resources                      kueue.Resources
-		draPartitionableDevicesEnabled bool
-		draConsumableCapacityEnabled   bool
-		want                           map[string]bool
+		resources                    kueue.Resources
+		draConsumableCapacityEnabled bool
+		want                         map[string]bool
 	}{
-		"capacity source enables only consumable capacity gate": {
-			resources:                      capacityResources,
-			draPartitionableDevicesEnabled: true,
-			draConsumableCapacityEnabled:   true,
+		"capacity source enables consumable capacity gate": {
+			resources:                    capacityResources,
+			draConsumableCapacityEnabled: true,
 			want: map[string]bool{
 				"KueueDRAIntegrationConsumableCapacity": true,
 			},
 		},
-		"counter source enables only partitionable devices gate": {
-			resources:                      counterResources,
-			draPartitionableDevicesEnabled: true,
-			draConsumableCapacityEnabled:   true,
-			want: map[string]bool{
-				"KueueDRAIntegrationPartitionableDevices": true,
-			},
-		},
-		"mappings without sources enable neither gate": {
-			resources:                      noSourceResources,
-			draPartitionableDevicesEnabled: true,
-			draConsumableCapacityEnabled:   true,
+		"mappings without sources enable no gate": {
+			resources:                    noSourceResources,
+			draConsumableCapacityEnabled: true,
 		},
 		"capacity source does not enable gate when dependency is unavailable": {
 			resources:                    capacityResources,
 			draConsumableCapacityEnabled: false,
 		},
-		"counter source does not enable gate when dependency is unavailable": {
-			resources:                      counterResources,
-			draPartitionableDevicesEnabled: false,
-		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			got := buildFeatureGates(nil, tc.draPartitionableDevicesEnabled, tc.draConsumableCapacityEnabled, tc.resources, nil, nil)
+			got := buildFeatureGates(nil, tc.draConsumableCapacityEnabled, tc.resources, nil, nil)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("unexpected feature gates (-want,+got):\n%s", diff)
 			}

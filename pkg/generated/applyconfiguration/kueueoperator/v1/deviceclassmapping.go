@@ -52,10 +52,11 @@ type DeviceClassMappingApplyConfiguration struct {
 	// Capacity sources are used for consumable capacity devices that allow multiple allocations.
 	// Extended resource requests that resolve to a DeviceClass with sources
 	// configured are marked inadmissible.
-	// The operator automatically enables the required kueue feature gate when
-	// sources are configured and the corresponding Kubernetes feature gate is
-	// enabled on the cluster: DRAPartitionableDevices for Counter sources, and
-	// DRAConsumableCapacity for Capacity sources.
+	// Counter-based sources depend on the Kubernetes
+	// DRAPartitionableDevices feature gate for device-consumption tracking.
+	// The operator automatically enables the KueueDRAIntegrationConsumableCapacity
+	// feature gate for Capacity sources when the Kubernetes
+	// DRAConsumableCapacity feature gate is enabled.
 	Sources []DeviceClassSourceConfigApplyConfiguration `json:"sources,omitempty"`
 }
 

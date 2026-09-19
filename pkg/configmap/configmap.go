@@ -36,8 +36,8 @@ import (
 
 const controllerManagerConfigYaml = "controller_manager_config.yaml"
 
-func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
-	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draPartitionableDevicesEnabled, draConsumableCapacityEnabled, tlsOpts)
+func BuildConfigMap(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draConsumableCapacityEnabled bool, tlsOpts *configapi.TLSOptions) (*corev1.ConfigMap, error) {
+	config, err := defaultKueueConfigurationTemplate(namespace, kueueCfg, gvrToKind, draConsumableCapacityEnabled, tlsOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func buildFairSharing(preemption kueue.Preemption) *configapi.FairSharing {
 	}
 }
 
-func buildResources(resources kueue.Resources, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool) *configapi.Resources {
+func buildResources(resources kueue.Resources, draConsumableCapacityEnabled bool) *configapi.Resources {
 	if len(resources.DeviceClassMappings) == 0 {
 		return nil
 	}
@@ -228,9 +228,6 @@ func buildResources(resources kueue.Resources, draPartitionableDevicesEnabled bo
 		for _, s := range m.Sources {
 			switch s.Type {
 			case kueue.DeviceClassSourceTypeCounter:
-				if !draPartitionableDevicesEnabled {
-					continue
-				}
 				source := configapi.DeviceClassSourceConfig{
 					Counter: &configapi.DeviceClassCounterSource{
 						Name:   s.Counter.Name,
@@ -272,18 +269,11 @@ func buildResources(resources kueue.Resources, draPartitionableDevicesEnabled bo
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(frameworks []kueue.KueueIntegration, draConsumableCapacityEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
 	featureGates := map[string]bool{}
 
-	// KueueDRAIntegration and KueueDRAIntegrationExtendedResource are enabled
-	// by default in Kueue 0.19+.
-
-	// KueueDRAIntegrationPartitionableDevices is Alpha in Kueue. Enable it when
-	// the K8s DRAPartitionableDevices feature gate is enabled on the cluster
-	// AND counter sources are configured in deviceClassMappings.
-	if draPartitionableDevicesEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCounter) {
-		featureGates["KueueDRAIntegrationPartitionableDevices"] = true
-	}
+	// KueueDRAIntegration, KueueDRAIntegrationExtendedResource, and
+	// KueueDRAIntegrationPartitionableDevices are enabled by default in Kueue 0.19+.
 
 	if draConsumableCapacityEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCapacity) {
 		featureGates["KueueDRAIntegrationConsumableCapacity"] = true
@@ -341,7 +331,7 @@ func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) 
 	return result, nil
 }
 
-func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draPartitionableDevicesEnabled bool, draConsumableCapacityEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
+func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueConfiguration, gvrToKind map[string]string, draConsumableCapacityEnabled bool, tlsOpts *configapi.TLSOptions) (*configapi.Configuration, error) {
 	admissionFairSharing, err := buildAdmissionFairSharing(kueueCfg.AdmissionFairSharing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
@@ -396,8 +386,8 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		ManageJobsWithoutQueueName: buildManagedJobsWithoutQueueName(kueueCfg.WorkloadManagement),
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
-		Resources:                  buildResources(kueueCfg.Resources, draPartitionableDevicesEnabled, draConsumableCapacityEnabled),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draPartitionableDevicesEnabled, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		Resources:                  buildResources(kueueCfg.Resources, draConsumableCapacityEnabled),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil

@@ -31,7 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	kueueconfigapi "sigs.k8s.io/kueue/apis/config/v1beta2"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -42,6 +44,22 @@ const (
 	pdTestNamespacePrefix = "kueue-pd-test-"
 	pdLocalQueueName      = "pd-test-queue"
 )
+
+func configHasDeviceClassSources(configData string) (bool, error) {
+	var config kueueconfigapi.Configuration
+	if err := yaml.Unmarshal([]byte(configData), &config); err != nil {
+		return false, fmt.Errorf("failed to unmarshal Kueue configuration: %w", err)
+	}
+	if config.Resources == nil {
+		return false, nil
+	}
+	for _, mapping := range config.Resources.DeviceClassMappings {
+		if len(mapping.Sources) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func verifyWorkloadGPUMemory(ctx context.Context, namespace, jobUID string, expectedBytes int64) {
 	kueueClient := clients.UpstreamKueueClient
@@ -219,8 +237,12 @@ var _ = Describe("DRA Partitionable Devices", Label("operator", "dra-pd"), Order
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "KueueDRAIntegrationPartitionableDevices") {
-				return fmt.Errorf("PD feature gate not configured yet")
+			hasSources, err := configHasDeviceClassSources(configData)
+			if err != nil {
+				return err
+			}
+			if !hasSources {
+				return fmt.Errorf("deviceClassMappings sources not configured yet")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
@@ -429,8 +451,12 @@ var _ = Describe("DRA Partitionable Devices", Label("operator", "dra-pd"), Order
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if strings.Contains(configData, "KueueDRAIntegrationPartitionableDevices") {
-				return fmt.Errorf("PD feature gate still present")
+			hasSources, err := configHasDeviceClassSources(configData)
+			if err != nil {
+				return err
+			}
+			if hasSources {
+				return fmt.Errorf("deviceClassMappings sources still present")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
@@ -474,8 +500,12 @@ var _ = Describe("DRA Partitionable Devices", Label("operator", "dra-pd"), Order
 				return err
 			}
 			configData := configMap.Data["controller_manager_config.yaml"]
-			if !strings.Contains(configData, "KueueDRAIntegrationPartitionableDevices") {
-				return fmt.Errorf("PD feature gate not restored yet")
+			hasSources, err := configHasDeviceClassSources(configData)
+			if err != nil {
+				return err
+			}
+			if !hasSources {
+				return fmt.Errorf("deviceClassMappings sources not restored yet")
 			}
 			return nil
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
