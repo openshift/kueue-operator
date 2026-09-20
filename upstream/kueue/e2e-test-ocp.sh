@@ -47,7 +47,9 @@ function ginkgo_label_filter() {
   local folder="$1"
   case "$folder" in
     singlecluster)
-      echo "feature:certs,feature:deployment,feature:e2e_v1beta1,feature:job,feature:jobset,feature:leaderworkerset,feature:metrics,feature:statefulset,feature:visibility"
+      # TAS suites live below singlecluster/tasapi and share generic feature labels such as
+      # feature:job with this lane, so exclude their area label explicitly.
+      echo "(feature:certs || feature:deployment || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas"
       ;;
     certmanager)
       echo "!feature:prometheus"
@@ -127,14 +129,16 @@ for folder in $E2E_TARGET_FOLDERS; do
   echo "=== Running upstream e2e tests for: ${folder} ==="
   configure_kueue_for_folder "$folder"
   label_filter=$(ginkgo_label_filter "$folder")
-  folder_ginkgo_args="${GINKGO_ARGS:-}"
+  folder_ginkgo_args=()
+  if [ -n "${GINKGO_ARGS:-}" ]; then
+    read -r -a folder_ginkgo_args <<< "$GINKGO_ARGS"
+  fi
   if [ -n "$label_filter" ]; then
-    folder_ginkgo_args="$folder_ginkgo_args --label-filter=$label_filter"
+    folder_ginkgo_args+=("--label-filter=$label_filter")
   fi
 
   report_name="${folder//\//-}"
-  # shellcheck disable=SC2086
-  $GINKGO ${folder_ginkgo_args} \
+  "$GINKGO" "${folder_ginkgo_args[@]}" \
     --skip="${GINKGO_SKIP_PATTERN}" \
     --junit-report="e2e-upstream-${report_name}-junit.xml" \
     --json-report="e2e-upstream-${report_name}.json" \

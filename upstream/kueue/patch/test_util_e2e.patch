@@ -1,13 +1,12 @@
 diff --git a/test/util/e2e.go b/test/util/e2e.go
-index 77572d8fe..85503da67 100644
+index 5fd0e6600..992bdc49f 100644
 --- a/test/util/e2e.go
 +++ b/test/util/e2e.go
-@@ -631,8 +631,13 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
- }
- 
+@@ -721,5 +721,10 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
  func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
 -	MustCreate(ctx, k8sClient, ns)
 -	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns.Name)
+-	return ns
 +	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns)
 +	if ns.Labels == nil {
 +		ns.Labels = make(map[string]string)
@@ -15,24 +14,13 @@ index 77572d8fe..85503da67 100644
 +	ns.Labels["kueue.openshift.io/managed"] = "true"
 +	gomega.Expect(k8sClient.Create(ctx, ns)).To(gomega.Succeed())
 +	ginkgo.GinkgoLogr.Info(fmt.Sprintf("Created namespace: %s", ns.Name))
- 	return ns
++	return ns
  }
- 
-@@ -654,7 +659,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
- 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
- 		g.Expect(err).NotTo(gomega.HaveOccurred())
- 		g.Expect(metricsOutput).Should(utiltesting.ContainMetrics(metrics))
+@@ -757,2 +762,2 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
 -	}, LongTimeout, Interval).Should(gomega.Succeed())
 +	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
  }
- 
- func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restClient *rest.RESTClient, curlPodName, curlContainerName string, metrics [][]string) {
-@@ -663,7 +668,7 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
- 		metricsOutput, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
- 		g.Expect(err).NotTo(gomega.HaveOccurred())
- 		g.Expect(metricsOutput).Should(utiltesting.ExcludeMetrics(metrics))
+@@ -766,2 +771,2 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
 -	}, LongTimeout, Interval).Should(gomega.Succeed())
 +	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
  }
- 
- func WaitForPodRunning(ctx context.Context, k8sClient client.Client, pod *corev1.Pod) {
