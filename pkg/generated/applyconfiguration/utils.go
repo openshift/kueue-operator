@@ -39,6 +39,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.ByWorkloadApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("CELDeviceSelector"):
 		return &kueueoperatorv1.CELDeviceSelectorApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ControllerManager"):
+		return &kueueoperatorv1.ControllerManagerApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ControllerMetrics"):
+		return &kueueoperatorv1.ControllerMetricsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ControllerMetricsCustomLabel"):
+		return &kueueoperatorv1.ControllerMetricsCustomLabelApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeviceClassCapacitySource"):
 		return &kueueoperatorv1.DeviceClassCapacitySourceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeviceClassCounterSource"):

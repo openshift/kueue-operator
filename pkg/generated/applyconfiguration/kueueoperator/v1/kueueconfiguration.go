@@ -61,6 +61,8 @@ type KueueConfigurationApplyConfiguration struct {
 	// so that queues which have consumed fewer resources are admitted first.
 	// This section configures the usage decay rate, the sampling frequency, and per-resource weights.
 	AdmissionFairSharing *AdmissionFairSharingApplyConfiguration `json:"admissionFairSharing,omitempty"`
+	// controllerManager contains the configurations for controllers
+	ControllerManager *ControllerManagerApplyConfiguration `json:"controllerManager,omitempty"`
 }
 
 // KueueConfigurationApplyConfiguration constructs a declarative configuration of the KueueConfiguration type for use with
@@ -122,5 +124,13 @@ func (b *KueueConfigurationApplyConfiguration) WithMultiKueue(value *MultiKueueA
 // If called multiple times, the AdmissionFairSharing field is set to the value of the last call.
 func (b *KueueConfigurationApplyConfiguration) WithAdmissionFairSharing(value *AdmissionFairSharingApplyConfiguration) *KueueConfigurationApplyConfiguration {
 	b.AdmissionFairSharing = value
+	return b
+}
+
+// WithControllerManager sets the ControllerManager field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ControllerManager field is set to the value of the last call.
+func (b *KueueConfigurationApplyConfiguration) WithControllerManager(value *ControllerManagerApplyConfiguration) *KueueConfigurationApplyConfiguration {
+	b.ControllerManager = value
 	return b
 }
