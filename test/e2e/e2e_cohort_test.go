@@ -26,6 +26,9 @@ import (
 	. "github.com/onsi/gomega"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -326,7 +329,7 @@ var _ = Describe("Hierarchical Cohorts", Label("cohort"), Ordered, func() {
 					[]string{
 						"/bin/sh", "-c",
 						fmt.Sprintf(
-							"curl -s --cacert %s/ca.crt -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://%s.%s.svc.cluster.local:8443/metrics",
+							"curl --fail --silent --show-error --cacert %s/ca.crt -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://%s.%s.svc.cluster.local:8443/metrics",
 							certMountPath, metricsServiceName, testutils.OperatorNamespace,
 						),
 					})
@@ -334,28 +337,68 @@ var _ = Describe("Hierarchical Cohorts", Label("cohort"), Ordered, func() {
 					return fmt.Errorf("exec into pod failed: %w", err)
 				}
 
-				metrics := string(metricsOutput)
+				parser := expfmt.NewTextParser(model.UTF8Validation)
+				metricFamilies, err := parser.TextToMetricFamilies(strings.NewReader(string(metricsOutput)))
+				if err != nil {
+					return fmt.Errorf("failed to parse Prometheus metrics: %w", err)
+				}
 
-				cohortMetrics := []struct {
-					name    string
-					pattern string
+				expectedMetrics := []struct {
+					name   string
+					labels map[string]string
 				}{
-					{"cohort subtree active workloads", fmt.Sprintf(`kueue_cohort_subtree_admitted_active_workloads{cohort="%s"`, env.OrgEng.Name)},
-					{"cohort subtree total workloads", fmt.Sprintf(`kueue_cohort_subtree_admitted_workloads_total{cohort="%s"`, env.OrgEng.Name)},
-					{"cohort subtree quota", fmt.Sprintf(`kueue_cohort_subtree_quota{cohort="%s"`, env.OrgEng.Name)},
-					{"cohort subtree reservations", fmt.Sprintf(`kueue_cohort_subtree_resource_reservations{cohort="%s"`, env.OrgEng.Name)},
-					{"cohort info", fmt.Sprintf(`kueue_cohort_info{cohort="%s",parent_cohort="%s"`, env.OrgEng.Name, env.RootCohort.Name)},
-					{"cohort weighted share", fmt.Sprintf(`kueue_cohort_weighted_share{cohort="%s"`, env.OrgEng.Name)},
-				}
-				for _, m := range cohortMetrics {
-					if !strings.Contains(metrics, m.pattern) {
-						return fmt.Errorf("%s not found: %s", m.name, m.pattern)
-					}
+					{
+						name: "kueue_cohort_subtree_admitted_active_workloads",
+						labels: map[string]string{
+							"cohort": env.OrgEng.Name,
+						},
+					},
+					{
+						name: "kueue_cohort_subtree_admitted_workloads_total",
+						labels: map[string]string{
+							"cohort": env.OrgEng.Name,
+						},
+					},
+					{
+						name: "kueue_cohort_subtree_quota",
+						labels: map[string]string{
+							"cohort": env.OrgEng.Name,
+						},
+					},
+					{
+						name: "kueue_cohort_subtree_resource_reservations",
+						labels: map[string]string{
+							"cohort": env.OrgEng.Name,
+						},
+					},
+					{
+						name: "kueue_cohort_info",
+						labels: map[string]string{
+							"cohort":        env.OrgEng.Name,
+							"parent_cohort": env.RootCohort.Name,
+							"root_cohort":   env.RootCohort.Name,
+						},
+					},
+					{
+						name: "kueue_cohort_weighted_share",
+						labels: map[string]string{
+							"cohort": env.OrgEng.Name,
+						},
+					},
+					{
+						name: "kueue_cluster_queue_info",
+						labels: map[string]string{
+							"cluster_queue": env.CQFrontend.Name,
+							"parent_cohort": env.OrgEng.Name,
+							"root_cohort":   env.RootCohort.Name,
+						},
+					},
 				}
 
-				cqInfo := fmt.Sprintf(`kueue_cluster_queue_info{cluster_queue="%s",parent_cohort="%s"`, env.CQFrontend.Name, env.OrgEng.Name)
-				if !strings.Contains(metrics, cqInfo) {
-					return fmt.Errorf("CQ info with parent_cohort not found: %s", cqInfo)
+				for _, expected := range expectedMetrics {
+					if err := findMetricWithLabels(metricFamilies, expected.name, expected.labels); err != nil {
+						return err
+					}
 				}
 
 				return nil
@@ -467,6 +510,39 @@ func setupCohortTestEnv(ctx context.Context,
 	env.LQML = lqML
 
 	return env
+}
+
+// findMetricWithLabels verifies that a metric family contains a sample with
+// all the expected labels. Additional labels on the sample are ignored.
+func findMetricWithLabels(
+	metricFamilies map[string]*dto.MetricFamily,
+	metricName string,
+	expectedLabels map[string]string,
+) error {
+	metricFamily, found := metricFamilies[metricName]
+	if !found {
+		return fmt.Errorf("metric family %q not found", metricName)
+	}
+
+	for _, metric := range metricFamily.GetMetric() {
+		actualLabels := make(map[string]string, len(metric.GetLabel()))
+		for _, label := range metric.GetLabel() {
+			actualLabels[label.GetName()] = label.GetValue()
+		}
+
+		matches := true
+		for name, expectedValue := range expectedLabels {
+			if actualLabels[name] != expectedValue {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("metric %q not found with labels %v", metricName, expectedLabels)
 }
 
 // verifyBorrowedCPU asserts that the named ClusterQueue has borrowed exactly
