@@ -88,6 +88,84 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"custom metric labels": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				ControllerManager: &kueue.ControllerManager{
+					Metrics: &kueue.ControllerMetrics{
+						CustomLabels: []kueue.ControllerMetricsCustomLabel{
+							{
+								Name:                "tenant_id",
+								SourceKind:          kueue.SourceKindLocalQueue,
+								SourceAnnotationKey: "foo.openshift.io/tenant",
+							},
+							{
+								Name:           "tenant_id2",
+								SourceLabelKey: "foo.openshift.io/tenant",
+							},
+							{
+								Name: "environment",
+							},
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  CustomMetricLabels: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  customLabels:
+  - name: tenant_id
+    sourceAnnotationKey: foo.openshift.io/tenant
+    sourceKind: LocalQueue
+  - name: tenant_id2
+    sourceLabelKey: foo.openshift.io/tenant
+  - name: environment
+  enableClusterQueueResources: true
+namespace: test
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"rhoai example": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
@@ -1737,6 +1815,18 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 		"capacity source does not enable gate when dependency is unavailable": {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: false,
+		},
+		"custom labels presence enables custom metrics labels gate": {
+			kueueCfg: kueue.KueueConfiguration{
+				ControllerManager: &kueue.ControllerManager{
+					Metrics: &kueue.ControllerMetrics{
+						CustomLabels: []kueue.ControllerMetricsCustomLabel{{Name: "label_0"}}},
+				},
+			},
+			draConsumableCapacityEnabled: false,
+			want: map[string]bool{
+				"CustomMetricLabels": true,
+			},
 		},
 	}
 
