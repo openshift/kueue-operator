@@ -57,6 +57,10 @@ type DeviceClassMappingApplyConfiguration struct {
 	// The operator automatically enables the KueueDRAIntegrationConsumableCapacity
 	// feature gate for Capacity sources when the Kubernetes
 	// DRAConsumableCapacity feature gate is enabled.
+	// Limited to one source per mapping in this release. Future releases may support
+	// multiple capacity sources per mapping to enable multi-dimensional quota accounting
+	// (e.g., tracking both GPU memory and compute cores as separate dimensions within a
+	// single resource pool, as described in KEP-2941).
 	Sources []DeviceClassSourceConfigApplyConfiguration `json:"sources,omitempty"`
 }
 

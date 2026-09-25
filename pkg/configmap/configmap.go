@@ -269,7 +269,14 @@ func buildResources(resources kueue.Resources, draConsumableCapacityEnabled bool
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draConsumableCapacityEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
+func buildFeatureGates(
+	frameworks []kueue.KueueIntegration,
+	draConsumableCapacityEnabled bool,
+	resources kueue.Resources,
+	integrationExtFrameworks []kueue.ExternalFramework,
+	multiKueue *kueue.MultiKueue,
+	customMetricLabelsDefined bool,
+) map[string]bool {
 	featureGates := map[string]bool{}
 
 	// KueueDRAIntegration, KueueDRAIntegrationExtendedResource, and
@@ -297,10 +304,37 @@ func buildFeatureGates(frameworks []kueue.KueueIntegration, draConsumableCapacit
 		featureGates["ShortWorkloadNames"] = true
 	}
 
+	// CustomMetricLabels is Alpha in Kueue and disabled by default. Enable it when
+	// custom metric labels are configured, otherwise the configured labels have no
+	// effect (upstream Kueue only honors metrics.customLabels when this gate is on).
+	if customMetricLabelsDefined {
+		featureGates["CustomMetricLabels"] = true
+	}
+
 	if len(featureGates) == 0 {
 		return nil
 	}
 	return featureGates
+}
+
+func buildControllerMetrics(cm *kueue.ControllerManager) []configapi.ControllerMetricsCustomLabel {
+	if cm == nil || cm.Metrics == nil {
+		return nil
+	}
+	labels := make([]configapi.ControllerMetricsCustomLabel, 0, len(cm.Metrics.CustomLabels))
+	for _, l := range cm.Metrics.CustomLabels {
+		entry := configapi.ControllerMetricsCustomLabel{
+			Name:                l.Name,
+			SourceLabelKey:      l.SourceLabelKey,
+			SourceAnnotationKey: l.SourceAnnotationKey,
+		}
+		if l.SourceKind != "" {
+			sk := configapi.SourceKind(l.SourceKind)
+			entry.SourceKind = &sk
+		}
+		labels = append(labels, entry)
+	}
+	return labels
 }
 
 func buildAdmissionFairSharing(admissionFairSharing kueue.AdmissionFairSharing) (*configapi.AdmissionFairSharing, error) {
@@ -336,6 +370,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 	if err != nil {
 		return nil, fmt.Errorf("failed to build admission fair sharing: %w", err)
 	}
+	customMetricLabels := buildControllerMetrics(kueueCfg.ControllerManager)
 	return &configapi.Configuration{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "Configuration",
@@ -349,6 +384,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 			Metrics: configapi.ControllerMetrics{
 				BindAddress:                 ":8443",
 				EnableClusterQueueResources: true,
+				CustomLabels:                customMetricLabels,
 			},
 			Webhook: configapi.ControllerWebhook{
 				Port: ptr.To(9443),
@@ -387,7 +423,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources, draConsumableCapacityEnabled),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue, len(customMetricLabels) > 0),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil

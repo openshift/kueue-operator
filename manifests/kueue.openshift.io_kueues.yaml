@@ -145,6 +145,102 @@ spec:
                         forbidden otherwise
                       rule: 'has(self.configuration) && self.configuration == ''Custom''
                         ? has(self.custom) : !has(self.custom)'
+                  controllerManager:
+                    description: controllerManager contains the configurations for
+                      controllers
+                    properties:
+                      metrics:
+                        description: metrics contains the controller metrics configuration
+                        properties:
+                          customLabels:
+                            description: |-
+                              customLabels is a list of entries whose values will be added as extra
+                              Prometheus labels on supported metrics.
+                              A maximum of 6 labels are allowed per SourceKind with up to 18 labels defined in total.
+                              Label names must be unique across all entries regardless of sourceKind.
+                            items:
+                              description: |-
+                                ControllerMetricsCustomLabel defines a Kubernetes label or annotation to promote
+                                as a Prometheus metric label with a "custom_" prefix.
+                              properties:
+                                name:
+                                  description: |-
+                                    name is the Prometheus metric label name suffix.
+                                    Kueue prepends "custom_" to this name to form the full Prometheus label name
+                                    (e.g., "team" becomes "custom_team").
+                                  maxLength: 32
+                                  minLength: 1
+                                  pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+                                  type: string
+                                sourceAnnotationKey:
+                                  description: |-
+                                    sourceAnnotationKey is the Kubernetes annotation key to read the value from.
+                                    Must be a valid Kubernetes qualified name consisting of alphanumeric characters,
+                                    hyphens, underscores, or dots, with an optional DNS subdomain prefix and
+                                    forward slash (e.g., "app.kubernetes.io/name" or "team").
+                                    Mutually exclusive with SourceLabelKey.
+                                  maxLength: 317
+                                  minLength: 1
+                                  type: string
+                                  x-kubernetes-validations:
+                                  - message: must be a valid Kubernetes annotation
+                                      key (qualified name)
+                                    rule: '!format.qualifiedName().validate(self).hasValue()'
+                                sourceKind:
+                                  description: |-
+                                    sourceKind is the object kind from which the label value should be sourced.
+                                    Up to 6 labels are allowed for source kinds.
+                                    Defaults to ClusterQueue when not specified.
+                                  enum:
+                                  - Cohort
+                                  - LocalQueue
+                                  - ClusterQueue
+                                  type: string
+                                sourceLabelKey:
+                                  description: |-
+                                    sourceLabelKey is the Kubernetes label key to read the value from.
+                                    Must be a valid Kubernetes qualified name consisting of alphanumeric characters,
+                                    hyphens, underscores, or dots, with an optional DNS subdomain prefix and
+                                    forward slash (e.g., "app.kubernetes.io/name" or "team").
+                                    Mutually exclusive with SourceAnnotationKey.
+                                    If neither is specified, defaults to Name.
+                                  maxLength: 317
+                                  minLength: 1
+                                  type: string
+                                  x-kubernetes-validations:
+                                  - message: must be a valid Kubernetes label key
+                                      (qualified name)
+                                    rule: '!format.qualifiedName().validate(self).hasValue()'
+                              required:
+                              - name
+                              type: object
+                              x-kubernetes-validations:
+                              - message: sourceLabelKey and sourceAnnotationKey are
+                                  mutually exclusive
+                                rule: '!(has(self.sourceLabelKey) && has(self.sourceAnnotationKey))'
+                            maxItems: 18
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                            x-kubernetes-validations:
+                            - message: label names must be unique across all entries
+                              rule: self.all(x, self.filter(y, y.name == x.name).size()
+                                == 1)
+                            - message: at most 6 labels are allowed for sourceKind
+                                ClusterQueue (the default when sourceKind is unset)
+                              rule: self.filter(x, !has(x.sourceKind) || x.sourceKind
+                                == 'ClusterQueue').size() <= 6
+                            - message: at most 6 labels are allowed for sourceKind
+                                LocalQueue
+                              rule: self.filter(x, has(x.sourceKind) && x.sourceKind
+                                == 'LocalQueue').size() <= 6
+                            - message: at most 6 labels are allowed for sourceKind
+                                Cohort
+                              rule: self.filter(x, has(x.sourceKind) && x.sourceKind
+                                == 'Cohort').size() <= 6
+                        type: object
+                    type: object
                   gangScheduling:
                     description: |-
                       gangScheduling controls how Kueue admits workloads.
@@ -607,6 +703,10 @@ spec:
                                 The operator automatically enables the KueueDRAIntegrationConsumableCapacity
                                 feature gate for Capacity sources when the Kubernetes
                                 DRAConsumableCapacity feature gate is enabled.
+                                Limited to one source per mapping in this release. Future releases may support
+                                multiple capacity sources per mapping to enable multi-dimensional quota accounting
+                                (e.g., tracking both GPU memory and compute cores as separate dimensions within a
+                                single resource pool, as described in KEP-2941).
                               items:
                                 description: |-
                                   DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
