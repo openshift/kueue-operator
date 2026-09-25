@@ -1,4 +1,4 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26 AS build
+FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.26-rhel9 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -12,7 +12,7 @@ RUN ./build.sh
 FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:22c70d6d7fa920df140c5facdce1f42178642ca7613590da5466f69418ddf57a
 RUN microdnf install -y lsof && microdnf clean all && rm -rf /var/cache/{dnf,yum}
 WORKDIR /
-COPY --from=build /workspace/upstream/kueue/src/bin/manager /
+COPY --from=builder /workspace/upstream/kueue/src/bin/manager /
 USER 65532:65532
 
 LABEL com.redhat.component="Kueue"
@@ -40,6 +40,6 @@ LABEL release="1.4.3"
 
 # Licenses
 
-COPY --from=build /workspace/LICENSE /licenses/LICENSE
+COPY --from=builder /workspace/LICENSE /licenses/LICENSE
 
 ENTRYPOINT ["/manager"]
