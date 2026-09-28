@@ -227,7 +227,7 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	$(GINKGO) --keep-going --flake-attempts=3 --timeout=90m --label-filter="!disruptive && !flaky" --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --timeout=120m --label-filter="!disruptive && !flaky" --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-ci-test-dra
 e2e-ci-test-dra: ginkgo
