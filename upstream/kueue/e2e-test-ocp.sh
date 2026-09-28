@@ -105,6 +105,12 @@ function configure_kueue_for_folder() {
         '{"spec":{"config":{"resources":{"deviceClassMappings":[{"name":"gpu.memory","deviceClassNames":["gpu.example.com"],"sources":[{"type":"Counter","counter":{"name":"memory","driver":"gpu.example.com","deviceSelector":{"type":"CEL","cel":{"expression":"device.driver == '"'"'gpu.example.com'"'"'"}}}}]}]}}}}'
       $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
       ;;
+    dra/capacity)
+      echo "Replacing deviceClassMappings with capacity sources for consumable capacity devices..."
+      $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
+        '{"spec":{"config":{"resources":{"deviceClassMappings":[{"name":"gpu.memory","deviceClassNames":["gpu.example.com"],"sources":[{"type":"Capacity","capacity":{"name":"memory","driver":"gpu.example.com","deviceSelector":{"type":"CEL","cel":{"expression":"device.driver == '"'"'gpu.example.com'"'"'"}}}}]}]}}}}'
+      $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
+      ;;
   esac
 }
 
@@ -118,6 +124,11 @@ function restore_kueue_for_folder() {
       ;;
     dra/counter)
       echo "Removing counter sources from Kueue CR..."
+      $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
+        '{"spec":{"config":{"resources":{"deviceClassMappings":[{"name":"gpu","deviceClassNames":["gpu.example.com"]},{"name":"gpu-late-dc","deviceClassNames":["gpu-late-dc.example.com"]}]}}}}'
+      ;;
+    dra/capacity)
+      echo "Removing capacity sources from Kueue CR..."
       $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
         '{"spec":{"config":{"resources":{"deviceClassMappings":[{"name":"gpu","deviceClassNames":["gpu.example.com"]},{"name":"gpu-late-dc","deviceClassNames":["gpu-late-dc.example.com"]}]}}}}'
       ;;
