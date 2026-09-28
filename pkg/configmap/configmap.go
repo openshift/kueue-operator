@@ -346,10 +346,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 			Health: configapi.ControllerHealth{
 				HealthProbeBindAddress: ":8081",
 			},
-			Metrics: configapi.ControllerMetrics{
-				BindAddress:                 ":8443",
-				EnableClusterQueueResources: buildEnableClusterQueueResources(kueueCfg.Metrics),
-			},
+			Metrics: buildMetrics(kueueCfg.Metrics),
 			Webhook: configapi.ControllerWebhook{
 				Port: ptr.To(9443),
 			},
@@ -393,11 +390,29 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 	}, nil
 }
 
-func buildEnableClusterQueueResources(metrics kueue.Metrics) bool {
-	if metrics.EnableClusterQueueResources != nil {
-		return *metrics.EnableClusterQueueResources
+func buildMetrics(metrics *kueue.Metrics) configapi.ControllerMetrics {
+	result := configapi.ControllerMetrics{
+		BindAddress:                 ":8443",
+		EnableClusterQueueResources: true,
 	}
-	return true
+	if metrics == nil {
+		return result
+	}
+	if metrics.ClusterQueueResources == kueue.MetricsToggleDisabled {
+		result.EnableClusterQueueResources = false
+	}
+	if metrics.LocalQueueMetrics != nil {
+		result.LocalQueueMetrics = &configapi.LocalQueueMetrics{}
+		if metrics.LocalQueueMetrics.Collection == kueue.MetricsToggleDisabled {
+			result.LocalQueueMetrics.Enable = false
+		} else {
+			result.LocalQueueMetrics.Enable = true
+		}
+		if metrics.LocalQueueMetrics.LocalQueueSelector != nil {
+			result.LocalQueueMetrics.LocalQueueSelector = metrics.LocalQueueMetrics.LocalQueueSelector
+		}
+	}
+	return result
 }
 
 func float32Ptr(f float32) *float32 {

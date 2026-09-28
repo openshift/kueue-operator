@@ -492,12 +492,70 @@ spec:
                       metrics configures the Kueue controller metrics endpoint.
                       When not specified, the operator uses default values.
                     properties:
-                      enableClusterQueueResources:
+                      clusterQueueResources:
                         description: |-
-                          enableClusterQueueResources enables reporting of per-ClusterQueue resource usage
+                          clusterQueueResources controls reporting of per-ClusterQueue resource usage
                           and quota metrics (kueue_cluster_queue_resource_usage, kueue_cluster_queue_nominal_quota, etc.).
-                          When not specified, the operator defaults to true.
-                        type: boolean
+                          The allowed values are Enabled, Disabled and "".
+                          When set to Enabled, ClusterQueue resource metrics are reported.
+                          When set to Disabled, ClusterQueue resource metrics are not reported.
+                          When set to "", this means no opinion and the operator is left
+                          to choose a reasonable default, which is subject to change over time.
+                          The current default is Enabled.
+                        enum:
+                        - ""
+                        - Enabled
+                        - Disabled
+                        type: string
+                      localQueueMetrics:
+                        description: |-
+                          localQueueMetrics configures metrics collection for LocalQueues.
+                          When not specified, local queue metrics are enabled for all queues.
+                        properties:
+                          collection:
+                            description: |-
+                              collection controls whether metrics are exposed for local queues.
+                              The allowed values are Enabled, Disabled and "".
+                              When set to Enabled, LocalQueue metrics are collected.
+                              When set to Disabled, LocalQueue metrics are not collected.
+                              When set to "", this means no opinion and the operator is left
+                              to choose a reasonable default, which is subject to change over time.
+                              The current default is Enabled.
+                            enum:
+                            - ""
+                            - Enabled
+                            - Disabled
+                            type: string
+                          localQueueSelector:
+                            description: |-
+                              localQueueSelector can be used to select which local queues have metrics collected.
+                              When not specified, metrics are collected for all local queues.
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                     type: object
                   preemption:
                     description: |-

@@ -92,16 +92,50 @@ type KueueConfiguration struct {
 	// metrics configures the Kueue controller metrics endpoint.
 	// When not specified, the operator uses default values.
 	// +optional
-	Metrics Metrics `json:"metrics,omitzero"`
+	Metrics *Metrics `json:"metrics,omitempty"`
 }
+
+// +kubebuilder:validation:Enum="";Enabled;Disabled
+type MetricsToggle string
+
+const (
+	MetricsToggleEnabled  MetricsToggle = "Enabled"
+	MetricsToggleDisabled MetricsToggle = "Disabled"
+)
 
 // Metrics configures the Kueue controller metrics endpoint.
 type Metrics struct {
-	// enableClusterQueueResources enables reporting of per-ClusterQueue resource usage
+	// clusterQueueResources controls reporting of per-ClusterQueue resource usage
 	// and quota metrics (kueue_cluster_queue_resource_usage, kueue_cluster_queue_nominal_quota, etc.).
-	// When not specified, the operator defaults to true.
+	// The allowed values are Enabled, Disabled and "".
+	// When set to Enabled, ClusterQueue resource metrics are reported.
+	// When set to Disabled, ClusterQueue resource metrics are not reported.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Enabled.
 	// +optional
-	EnableClusterQueueResources *bool `json:"enableClusterQueueResources,omitempty"`
+	ClusterQueueResources MetricsToggle `json:"clusterQueueResources,omitempty"`
+	// localQueueMetrics configures metrics collection for LocalQueues.
+	// When not specified, local queue metrics are enabled for all queues.
+	// +optional
+	LocalQueueMetrics *LocalQueueMetrics `json:"localQueueMetrics,omitempty"`
+}
+
+// LocalQueueMetrics configures metrics collection for LocalQueues.
+type LocalQueueMetrics struct {
+	// collection controls whether metrics are exposed for local queues.
+	// The allowed values are Enabled, Disabled and "".
+	// When set to Enabled, LocalQueue metrics are collected.
+	// When set to Disabled, LocalQueue metrics are not collected.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Enabled.
+	// +optional
+	Collection MetricsToggle `json:"collection,omitempty"`
+	// localQueueSelector can be used to select which local queues have metrics collected.
+	// When not specified, metrics are collected for all local queues.
+	// +optional
+	LocalQueueSelector *metav1.LabelSelector `json:"localQueueSelector,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue
