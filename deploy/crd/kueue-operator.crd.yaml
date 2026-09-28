@@ -487,6 +487,18 @@ spec:
                         - group
                         x-kubernetes-list-type: map
                     type: object
+                  metrics:
+                    description: |-
+                      metrics configures the Kueue controller metrics endpoint.
+                      When not specified, the operator uses default values.
+                    properties:
+                      enableClusterQueueResources:
+                        description: |-
+                          enableClusterQueueResources enables reporting of per-ClusterQueue resource usage
+                          and quota metrics (kueue_cluster_queue_resource_usage, kueue_cluster_queue_nominal_quota, etc.).
+                          When not specified, the operator defaults to true.
+                        type: boolean
+                    type: object
                   preemption:
                     description: |-
                       preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.

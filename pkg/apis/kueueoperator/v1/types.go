@@ -89,6 +89,19 @@ type KueueConfiguration struct {
 	// This section configures the usage decay rate, the sampling frequency, and per-resource weights.
 	// +optional
 	AdmissionFairSharing AdmissionFairSharing `json:"admissionFairSharing,omitzero"`
+	// metrics configures the Kueue controller metrics endpoint.
+	// When not specified, the operator uses default values.
+	// +optional
+	Metrics Metrics `json:"metrics,omitzero"`
+}
+
+// Metrics configures the Kueue controller metrics endpoint.
+type Metrics struct {
+	// enableClusterQueueResources enables reporting of per-ClusterQueue resource usage
+	// and quota metrics (kueue_cluster_queue_resource_usage, kueue_cluster_queue_nominal_quota, etc.).
+	// When not specified, the operator defaults to true.
+	// +optional
+	EnableClusterQueueResources *bool `json:"enableClusterQueueResources,omitempty"`
 }
 
 // KueueStatus defines the observed state of Kueue

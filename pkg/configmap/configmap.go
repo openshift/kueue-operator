@@ -348,7 +348,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 			},
 			Metrics: configapi.ControllerMetrics{
 				BindAddress:                 ":8443",
-				EnableClusterQueueResources: true,
+				EnableClusterQueueResources: buildEnableClusterQueueResources(kueueCfg.Metrics),
 			},
 			Webhook: configapi.ControllerWebhook{
 				Port: ptr.To(9443),
@@ -391,6 +391,13 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil
+}
+
+func buildEnableClusterQueueResources(metrics kueue.Metrics) bool {
+	if metrics.EnableClusterQueueResources != nil {
+		return *metrics.EnableClusterQueueResources
+	}
+	return true
 }
 
 func float32Ptr(f float32) *float32 {
