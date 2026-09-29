@@ -23,7 +23,7 @@ CMD ["/bin/bash", "/usr/bin/gather"]
 LABEL io.k8s.display-name="OpenShift Kueue must-gather"
 LABEL io.k8s.description="This is a must-gather for the Kueue"
 LABEL com.redhat.component="kueue-must-gather"
-LABEL com.redhat.openshift.versions="v4.18-v4.19-v4.20-v4.21-v4.22"
+LABEL com.redhat.openshift.versions="v4.18-v4.19-v4.20-v4.21-v4.22-v4.23-v5.0"
 LABEL name="kueue-must-gather"
 LABEL summary="kueue-must-gather"
 LABEL url="https://github.com/openshift/kueue-operator"

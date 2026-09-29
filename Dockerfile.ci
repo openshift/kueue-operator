@@ -11,6 +11,7 @@ COPY --from=builder /usr/bin/lsof /usr/bin/lsof
 
 LABEL io.k8s.display-name="OpenShift Kueue Operator based on RHEL 9" \
       io.k8s.description="This is a component of OpenShift and manages kueue based on RHEL 9" \
+      com.redhat.openshift.versions="v4.18-v4.19-v4.20-v4.21-v4.22-v4.23-v5.0" \
       io.openshift.tags="openshift,kueue-operator" \
       com.redhat.delivery.appregistry=true \
       maintainer="AOS Node team, <aos-node@redhat.com>"
