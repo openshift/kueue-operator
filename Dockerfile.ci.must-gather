@@ -15,5 +15,6 @@ CMD ["/bin/bash", "/usr/bin/gather"]
 
 LABEL io.k8s.display-name="OpenShift Kueue must-gather" \
       io.k8s.description="This is a must-gather for the Kueue" \
+      com.redhat.openshift.versions="v4.18-v4.19-v4.20-v4.21-v4.22-v4.23-v5.0" \
       io.openshift.tags="openshift,kueue-must-gather" \
       maintainer="AOS Node team, <aos-node@redhat.com>"
