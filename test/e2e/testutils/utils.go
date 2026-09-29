@@ -164,6 +164,24 @@ func (cqw *ClusterQueueWrapper) WithCohort(cohort string) *ClusterQueueWrapper {
 	return cqw
 }
 
+// WithLabel adds a label to the ClusterQueue's ObjectMeta.
+func (cqw *ClusterQueueWrapper) WithLabel(key, value string) *ClusterQueueWrapper {
+	if cqw.Labels == nil {
+		cqw.Labels = make(map[string]string)
+	}
+	cqw.Labels[key] = value
+	return cqw
+}
+
+// WithAnnotation adds an annotation to the ClusterQueue's ObjectMeta.
+func (cqw *ClusterQueueWrapper) WithAnnotation(key, value string) *ClusterQueueWrapper {
+	if cqw.Annotations == nil {
+		cqw.Annotations = make(map[string]string)
+	}
+	cqw.Annotations[key] = value
+	return cqw
+}
+
 // WithReclaimWithinCohort sets the reclaimWithinCohort preemption policy.
 // This controls whether a pending workload can preempt workloads from other ClusterQueues in the cohort.
 func (cqw *ClusterQueueWrapper) WithReclaimWithinCohort(policy kueuev1beta2.PreemptionPolicy) *ClusterQueueWrapper {
@@ -299,6 +317,15 @@ func (lqw *LocalQueueWrapper) WithGenerateName() *LocalQueueWrapper {
 func (lqw *LocalQueueWrapper) WithClusterQueue(clusterQueue string) *LocalQueueWrapper {
 	lqw.Spec.ClusterQueue = kueuev1beta2.ClusterQueueReference(clusterQueue)
 	return lqw
+}
+
+// WithLabel adds a label to the LocalQueue's ObjectMeta.
+func (cqw *LocalQueueWrapper) WithLabel(key, value string) *LocalQueueWrapper {
+	if cqw.Labels == nil {
+		cqw.Labels = make(map[string]string)
+	}
+	cqw.Labels[key] = value
+	return cqw
 }
 
 // WithFairSharingWeight sets the FairSharing weight for the LocalQueue.
@@ -451,6 +478,15 @@ func NewCohort(name string) *CohortWrapper {
 func (cw *CohortWrapper) WithGenerateName() *CohortWrapper {
 	cw.Name = ""
 	cw.GenerateName = "cohort-"
+	return cw
+}
+
+// WithLabel adds a label to the Cohort's ObjectMeta.
+func (cw *CohortWrapper) WithLabel(key, value string) *CohortWrapper {
+	if cw.Labels == nil {
+		cw.Labels = make(map[string]string)
+	}
+	cw.Labels[key] = value
 	return cw
 }
 
