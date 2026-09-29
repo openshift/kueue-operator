@@ -1,0 +1,16 @@
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+spec:
+  tags:
+  - name: kueue-operator
+    from:
+      kind: DockerImage
+      name: registry.redhat.io/kueue/kueue-rhel9-operator:latest
+  - name: kueue
+    from:
+      kind: DockerImage
+      name: registry.redhat.io/kueue/kueue-rhel9:latest
+  - name: kueue-must-gather
+    from:
+      kind: DockerImage
+      name: registry.redhat.io/kueue/kueue-must-gather-rhel9:latest
