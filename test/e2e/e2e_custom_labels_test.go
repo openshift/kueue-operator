@@ -45,8 +45,8 @@ var _ = Describe("Custom Labels", Label("custom-labels"), Ordered, func() {
 
 		By("Applying Kueue configuration with custom metric labels")
 		newConfig := initialKueueInstance.Spec.Config
-		newConfig.ControllerManager = &ssv1.ControllerManager{
-			Metrics: &ssv1.ControllerMetrics{
+		newConfig.ControllerManager = ssv1.ControllerManager{
+			Metrics: ssv1.ControllerMetrics{
 				CustomLabels: []ssv1.ControllerMetricsCustomLabel{
 					{
 						Name:           "tenant_id",

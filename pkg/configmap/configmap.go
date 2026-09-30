@@ -298,10 +298,8 @@ func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityE
 				(kueueCfg.MultiKueue != nil && len(kueueCfg.MultiKueue.ExternalFrameworks) > 0),
 		},
 		{
-			name: "CustomMetricLabels",
-			enabled: kueueCfg.ControllerManager != nil &&
-				kueueCfg.ControllerManager.Metrics != nil &&
-				len(kueueCfg.ControllerManager.Metrics.CustomLabels) > 0,
+			name:    "CustomMetricLabels",
+			enabled: len(kueueCfg.ControllerManager.Metrics.CustomLabels) > 0,
 		},
 	}
 
@@ -317,10 +315,7 @@ func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityE
 	return featureGates
 }
 
-func buildControllerMetrics(cm *kueue.ControllerManager) []configapi.ControllerMetricsCustomLabel {
-	if cm == nil || cm.Metrics == nil {
-		return nil
-	}
+func buildControllerMetrics(cm kueue.ControllerManager) []configapi.ControllerMetricsCustomLabel {
 	labels := make([]configapi.ControllerMetricsCustomLabel, 0, len(cm.Metrics.CustomLabels))
 	for _, l := range cm.Metrics.CustomLabels {
 		entry := configapi.ControllerMetricsCustomLabel{
