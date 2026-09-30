@@ -93,8 +93,8 @@ webhook:
 				Integrations: kueue.Integrations{
 					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
 				},
-				ControllerManager: &kueue.ControllerManager{
-					Metrics: &kueue.ControllerMetrics{
+				ControllerManager: kueue.ControllerManager{
+					Metrics: kueue.ControllerMetrics{
 						CustomLabels: []kueue.ControllerMetricsCustomLabel{
 							{
 								Name:                "tenant_id",
@@ -1818,8 +1818,8 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 		},
 		"custom labels presence enables custom metrics labels gate": {
 			kueueCfg: kueue.KueueConfiguration{
-				ControllerManager: &kueue.ControllerManager{
-					Metrics: &kueue.ControllerMetrics{
+				ControllerManager: kueue.ControllerManager{
+					Metrics: kueue.ControllerMetrics{
 						CustomLabels: []kueue.ControllerMetricsCustomLabel{{Name: "label_0"}}},
 				},
 			},

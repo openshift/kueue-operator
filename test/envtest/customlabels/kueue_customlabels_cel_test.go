@@ -106,8 +106,8 @@ func customLabels(n int, kind kueueopv1.SourceKind) []kueueopv1.ControllerMetric
 func setCustomLabels(ctx context.Context, labels []kueueopv1.ControllerMetricsCustomLabel) error {
 	current, getErr := clients.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
 	Expect(getErr).NotTo(HaveOccurred())
-	current.Spec.Config.ControllerManager = &kueueopv1.ControllerManager{
-		Metrics: &kueueopv1.ControllerMetrics{
+	current.Spec.Config.ControllerManager = kueueopv1.ControllerManager{
+		Metrics: kueueopv1.ControllerMetrics{
 			CustomLabels: labels,
 		},
 	}
@@ -173,7 +173,7 @@ var _ = Describe("CustomLabelsCEL", func() {
 			"want error for label with the same name: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
 			"want invalid for label with the same name: %v", err)
-		Expect(err.Error()).To(ContainSubstring("label names must be unique across all entries"))
+		Expect(err.Error()).To(ContainSubstring("Duplicate value: {\"name\":\"label_0\"}"))
 	})
 	It("should reject name with wrong format", func(ctx context.Context) {
 		By("setting a label with the wrong name")
@@ -186,7 +186,7 @@ var _ = Describe("CustomLabelsCEL", func() {
 			"want error for label with the wrong name: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
 			"want invalid for label with the wrong name: %v", err)
-		Expect(err.Error()).To(ContainSubstring("should match '^[a-zA-Z][a-zA-Z0-9_]*$'"))
+		Expect(err.Error()).To(ContainSubstring("must match the following pattern '^[a-zA-Z][a-zA-Z0-9_]*$'"))
 	})
 	It("should reject source label key with wrong format", func(ctx context.Context) {
 		By("setting a label with the wrong source label key")

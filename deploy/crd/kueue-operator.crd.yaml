@@ -148,9 +148,11 @@ spec:
                   controllerManager:
                     description: controllerManager contains the configurations for
                       controllers
+                    minProperties: 1
                     properties:
                       metrics:
                         description: metrics contains the controller metrics configuration
+                        minProperties: 1
                         properties:
                           customLabels:
                             description: |-
@@ -170,8 +172,10 @@ spec:
                                     (e.g., "team" becomes "custom_team").
                                   maxLength: 50
                                   minLength: 1
-                                  pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
                                   type: string
+                                  x-kubernetes-validations:
+                                  - message: must match the following pattern '^[a-zA-Z][a-zA-Z0-9_]*$'
+                                    rule: self.matches('^[a-zA-Z][a-zA-Z0-9_]*$')
                                 sourceAnnotationKey:
                                   description: |-
                                     sourceAnnotationKey is the Kubernetes annotation key to read the value from.
@@ -224,9 +228,6 @@ spec:
                             - name
                             x-kubernetes-list-type: map
                             x-kubernetes-validations:
-                            - message: label names must be unique across all entries
-                              rule: self.all(x, self.filter(y, y.name == x.name).size()
-                                == 1)
                             - message: at most 6 labels are allowed for sourceKind
                                 ClusterQueue (the default when sourceKind is unset)
                               rule: self.filter(x, !has(x.sourceKind) || x.sourceKind

@@ -92,7 +92,7 @@ type KueueConfiguration struct {
 
 	// controllerManager contains the configurations for controllers
 	// +optional
-	ControllerManager *ControllerManager `json:"controllerManager,omitempty"`
+	ControllerManager ControllerManager `json:"controllerManager,omitzero"`
 }
 
 // KueueStatus defines the observed state of Kueue
@@ -116,20 +116,21 @@ type KueueList struct {
 }
 
 // metrics contains the configurations for controllers
+// +kubebuilder:validation:MinProperties=1
 type ControllerManager struct {
 	// metrics contains the controller metrics configuration
 	// +optional
-	Metrics *ControllerMetrics `json:"metrics,omitempty"`
+	Metrics ControllerMetrics `json:"metrics,omitzero"`
 }
 
 // customLabels defines the metrics configs.
+// +kubebuilder:validation:MinProperties=1
 type ControllerMetrics struct {
 	// customLabels is a list of entries whose values will be added as extra
 	// Prometheus labels on supported metrics.
 	// A maximum of 6 labels are allowed per SourceKind with up to 18 labels defined in total.
 	// Label names must be unique across all entries regardless of sourceKind.
 	// +kubebuilder:validation:MaxItems=18
-	// +kubebuilder:validation:XValidation:rule="self.all(x, self.filter(y, y.name == x.name).size() == 1)",message="label names must be unique across all entries"
 	// +kubebuilder:validation:XValidation:rule="self.filter(x, !has(x.sourceKind) || x.sourceKind == 'ClusterQueue').size() <= 6",message="at most 6 labels are allowed for sourceKind ClusterQueue (the default when sourceKind is unset)"
 	// +kubebuilder:validation:XValidation:rule="self.filter(x, has(x.sourceKind) && x.sourceKind == 'LocalQueue').size() <= 6",message="at most 6 labels are allowed for sourceKind LocalQueue"
 	// +kubebuilder:validation:XValidation:rule="self.filter(x, has(x.sourceKind) && x.sourceKind == 'Cohort').size() <= 6",message="at most 6 labels are allowed for sourceKind Cohort"
@@ -155,7 +156,7 @@ type ControllerMetricsCustomLabel struct {
 	// name is the Prometheus metric label name suffix.
 	// Kueue prepends "custom_" to this name to form the full Prometheus label name
 	// (e.g., "team" becomes "custom_team").
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_]*$`
+	// +kubebuilder:validation:XValidation:rule="self.matches('^[a-zA-Z][a-zA-Z0-9_]*$')",message="must match the following pattern '^[a-zA-Z][a-zA-Z0-9_]*$'"
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=50
 	// +required
