@@ -81,6 +81,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kueueoperatorv1.ResourcesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ResourceWeight"):
 		return &kueueoperatorv1.ResourceWeightApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("SourceKey"):
+		return &kueueoperatorv1.SourceKeyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("SourceKeyAnnotation"):
+		return &kueueoperatorv1.SourceKeyAnnotationApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("SourceKeyLabel"):
+		return &kueueoperatorv1.SourceKeyLabelApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkloadManagement"):
 		return &kueueoperatorv1.WorkloadManagementApplyConfiguration{}
 

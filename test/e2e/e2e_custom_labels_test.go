@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	kueueopv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
 	"github.com/prometheus/common/expfmt"
@@ -49,24 +50,44 @@ var _ = Describe("Custom Labels", Label("custom-labels"), Ordered, func() {
 			Metrics: ssv1.ControllerMetrics{
 				CustomLabels: []ssv1.ControllerMetricsCustomLabel{
 					{
-						Name:           "tenant_id",
-						SourceKind:     ssv1.SourceKindClusterQueue,
-						SourceLabelKey: "foo.io/tenant",
+						Name:       "tenant_id",
+						SourceKind: ssv1.SourceKindClusterQueue,
+						SourceKey: kueueopv1.SourceKey{
+							SourceType: kueueopv1.SourceLabel,
+							Label: kueueopv1.SourceKeyLabel{
+								Key: "foo.io/tenant",
+							},
+						},
 					},
 					{
-						Name:                "cost_center",
-						SourceKind:          ssv1.SourceKindClusterQueue,
-						SourceAnnotationKey: "foo.com/cost-center",
+						Name:       "cost_center",
+						SourceKind: ssv1.SourceKindClusterQueue,
+						SourceKey: kueueopv1.SourceKey{
+							SourceType: kueueopv1.SourceAnnotation,
+							Annotation: kueueopv1.SourceKeyAnnotation{
+								Key: "foo.com/cost-center",
+							},
+						},
 					},
 					{
-						Name:           "tenant_id2",
-						SourceKind:     ssv1.SourceKindLocalQueue,
-						SourceLabelKey: "foo.io/tenant2",
+						Name:       "tenant_id2",
+						SourceKind: ssv1.SourceKindLocalQueue,
+						SourceKey: kueueopv1.SourceKey{
+							SourceType: kueueopv1.SourceLabel,
+							Label: kueueopv1.SourceKeyLabel{
+								Key: "foo.io/tenant2",
+							},
+						},
 					},
 					{
-						Name:           "org_unit",
-						SourceKind:     ssv1.SourceKindCohort,
-						SourceLabelKey: "foo.io/org-unit",
+						Name:       "org_unit",
+						SourceKind: ssv1.SourceKindCohort,
+						SourceKey: kueueopv1.SourceKey{
+							SourceType: kueueopv1.SourceLabel,
+							Label: kueueopv1.SourceKeyLabel{
+								Key: "foo.io/org-unit",
+							},
+						},
 					},
 				},
 			},
@@ -169,7 +190,7 @@ var _ = Describe("Custom Labels", Label("custom-labels"), Ordered, func() {
 				testutils.OperatorNamespace,
 			)
 
-			By("Verifying custom_tenant_id and custom_cost_center appear in kueue_cluster_queue_nominal_quota")
+			By("Verifying generated metrics contains the custom labels")
 			Eventually(func() error {
 				metricsOutput, _, err := Kexecute(ctx, clients.RestConfig, kubeClient,
 					testutils.OperatorNamespace, curlPod.Name, "curl-metrics",
