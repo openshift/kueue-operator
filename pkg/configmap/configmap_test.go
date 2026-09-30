@@ -1719,30 +1719,30 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 	noSourceResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Name: "gpu.memory"}}}
 
 	testCases := map[string]struct {
-		resources                    kueue.Resources
+		kueueCfg                     kueue.KueueConfiguration
 		draConsumableCapacityEnabled bool
 		want                         map[string]bool
 	}{
 		"capacity source enables consumable capacity gate": {
-			resources:                    capacityResources,
+			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: true,
 			want: map[string]bool{
 				"KueueDRAIntegrationConsumableCapacity": true,
 			},
 		},
 		"mappings without sources enable no gate": {
-			resources:                    noSourceResources,
+			kueueCfg:                     kueue.KueueConfiguration{Resources: noSourceResources},
 			draConsumableCapacityEnabled: true,
 		},
 		"capacity source does not enable gate when dependency is unavailable": {
-			resources:                    capacityResources,
+			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: false,
 		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			got := buildFeatureGates(nil, tc.draConsumableCapacityEnabled, tc.resources, nil, nil)
+			got := buildFeatureGates(tc.kueueCfg, tc.draConsumableCapacityEnabled)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("unexpected feature gates (-want,+got):\n%s", diff)
 			}

@@ -18,6 +18,7 @@ package configmap
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -269,34 +270,41 @@ func buildResources(resources kueue.Resources, draConsumableCapacityEnabled bool
 	}
 }
 
-func buildFeatureGates(frameworks []kueue.KueueIntegration, draConsumableCapacityEnabled bool, resources kueue.Resources, integrationExtFrameworks []kueue.ExternalFramework, multiKueue *kueue.MultiKueue) map[string]bool {
-	featureGates := map[string]bool{}
-
-	// KueueDRAIntegration, KueueDRAIntegrationExtendedResource, and
-	// KueueDRAIntegrationPartitionableDevices are enabled by default in Kueue 0.19+.
-
-	if draConsumableCapacityEnabled && util.HasSourceOfType(resources, kueue.DeviceClassSourceTypeCapacity) {
-		featureGates["KueueDRAIntegrationConsumableCapacity"] = true
+func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityEnabled bool) map[string]bool {
+	gates := []struct {
+		name    string
+		enabled bool
+	}{
+		{
+			// KueueDRAIntegration, KueueDRAIntegrationExtendedResource, and
+			// KueueDRAIntegrationPartitionableDevices are enabled by default in Kueue 0.19+.
+			// Enable when consumable-capacity DRA is configured.
+			name:    "KueueDRAIntegrationConsumableCapacity",
+			enabled: draConsumableCapacityEnabled && util.HasSourceOfType(kueueCfg.Resources, kueue.DeviceClassSourceTypeCapacity),
+		},
+		{
+			// SparkApplicationIntegration is Alpha in Kueue, so we explicitly enable it
+			// when SparkApplication is in the frameworks list. Once it graduates to Beta in upstream
+			// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
+			name:    "SparkApplicationIntegration",
+			enabled: slices.Contains(kueueCfg.Integrations.Frameworks, kueue.KueueIntegrationSparkApplication),
+		},
+		{
+			// ShortWorkloadNames prevents workload names from exceeding the 63-char
+			// Kubernetes label-value limit in the MultiKueue external-frameworks adapter.
+			// See https://issues.redhat.com/browse/OCPBUGS-82009.
+			name: "ShortWorkloadNames",
+			enabled: len(kueueCfg.Integrations.ExternalFrameworks) > 0 ||
+				(kueueCfg.MultiKueue != nil && len(kueueCfg.MultiKueue.ExternalFrameworks) > 0),
+		},
 	}
 
-	// SparkApplicationIntegration is Alpha in Kueue, so we explicitly enable it
-	// when SparkApplication is in the frameworks list. Once it graduates to Beta in upstream
-	// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
-	for _, f := range frameworks {
-		if f == kueue.KueueIntegrationSparkApplication {
-			featureGates["SparkApplicationIntegration"] = true
-			break
+	featureGates := map[string]bool{}
+	for _, g := range gates {
+		if g.enabled {
+			featureGates[g.name] = true
 		}
 	}
-
-	// ShortWorkloadNames is Alpha in Kueue. Enable it when external frameworks
-	// are configured to prevent workload names from exceeding the 63-character
-	// Kubernetes label value limit in the MultiKueue external frameworks adapter.
-	// See https://issues.redhat.com/browse/OCPBUGS-82009.
-	if len(integrationExtFrameworks) > 0 || (multiKueue != nil && len(multiKueue.ExternalFrameworks) > 0) {
-		featureGates["ShortWorkloadNames"] = true
-	}
-
 	if len(featureGates) == 0 {
 		return nil
 	}
@@ -387,7 +395,7 @@ func defaultKueueConfigurationTemplate(namespace string, kueueCfg kueue.KueueCon
 		WaitForPodsReady:           buildWaitForPodsReady(kueueCfg.GangScheduling),
 		FairSharing:                buildFairSharing(kueueCfg.Preemption),
 		Resources:                  buildResources(kueueCfg.Resources, draConsumableCapacityEnabled),
-		FeatureGates:               buildFeatureGates(kueueCfg.Integrations.Frameworks, draConsumableCapacityEnabled, kueueCfg.Resources, kueueCfg.Integrations.ExternalFrameworks, kueueCfg.MultiKueue),
+		FeatureGates:               buildFeatureGates(kueueCfg, draConsumableCapacityEnabled),
 		MultiKueue:                 mapOperatorMultiKueueToKueue(kueueCfg.MultiKueue, gvrToKind),
 		AdmissionFairSharing:       admissionFairSharing,
 	}, nil
