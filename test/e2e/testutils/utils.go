@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1127,6 +1129,21 @@ func IsDRASupported(kubeClient *kubernetes.Clientset) bool {
 		}
 	}
 	return false
+}
+
+// KubeMinorAtLeast reports whether the cluster's Kubernetes minor version is at
+// least minor. It mirrors the operator's isKubernetesMinorAtLeast so tests
+// classify version-gated behavior the same way the operator does.
+func KubeMinorAtLeast(kubeClient *kubernetes.Clientset, minor int) (bool, error) {
+	version, err := kubeClient.Discovery().ServerVersion()
+	if err != nil {
+		return false, fmt.Errorf("discovering Kubernetes server version: %w", err)
+	}
+	parsed, err := strconv.Atoi(strings.TrimRight(version.Minor, "+"))
+	if err != nil {
+		return false, fmt.Errorf("parsing Kubernetes server minor version %q: %w", version.Minor, err)
+	}
+	return parsed >= minor, nil
 }
 
 // SetupTestEnv creates a ResourceFlavor, ClusterQueue, Namespace, and LocalQueue
