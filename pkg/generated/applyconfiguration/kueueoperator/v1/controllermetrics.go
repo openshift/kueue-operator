@@ -20,10 +20,11 @@ package v1
 // ControllerMetricsApplyConfiguration represents a declarative configuration of the ControllerMetrics type for use
 // with apply.
 //
-// customLabels defines the metrics configs.
+// ControllerMetrics defines the metrics configs.
 type ControllerMetricsApplyConfiguration struct {
-	// customLabels is a list of entries whose values will be added as extra
-	// Prometheus labels on supported metrics.
+	// customLabels configures additional labels for kueue prometheus metrics.
+	// For each customLabel, kueue reads a value from the specified kubernetes label or
+	// annotation on the source kind and exposes it with the new prometheus label.
 	// A maximum of 6 labels are allowed per SourceKind with up to 18 labels defined in total.
 	// Label names must be unique across all entries regardless of sourceKind.
 	CustomLabels []ControllerMetricsCustomLabelApplyConfiguration `json:"customLabels,omitempty"`

@@ -115,7 +115,7 @@ type KueueList struct {
 	Items []Kueue `json:"items"`
 }
 
-// metrics contains the configurations for controllers
+// ControllerManager contains the configurations for controllers
 // +kubebuilder:validation:MinProperties=1
 type ControllerManager struct {
 	// metrics contains the controller metrics configuration
@@ -123,17 +123,19 @@ type ControllerManager struct {
 	Metrics ControllerMetrics `json:"metrics,omitzero"`
 }
 
-// customLabels defines the metrics configs.
+// ControllerMetrics defines the metrics configs.
 // +kubebuilder:validation:MinProperties=1
 type ControllerMetrics struct {
-	// customLabels is a list of entries whose values will be added as extra
-	// Prometheus labels on supported metrics.
+	// customLabels configures additional labels for kueue prometheus metrics.
+	// For each customLabel, kueue reads a value from the specified kubernetes label or
+	// annotation on the source kind and exposes it with the new prometheus label.
 	// A maximum of 6 labels are allowed per SourceKind with up to 18 labels defined in total.
 	// Label names must be unique across all entries regardless of sourceKind.
+	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=18
-	// +kubebuilder:validation:XValidation:rule="self.filter(x, !has(x.sourceKind) || x.sourceKind == 'ClusterQueue').size() <= 6",message="at most 6 labels are allowed for sourceKind ClusterQueue (the default when sourceKind is unset)"
-	// +kubebuilder:validation:XValidation:rule="self.filter(x, has(x.sourceKind) && x.sourceKind == 'LocalQueue').size() <= 6",message="at most 6 labels are allowed for sourceKind LocalQueue"
-	// +kubebuilder:validation:XValidation:rule="self.filter(x, has(x.sourceKind) && x.sourceKind == 'Cohort').size() <= 6",message="at most 6 labels are allowed for sourceKind Cohort"
+	// +kubebuilder:validation:XValidation:rule="self.filter(x, x.sourceKind == 'ClusterQueue').size() <= 6",message="at most 6 labels are allowed for sourceKind ClusterQueue"
+	// +kubebuilder:validation:XValidation:rule="self.filter(x, x.sourceKind == 'LocalQueue').size() <= 6",message="at most 6 labels are allowed for sourceKind LocalQueue"
+	// +kubebuilder:validation:XValidation:rule="self.filter(x, x.sourceKind == 'Cohort').size() <= 6",message="at most 6 labels are allowed for sourceKind Cohort"
 	// +listType=map
 	// +listMapKey=name
 	// +optional
@@ -149,47 +151,84 @@ const (
 	SourceKindClusterQueue SourceKind = "ClusterQueue"
 )
 
-// ControllerMetricsCustomLabel defines a Kubernetes label or annotation to promote
-// as a Prometheus metric label with a "custom_" prefix.
-// +kubebuilder:validation:XValidation:rule="!(has(self.sourceLabelKey) && has(self.sourceAnnotationKey))",message="sourceLabelKey and sourceAnnotationKey are mutually exclusive"
+// +kubebuilder:validation:Enum=Label;Annotation
+type SourceType string
+
+const (
+	SourceAnnotation SourceType = "Annotation"
+	SourceLabel      SourceType = "Label"
+)
+
+// ControllerMetricsCustomLabel defines a custom Prometheus label and its value source.
 type ControllerMetricsCustomLabel struct {
-	// name is the Prometheus metric label name suffix.
+	// name is the sufix used to construct the Prometheus metric label name.
 	// Kueue prepends "custom_" to this name to form the full Prometheus label name
 	// (e.g., "team" becomes "custom_team").
-	// +kubebuilder:validation:XValidation:rule="self.matches('^[a-zA-Z][a-zA-Z0-9_]*$')",message="must match the following pattern '^[a-zA-Z][a-zA-Z0-9_]*$'"
+	// The value must start with an ASCII letter followed by zero or more ASCII letters, digits, or underscores.
+	// +kubebuilder:validation:XValidation:rule="self.matches('^[a-zA-Z][a-zA-Z0-9_]*$')",message="must start with an ASCII letter followed by zero or more ASCII letters, digits, or underscores."
+	// Must be between 1 and 50 characters total.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=50
 	// +required
 	Name string `json:"name,omitempty"`
 
-	// sourceLabelKey is the Kubernetes label key to read the value from.
+	// sourceKey is the label or annotation key that will have the value read and set as the value for the
+	// new custom prometheus label.
+	// +required
+	SourceKey SourceKey `json:"sourceKey,omitzero"`
+
+	// sourceKind is the object kind from which the label value should be sourced.
+	// Up to 6 labels are allowed for each source kinds.
+	// The allowed values are Cohort, LocalQueue and ClusterQueue.
+	// +required
+	SourceKind SourceKind `json:"sourceKind,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="self.sourceType == 'Label' ? has(self.label) : !has(self.label)",message="label is required when sourceType is Label, and forbidden otherwise"
+// +kubebuilder:validation:XValidation:rule="self.sourceType == 'Annotation' ? has(self.annotation) : !has(self.annotation)",message="annotation is required when sourceType is Annotation, and forbidden otherwise"
+// +union
+type SourceKey struct {
+	// sourceType determines if the source for the key is the label or the annotation.
+	// The allowed values are Label and Annotation.
+	// +required
+	// +unionDiscriminator
+	SourceType SourceType `json:"sourceType,omitempty"`
+
+	// label contains the name of the label that will have its value read and enforced at the new custom label.
+	// label is required when sourceType is Label, and forbidden otherwise.
+	// +optional
+	Label SourceKeyLabel `json:"label,omitzero"`
+
+	// annotation contains the name of the annotation that will have its value read and enforced at the new custom label.
+	// annotation is required when sourceType is Annotation, and forbidden otherwise.
+	// +optional
+	Annotation SourceKeyAnnotation `json:"annotation,omitzero"`
+}
+
+type SourceKeyLabel struct {
+	// key is the Kubernetes label key to read the value from.
 	// Must be a valid Kubernetes qualified name consisting of alphanumeric characters,
 	// hyphens, underscores, or dots, with an optional DNS subdomain prefix and
 	// forward slash (e.g., "app.kubernetes.io/name" or "team").
-	// Mutually exclusive with SourceAnnotationKey.
-	// If neither is specified, defaults to Name.
+	// Must be between 1 and 317 characters total.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=317
 	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a valid Kubernetes label key (qualified name)"
-	// +optional
-	SourceLabelKey string `json:"sourceLabelKey,omitempty"`
+	// +required
+	Key string `json:"key,omitempty"`
+}
 
-	// sourceAnnotationKey is the Kubernetes annotation key to read the value from.
+type SourceKeyAnnotation struct {
+	// key is the Kubernetes annotation key to read the value from.
 	// Must be a valid Kubernetes qualified name consisting of alphanumeric characters,
 	// hyphens, underscores, or dots, with an optional DNS subdomain prefix and
 	// forward slash (e.g., "app.kubernetes.io/name" or "team").
-	// Mutually exclusive with SourceLabelKey.
+	// Must be between 1 and 317 characters total.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=317
 	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a valid Kubernetes annotation key (qualified name)"
-	// +optional
-	SourceAnnotationKey string `json:"sourceAnnotationKey,omitempty"`
-
-	// sourceKind is the object kind from which the label value should be sourced.
-	// Up to 6 labels are allowed for source kinds.
-	// Defaults to ClusterQueue when not specified.
-	// +optional
-	SourceKind SourceKind `json:"sourceKind,omitempty"`
+	// +required
+	Key string `json:"key,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;RayService;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet;SparkApplication

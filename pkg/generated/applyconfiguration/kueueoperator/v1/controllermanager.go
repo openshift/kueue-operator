@@ -20,7 +20,7 @@ package v1
 // ControllerManagerApplyConfiguration represents a declarative configuration of the ControllerManager type for use
 // with apply.
 //
-// metrics contains the configurations for controllers
+// ControllerManager contains the configurations for controllers
 type ControllerManagerApplyConfiguration struct {
 	// metrics contains the controller metrics configuration
 	Metrics *ControllerMetricsApplyConfiguration `json:"metrics,omitempty"`

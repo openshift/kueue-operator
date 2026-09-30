@@ -24,29 +24,20 @@ import (
 // ControllerMetricsCustomLabelApplyConfiguration represents a declarative configuration of the ControllerMetricsCustomLabel type for use
 // with apply.
 //
-// ControllerMetricsCustomLabel defines a Kubernetes label or annotation to promote
-// as a Prometheus metric label with a "custom_" prefix.
+// ControllerMetricsCustomLabel defines a custom Prometheus label and its value source.
 type ControllerMetricsCustomLabelApplyConfiguration struct {
-	// name is the Prometheus metric label name suffix.
+	// name is the sufix used to construct the Prometheus metric label name.
 	// Kueue prepends "custom_" to this name to form the full Prometheus label name
 	// (e.g., "team" becomes "custom_team").
+	// The value must start with an ASCII letter followed by zero or more ASCII letters, digits, or underscores.
+	// Must be between 1 and 50 characters total.
 	Name *string `json:"name,omitempty"`
-	// sourceLabelKey is the Kubernetes label key to read the value from.
-	// Must be a valid Kubernetes qualified name consisting of alphanumeric characters,
-	// hyphens, underscores, or dots, with an optional DNS subdomain prefix and
-	// forward slash (e.g., "app.kubernetes.io/name" or "team").
-	// Mutually exclusive with SourceAnnotationKey.
-	// If neither is specified, defaults to Name.
-	SourceLabelKey *string `json:"sourceLabelKey,omitempty"`
-	// sourceAnnotationKey is the Kubernetes annotation key to read the value from.
-	// Must be a valid Kubernetes qualified name consisting of alphanumeric characters,
-	// hyphens, underscores, or dots, with an optional DNS subdomain prefix and
-	// forward slash (e.g., "app.kubernetes.io/name" or "team").
-	// Mutually exclusive with SourceLabelKey.
-	SourceAnnotationKey *string `json:"sourceAnnotationKey,omitempty"`
+	// sourceKey is the label or annotation key that will have the value read and set as the value for the
+	// new custom prometheus label.
+	SourceKey *SourceKeyApplyConfiguration `json:"sourceKey,omitempty"`
 	// sourceKind is the object kind from which the label value should be sourced.
-	// Up to 6 labels are allowed for source kinds.
-	// Defaults to ClusterQueue when not specified.
+	// Up to 6 labels are allowed for each source kinds.
+	// The allowed values are Cohort, LocalQueue and ClusterQueue.
 	SourceKind *kueueoperatorv1.SourceKind `json:"sourceKind,omitempty"`
 }
 
@@ -64,19 +55,11 @@ func (b *ControllerMetricsCustomLabelApplyConfiguration) WithName(value string) 
 	return b
 }
 
-// WithSourceLabelKey sets the SourceLabelKey field in the declarative configuration to the given value
+// WithSourceKey sets the SourceKey field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SourceLabelKey field is set to the value of the last call.
-func (b *ControllerMetricsCustomLabelApplyConfiguration) WithSourceLabelKey(value string) *ControllerMetricsCustomLabelApplyConfiguration {
-	b.SourceLabelKey = &value
-	return b
-}
-
-// WithSourceAnnotationKey sets the SourceAnnotationKey field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SourceAnnotationKey field is set to the value of the last call.
-func (b *ControllerMetricsCustomLabelApplyConfiguration) WithSourceAnnotationKey(value string) *ControllerMetricsCustomLabelApplyConfiguration {
-	b.SourceAnnotationKey = &value
+// If called multiple times, the SourceKey field is set to the value of the last call.
+func (b *ControllerMetricsCustomLabelApplyConfiguration) WithSourceKey(value *SourceKeyApplyConfiguration) *ControllerMetricsCustomLabelApplyConfiguration {
+	b.SourceKey = value
 	return b
 }
 
