@@ -319,14 +319,15 @@ func buildControllerMetrics(cm kueue.ControllerManager) []configapi.ControllerMe
 	labels := make([]configapi.ControllerMetricsCustomLabel, 0, len(cm.Metrics.CustomLabels))
 	for _, l := range cm.Metrics.CustomLabels {
 		entry := configapi.ControllerMetricsCustomLabel{
-			Name:                l.Name,
-			SourceLabelKey:      l.SourceLabelKey,
-			SourceAnnotationKey: l.SourceAnnotationKey,
+			Name: l.Name,
 		}
-		if l.SourceKind != "" {
-			sk := configapi.SourceKind(l.SourceKind)
-			entry.SourceKind = &sk
+		if l.SourceKey.SourceType == kueue.SourceAnnotation {
+			entry.SourceAnnotationKey = l.SourceKey.Annotation.Key
+		} else {
+			entry.SourceLabelKey = l.SourceKey.Label.Key
 		}
+		sk := configapi.SourceKind(l.SourceKind)
+		entry.SourceKind = &sk
 		labels = append(labels, entry)
 	}
 	return labels
