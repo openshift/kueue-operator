@@ -88,14 +88,20 @@ var _ = AfterSuite(func() {
 })
 
 // customLabels builds n custom metric labels with unique names, all sourced from
-// the given source kind. A zero-value kind is left unset, exercising the
-// ClusterQueue default path.
+// the given source kind.
 func customLabels(n int, kind kueueopv1.SourceKind) []kueueopv1.ControllerMetricsCustomLabel {
 	labels := make([]kueueopv1.ControllerMetricsCustomLabel, 0, n)
 	for i := 0; i < n; i++ {
+		name := fmt.Sprintf("label_%d", i)
 		labels = append(labels, kueueopv1.ControllerMetricsCustomLabel{
-			Name:       fmt.Sprintf("label_%d", i),
+			Name:       name,
 			SourceKind: kind,
+			SourceKey: kueueopv1.SourceKey{
+				SourceType: kueueopv1.SourceLabel,
+				Label: kueueopv1.SourceKeyLabel{
+					Key: name,
+				},
+			},
 		})
 	}
 	return labels
@@ -133,9 +139,9 @@ var _ = Describe("CustomLabelsCEL", func() {
 		Expect(err.Error()).To(ContainSubstring("at most 6 labels are allowed for sourceKind LocalQueue"))
 	})
 
-	It("should not allow more than 6 labels for the default ClusterQueue source kind", func(ctx context.Context) {
-		By("setting 7 labels with sourceKind unset (defaults to ClusterQueue)")
-		err = setCustomLabels(ctx, customLabels(7, ""))
+	It("should not allow more than 6 labels for the ClusterQueue source kind", func(ctx context.Context) {
+		By("setting 7 ClusterQueue-sourced labels")
+		err = setCustomLabels(ctx, customLabels(7, kueueopv1.SourceKindClusterQueue))
 		Expect(err).To(HaveOccurred(),
 			"want error for 7 ClusterQueue labels: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
@@ -143,30 +149,64 @@ var _ = Describe("CustomLabelsCEL", func() {
 		Expect(err.Error()).To(ContainSubstring("at most 6 labels are allowed for sourceKind ClusterQueue"))
 	})
 
-	It("should not allow SourceAnnotationKey and SourceLabelKey to be set together", func(ctx context.Context) {
-		By("setting a label with both SourceAnnotationKey and SourceLabelKey set")
+	It("should not allow label and annotation to be set together", func(ctx context.Context) {
+		By("setting a SourceKey with both label and annotation set")
 		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{
 			{
-				Name:                "label_0",
-				SourceAnnotationKey: "foo.openshift.io/tenant",
-				SourceLabelKey:      "foo.openshift.io/tenant2",
+				Name:       "label_0",
+				SourceKind: kueueopv1.SourceKindClusterQueue,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceLabel,
+					Label:      kueueopv1.SourceKeyLabel{Key: "foo.openshift.io/tenant"},
+					Annotation: kueueopv1.SourceKeyAnnotation{Key: "foo.openshift.io/tenant2"},
+				},
 			},
 		})
 		Expect(err).To(HaveOccurred(),
-			"want error for label with both SourceAnnotationKey and SourceLabelKey set: %v", err)
+			"want error for label with both label and annotation set: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
-			"want invalid for label with both SourceAnnotationKey and SourceLabelKey set: %v", err)
-		Expect(err.Error()).To(ContainSubstring("sourceLabelKey and sourceAnnotationKey are mutually exclusive"))
+			"want invalid for label with both label and annotation set: %v", err)
+		Expect(err.Error()).To(
+			ContainSubstring("annotation is required when sourceType is Annotation, and forbidden otherwise"),
+		)
 	})
+
+	It("should not allow label to not be specified when sourceType is label", func(ctx context.Context) {
+		By("setting a SourceKey with only sourceType")
+		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{
+			{
+				Name:       "label_0",
+				SourceKind: kueueopv1.SourceKindClusterQueue,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceLabel,
+				},
+			},
+		})
+		Expect(err).To(HaveOccurred(),
+			"want error for label with both label and annotation set: %v", err)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
+			"want invalid for label with both label and annotation set: %v", err)
+		Expect(err.Error()).To(ContainSubstring("label is required when sourceType is Label, and forbidden otherwis"))
+	})
+
 	It("should not allow labels with the same name", func(ctx context.Context) {
 		By("setting a label with the same name")
 		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{
 			{
 				Name:       "label_0",
 				SourceKind: kueueopv1.SourceKindLocalQueue,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceLabel,
+					Label:      kueueopv1.SourceKeyLabel{Key: "foo.openshift.io/tenant"},
+				},
 			},
 			{
-				Name: "label_0",
+				Name:       "label_0",
+				SourceKind: kueueopv1.SourceKindCohort,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceAnnotation,
+					Annotation: kueueopv1.SourceKeyAnnotation{Key: "foo.openshift.io/tenant"},
+				},
 			},
 		})
 		Expect(err).To(HaveOccurred(),
@@ -179,21 +219,31 @@ var _ = Describe("CustomLabelsCEL", func() {
 		By("setting a label with the wrong name")
 		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{
 			{
-				Name: "label-0",
+				Name:       "label-0",
+				SourceKind: kueueopv1.SourceKindLocalQueue,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceLabel,
+					Label:      kueueopv1.SourceKeyLabel{Key: "foo.openshift.io/tenant"},
+				},
 			},
 		})
 		Expect(err).To(HaveOccurred(),
-			"want error for label with the wrong name: %v", err)
+			"want error for wrong name: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
-			"want invalid for label with the wrong name: %v", err)
-		Expect(err.Error()).To(ContainSubstring("must match the following pattern '^[a-zA-Z][a-zA-Z0-9_]*$'"))
+			"want invalid for wrong name: %v", err)
+		Expect(err.Error()).To(
+			ContainSubstring("must start with an ASCII letter followed by zero or more ASCII letters, digits, or underscores."))
 	})
 	It("should reject source label key with wrong format", func(ctx context.Context) {
 		By("setting a label with the wrong source label key")
 		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{
 			{
-				Name:           "label_0",
-				SourceLabelKey: ".label-0.com",
+				Name:       "label_0",
+				SourceKind: kueueopv1.SourceKindLocalQueue,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceLabel,
+					Label:      kueueopv1.SourceKeyLabel{Key: ".label-0.com"},
+				},
 			},
 		})
 		Expect(err).To(HaveOccurred(),
@@ -206,8 +256,12 @@ var _ = Describe("CustomLabelsCEL", func() {
 		By("setting a label with the wrong source annotation key")
 		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{
 			{
-				Name:                "label_0",
-				SourceAnnotationKey: "@invalid",
+				Name:       "label_0",
+				SourceKind: kueueopv1.SourceKindLocalQueue,
+				SourceKey: kueueopv1.SourceKey{
+					SourceType: kueueopv1.SourceAnnotation,
+					Annotation: kueueopv1.SourceKeyAnnotation{Key: "@invalid"},
+				},
 			},
 		})
 		Expect(err).To(HaveOccurred(),
@@ -215,5 +269,16 @@ var _ = Describe("CustomLabelsCEL", func() {
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
 			"want invalid for label with the wrong source annotation key: %v", err)
 		Expect(err.Error()).To(ContainSubstring("must be a valid Kubernetes annotation key (qualified name)"))
+	})
+	It("do not allow empty custom labels", func(ctx context.Context) {
+		By("setting a label with the wrong source annotation key")
+		err = setCustomLabels(ctx, []kueueopv1.ControllerMetricsCustomLabel{})
+		Expect(err).To(HaveOccurred(),
+			"want error for no custom labels specified: %v", err)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
+			"want invalid for no custom labels specified: %v", err)
+		Expect(err.Error()).To(
+			ContainSubstring("spec.config.controllerManager.metrics in body should have at least 1 properties"),
+		)
 	})
 })

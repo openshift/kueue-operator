@@ -97,16 +97,28 @@ webhook:
 					Metrics: kueue.ControllerMetrics{
 						CustomLabels: []kueue.ControllerMetricsCustomLabel{
 							{
-								Name:                "tenant_id",
-								SourceKind:          kueue.SourceKindLocalQueue,
-								SourceAnnotationKey: "foo.openshift.io/tenant",
+								Name:       "tenant_id",
+								SourceKind: kueue.SourceKindLocalQueue,
+								SourceKey: kueue.SourceKey{
+									SourceType: kueue.SourceAnnotation,
+									Annotation: kueue.SourceKeyAnnotation{Key: "foo.openshift.io/tenant"},
+								},
 							},
 							{
-								Name:           "tenant_id2",
-								SourceLabelKey: "foo.openshift.io/tenant",
+								Name:       "tenant_id2",
+								SourceKind: kueue.SourceKindClusterQueue,
+								SourceKey: kueue.SourceKey{
+									SourceType: kueue.SourceLabel,
+									Label:      kueue.SourceKeyLabel{Key: "foo.openshift.io/tenant"},
+								},
 							},
 							{
-								Name: "environment",
+								Name:       "environment",
+								SourceKind: kueue.SourceKindClusterQueue,
+								SourceKey: kueue.SourceKey{
+									SourceType: kueue.SourceLabel,
+									Label:      kueue.SourceKeyLabel{Key: "environment"},
+								},
 							},
 						},
 					},
@@ -155,8 +167,11 @@ metrics:
     sourceAnnotationKey: foo.openshift.io/tenant
     sourceKind: LocalQueue
   - name: tenant_id2
+    sourceKind: ClusterQueue
     sourceLabelKey: foo.openshift.io/tenant
   - name: environment
+    sourceKind: ClusterQueue
+    sourceLabelKey: environment
   enableClusterQueueResources: true
 namespace: test
 webhook:
