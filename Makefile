@@ -239,6 +239,11 @@ e2e-ci-test-dra-pd: ginkgo
 	@echo "Running DRA Partitionable Devices e2e tests..."
 	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="dra-pd" --junit-report=${ARTIFACT_DIR}/e2e-dra-pd-junit.xml --no-color -v ./test/e2e/...
 
+.PHONY: e2e-ci-test-dra-cc
+e2e-ci-test-dra-cc: ginkgo
+	@echo "Running DRA Consumable Capacity e2e tests..."
+	$(GINKGO) --keep-going --flake-attempts=3 --label-filter="dra-consumable-capacity" --junit-report=${ARTIFACT_DIR}/e2e-dra-cc-junit.xml --no-color -v ./test/e2e/...
+
 .PHONY: e2e-ci-test-tas
 e2e-ci-test-tas: ginkgo
 	@echo "Running TAS e2e tests..."
