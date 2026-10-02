@@ -32,4 +32,6 @@ const (
 	ConsistentlyLongTimeout = 15 * time.Second
 	ConsistentlyLongPoll    = 5 * time.Second
 	DeviceClassKind         = "DeviceClass"
+	MetricsReadyTime        = 3 * time.Minute
+	MetricsPoll             = 2 * time.Second
 )
