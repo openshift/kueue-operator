@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,8 +26,12 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
+	corev1 "k8s.io/api/core/v1"
+	resourcev1 "k8s.io/api/resource/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kueueconfigapi "sigs.k8s.io/kueue/apis/config/v1beta2"
+	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 	"sigs.k8s.io/yaml"
 )
 
@@ -50,11 +55,13 @@ import (
 // additionally need a DRA driver publishing consumable capacity.
 
 const (
-	ccResourceName      = "gpu.memory"
-	ccDeviceClassName   = "gpu.example.com"
-	ccDriverName        = "gpu.example.com"
-	ccCapacityDimension = "memory"
-	ccDeviceSelectorCEL = "device.driver == 'gpu.example.com'"
+	ccResourceName        = "gpu.memory"
+	ccDeviceClassName     = "gpu.example.com"
+	ccDriverName          = "gpu.example.com"
+	ccCapacityDimension   = "memory"
+	ccDeviceSelectorCEL   = "device.driver == 'gpu.example.com'"
+	ccTestNamespacePrefix = "kueue-dra-cc-test-"
+	ccLocalQueueName      = "cc-test-queue"
 
 	ccFeatureGate = "KueueDRAIntegrationConsumableCapacity"
 
@@ -149,8 +156,361 @@ var _ = Describe("DRA Consumable Capacity", Label("dra", "dra-consumable-capacit
 		It("enables the Consumable Capacity feature gate in the operand config", func(ctx context.Context) {
 			expectConsumableCapacityGateEnabled(ctx)
 		})
+
+		When("a DRA driver supporting Consumable Capacity is available", func() {
+			BeforeAll(func(ctx context.Context) {
+				if !hasConsumableCapacityResourceSlices(ctx) {
+					Skip("no ResourceSlices with consumable capacity found for driver " + ccDriverName)
+				}
+			})
+
+			It("admits and charges a Job with an explicit capacity request", func(ctx context.Context) {
+				kueueClient := clients.UpstreamKueueClient
+				cq, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+					ccTestNamespacePrefix, ccLocalQueueName,
+					func(cq *testutils.ClusterQueueWrapper) {
+						cq.WithDRAResource(ccResourceName, "320Gi")
+					})
+
+				By("Creating ResourceClaimTemplate with an explicit 20Gi capacity request")
+				rct := newConsumableCapacityResourceClaimTemplate(
+					"cc-explicit-template", ns.Name, 1, "20Gi", "")
+				_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating Job that references the capacity ResourceClaimTemplate")
+				builder := testutils.NewTestResourceBuilder(ns.Name, ccLocalQueueName)
+				job := builder.NewDRAJob("cc-explicit-job", ccLocalQueueName, rct.Name)
+				createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
+
+				By("Verifying the Workload is admitted and charged 20Gi of gpu.memory")
+				verifyConsumableCapacityWorkload(
+					ctx, ns.Name, string(createdJob.UID), resource.MustParse("20Gi"))
+
+				By("Verifying the ClusterQueue has a 20Gi gpu.memory reservation")
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.MustParse("20Gi"))
+
+				By("Verifying the Job is unsuspended and its Pod is running")
+				Eventually(func() bool {
+					return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+				Eventually(func() bool {
+					return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob.Name)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+				By("Deleting the Job and verifying the capacity reservation is released")
+				testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.Quantity{})
+			})
+
+			It("multiplies the capacity charge by the requested device count", func(ctx context.Context) {
+				kueueClient := clients.UpstreamKueueClient
+				cq, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+					ccTestNamespacePrefix, ccLocalQueueName,
+					func(cq *testutils.ClusterQueueWrapper) {
+						cq.WithDRAResource(ccResourceName, "320Gi")
+					})
+
+				By("Creating a ResourceClaimTemplate for 2 devices with a 20Gi capacity request")
+				rct := newConsumableCapacityResourceClaimTemplate(
+					"cc-count2-template", ns.Name, 2, "20Gi", "")
+				_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating a Job that requests 2 devices")
+				builder := testutils.NewTestResourceBuilder(ns.Name, ccLocalQueueName)
+				job := builder.NewDRAJob("cc-count2-job", ccLocalQueueName, rct.Name)
+				createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
+
+				By("Verifying the Workload is admitted and charged 40Gi of gpu.memory")
+				verifyConsumableCapacityWorkload(
+					ctx, ns.Name, string(createdJob.UID), resource.MustParse("40Gi"))
+
+				By("Verifying the ClusterQueue has a 40Gi gpu.memory reservation")
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.MustParse("40Gi"))
+
+				By("Verifying the Job is unsuspended and its Pod is running")
+				Eventually(func() bool {
+					return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+				Eventually(func() bool {
+					return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, createdJob.Name)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+				By("Deleting the Job and verifying the capacity reservation is released")
+				testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.Quantity{})
+			})
+
+			It("marks a workload inadmissible when no device matches the capacity selector", func(ctx context.Context) {
+				const noMatchSelectorCEL = "device.capacity[\"gpu.example.com\"].memory.compareTo(quantity(\"999Gi\")) == 0"
+				kueueClient := clients.UpstreamKueueClient
+				_, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+					ccTestNamespacePrefix, ccLocalQueueName,
+					func(cq *testutils.ClusterQueueWrapper) {
+						cq.WithDRAResource(ccResourceName, "320Gi")
+					})
+
+				By("Creating a ResourceClaimTemplate with an unmatchable CEL selector")
+				rct := newConsumableCapacityResourceClaimTemplate(
+					"cc-nomatch-template", ns.Name, 1, "10Gi", noMatchSelectorCEL)
+				_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating a Job with the unmatchable CEL selector")
+				builder := testutils.NewTestResourceBuilder(ns.Name, ccLocalQueueName)
+				job := builder.NewDRAJob("cc-nomatch-job", ccLocalQueueName, rct.Name)
+				createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
+
+				By("Verifying the Workload is inadmissible")
+				verifyConsumableCapacityWorkloadInadmissible(ctx, ns.Name, string(createdJob.UID))
+			})
+
+			It("admits multiple workloads that fully consume capacity and leaves the next workload pending", func(ctx context.Context) {
+				kueueClient := clients.UpstreamKueueClient
+				cq, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+					ccTestNamespacePrefix, ccLocalQueueName,
+					func(cq *testutils.ClusterQueueWrapper) {
+						cq.WithDRAResource(ccResourceName, "40Gi")
+					})
+
+				By("Creating a ResourceClaimTemplate for a 20Gi capacity request")
+				rct := newConsumableCapacityResourceClaimTemplate(
+					"cc-share-template", ns.Name, 1, "20Gi", "")
+				_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating two Jobs sharing the same gpu.memory capacity pool")
+				builder := testutils.NewTestResourceBuilder(ns.Name, ccLocalQueueName)
+				job1 := builder.NewDRAJob("cc-share-job-1", ccLocalQueueName, rct.Name)
+				createdJob1, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job1, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob1.Namespace, createdJob1.Name)
+
+				job2 := builder.NewDRAJob("cc-share-job-2", ccLocalQueueName, rct.Name)
+				createdJob2, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job2, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob2.Namespace, createdJob2.Name)
+
+				By("Verifying both Workloads are admitted with 20Gi charges")
+				for _, jobUID := range []string{string(createdJob1.UID), string(createdJob2.UID)} {
+					verifyConsumableCapacityWorkload(ctx, ns.Name, jobUID, resource.MustParse("20Gi"))
+				}
+
+				By("Verifying the ClusterQueue has a 40Gi gpu.memory reservation")
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.MustParse("40Gi"))
+
+				By("Creating a third Job that exceeds the shared capacity quota")
+				job3 := builder.NewDRAJob("cc-share-job-3", ccLocalQueueName, rct.Name)
+				createdJob3, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job3, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob3.Namespace, createdJob3.Name)
+
+				By("Verifying the third Workload remains pending without a reservation")
+				verifyConsumableCapacityWorkloadPending(ctx, ns.Name, cq.Name, string(createdJob3.UID))
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.MustParse("40Gi"))
+				Eventually(func() bool {
+					return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob3.Name)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+				By("Verifying both admitted Jobs are unsuspended and their Pods are running")
+				for _, jobName := range []string{createdJob1.Name, createdJob2.Name} {
+					Eventually(func() bool {
+						return !testutils.IsJobSuspended(ctx, kubeClient, ns.Name, jobName)
+					}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+					Eventually(func() bool {
+						return testutils.IsJobPodRunning(ctx, kubeClient, ns.Name, jobName)
+					}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+				}
+
+				By("Deleting both Jobs and verifying the capacity reservation is released")
+				testutils.CleanUpJob(ctx, kubeClient, createdJob1.Namespace, createdJob1.Name)
+				testutils.CleanUpJob(ctx, kubeClient, createdJob2.Namespace, createdJob2.Name)
+				testutils.CleanUpJob(ctx, kubeClient, createdJob3.Namespace, createdJob3.Name)
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.Quantity{})
+			})
+
+			It("keeps a workload pending when its capacity charge exceeds ClusterQueue quota", func(ctx context.Context) {
+				kueueClient := clients.UpstreamKueueClient
+				cq, ns := testutils.SetupTestEnv(ctx, kubeClient, kueueClient,
+					ccTestNamespacePrefix, ccLocalQueueName,
+					func(cq *testutils.ClusterQueueWrapper) {
+						cq.WithDRAResource(ccResourceName, "40Gi")
+					})
+
+				By("Creating a ResourceClaimTemplate requesting 3 devices at 20Gi each")
+				rct := newConsumableCapacityResourceClaimTemplate(
+					"cc-exceed-template", ns.Name, 3, "20Gi", "")
+				_, err := kubeClient.ResourceV1().ResourceClaimTemplates(ns.Name).Create(ctx, rct, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Creating a Job whose 60Gi capacity charge exceeds the 40Gi quota")
+				builder := testutils.NewTestResourceBuilder(ns.Name, ccLocalQueueName)
+				job := builder.NewDRAJob("cc-exceed-job", ccLocalQueueName, rct.Name)
+				createdJob, err := kubeClient.BatchV1().Jobs(ns.Name).Create(ctx, job, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(testutils.CleanUpJob, kubeClient, createdJob.Namespace, createdJob.Name)
+
+				By("Verifying the Workload remains pending without a reservation")
+				verifyConsumableCapacityWorkloadPending(ctx, ns.Name, cq.Name, string(createdJob.UID))
+				expectClusterQueueResourceReservation(ctx, cq.Name, resource.Quantity{})
+				Eventually(func() bool {
+					return testutils.IsJobSuspended(ctx, kubeClient, ns.Name, createdJob.Name)
+				}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(BeTrue())
+
+				testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
+			})
+		})
+
+		When("Capacity is added to an existing Kueue configuration", Ordered, func() {
+			BeforeAll(func(ctx context.Context) {
+				applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+			})
+
+			It("updates the Kueue configuration and rolls the controller", func(ctx context.Context) {
+				By("Adding the Capacity source to the existing Kueue configuration")
+				applyKueueConfig(ctx, ccCapacityConfig(initialKueueInstance.Spec.Config), kubeClient)
+
+				By("Verifying the Capacity source and feature gate are rendered after the rollout")
+				expectCapacityRendered(ctx)
+				expectConsumableCapacityGateEnabled(ctx)
+				expectControllerAvailable(ctx)
+				expectKueueAvailable(ctx)
+			})
+		})
 	})
 })
+
+func hasConsumableCapacityResourceSlices(ctx context.Context) bool {
+	hasDriverSlices := false
+	for i := 0; i < 6 && !hasDriverSlices; i++ {
+		if i > 0 {
+			time.Sleep(5 * time.Second)
+		}
+		slices, err := kubeClient.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, slice := range slices.Items {
+			if slice.Spec.Driver != ccDriverName {
+				continue
+			}
+			for _, device := range slice.Spec.Devices {
+				allowed := device.AllowMultipleAllocations != nil && *device.AllowMultipleAllocations
+				if allowed {
+					if _, ok := device.Capacity[resourcev1.QualifiedName(ccCapacityDimension)]; ok {
+						hasDriverSlices = true
+						break
+					}
+				}
+			}
+		}
+	}
+	return hasDriverSlices
+}
+
+func verifyConsumableCapacityWorkload(ctx context.Context, namespace, jobUID string, expected resource.Quantity) {
+	Eventually(func(g Gomega) {
+		workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobUID),
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workloads.Items).NotTo(BeEmpty())
+
+		workload := workloads.Items[0]
+		g.Expect(workload.Status.Admission).NotTo(BeNil(), "workload should be admitted")
+		g.Expect(workload.Status.Admission.PodSetAssignments).To(HaveLen(1))
+		assignment := workload.Status.Admission.PodSetAssignments[0]
+		g.Expect(assignment.ResourceUsage).To(HaveKey(corev1.ResourceName(ccResourceName)))
+		usage := assignment.ResourceUsage[corev1.ResourceName(ccResourceName)]
+		g.Expect(usage.Cmp(expected)).To(Equal(0), "expected %s=%s, got %s", ccResourceName, expected.String(), usage.String())
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
+
+func verifyConsumableCapacityWorkloadInadmissible(ctx context.Context, namespace, jobUID string) {
+	Eventually(func(g Gomega) {
+		workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobUID),
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workloads.Items).NotTo(BeEmpty())
+
+		workload := workloads.Items[0]
+		g.Expect(workload.Status.Admission).To(BeNil())
+		g.Expect(workload.Status.Conditions).To(ContainElement(And(
+			HaveField("Type", kueuev1beta2.WorkloadQuotaReserved),
+			HaveField("Status", metav1.ConditionFalse),
+			HaveField("Message", ContainSubstring("insufficient matching devices for CEL selector")),
+		)))
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
+
+func verifyConsumableCapacityWorkloadPending(ctx context.Context, namespace, clusterQueueName, jobUID string) {
+	assertPending := func(g Gomega) {
+		workloads, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kueue.x-k8s.io/job-uid=%s", jobUID),
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workloads.Items).NotTo(BeEmpty())
+
+		workload := workloads.Items[0]
+		g.Expect(workload.Status.Admission).To(BeNil())
+		g.Expect(workload.Status.Conditions).To(ContainElement(And(
+			HaveField("Type", kueuev1beta2.WorkloadQuotaReserved),
+			HaveField("Status", metav1.ConditionFalse),
+			HaveField("Message", And(
+				ContainSubstring("insufficient"),
+				ContainSubstring("quota"),
+				ContainSubstring(ccResourceName),
+			)),
+		)))
+	}
+
+	Eventually(assertPending, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+	Consistently(assertPending, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed())
+
+	Eventually(func(g Gomega) {
+		clusterQueue, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, clusterQueueName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(clusterQueue.Status.PendingWorkloads).To(BeNumerically(">=", 1))
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
+
+func newConsumableCapacityResourceClaimTemplate(name, namespace string, count int64, memory, celExpression string) *resourcev1.ResourceClaimTemplate {
+	rct := testutils.NewResourceClaimTemplate(name, namespace, ccDeviceClassName, count, celExpression)
+	rct.Spec.Spec.Devices.Requests[0].Exactly.Capacity = &resourcev1.CapacityRequirements{
+		Requests: map[resourcev1.QualifiedName]resource.Quantity{
+			resourcev1.QualifiedName(ccCapacityDimension): resource.MustParse(memory),
+		},
+	}
+	return rct
+}
+
+func expectClusterQueueResourceReservation(ctx context.Context, clusterQueueName string, expected resource.Quantity) {
+	Eventually(func(g Gomega) {
+		clusterQueue, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, clusterQueueName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		for _, flavorUsage := range clusterQueue.Status.FlavorsReservation {
+			for _, reservation := range flavorUsage.Resources {
+				if reservation.Name == corev1.ResourceName(ccResourceName) {
+					g.Expect(reservation.Total.Cmp(expected)).To(Equal(0),
+						"ClusterQueue %s should reserve %s of %s", clusterQueueName, expected.String(), ccResourceName)
+					return
+				}
+			}
+		}
+
+		if expected.IsZero() {
+			return
+		}
+		g.Expect(false).To(BeTrue(), "resource reservation %s was not found", ccResourceName)
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
 
 // ccCapacityConfig returns a copy of base with a single Capacity-source
 // DeviceClassMapping added.
