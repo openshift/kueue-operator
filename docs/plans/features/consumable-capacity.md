@@ -211,18 +211,18 @@ These are `go test` helpers with no cluster. DI1 fakes a Kubernetes minor; DI2 p
 Location:
 - `test/e2e/e2e_dra_consumable_capacity_test.go`
 
-E2E scenarios (DE1–DE9) are deferred pending plan approval. Each will be tracked as a separate JIRA story; implementation depends on [OCPKUEUE-847](https://redhat.atlassian.net/browse/OCPKUEUE-847) (upstream e2e leverage) and those stories. The versioned Prow jobs run the same suite; specs `Skip` per the version matrix above. Implement DE9 as two Ginkgo `It`s that `Skip` (DRA-absent vs DRA-present/CC-absent), both mapped to this one scenario ID.
+E2E scenarios (DE1–DE9) are implemented in [#2687](https://github.com/openshift/kueue-operator/pull/2687) and [#2690](https://github.com/openshift/kueue-operator/pull/2690). The versioned Prow jobs run the same suite; specs `Skip` per the version matrix above.
 
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
 | DE1 | Operator-managed install with Capacity source | PR operator image installs on OpenShift, accepts a Kueue CR with `type: Capacity`, and renders the expected operand ConfigMap | Implemented in [#2687](https://github.com/openshift/kueue-operator/pull/2687) |
 | DE2 | Feature gate active in live operand config | Rendered `kueue-manager-config` contains `KueueDRAIntegrationConsumableCapacity: true` and the operand starts successfully | Implemented in [#2687](https://github.com/openshift/kueue-operator/pull/2687) |
-| DE3 | Explicit capacity request Job admitted and charged | `dra-example-driver` publishes capacity, Job requests `memory: 20Gi`, Workload is admitted, and `resourceUsage["gpu.memory"] == 20Gi` | To be automated |
-| DE4 | Capacity request count multiplication | ResourceClaimTemplate uses `count: 2` with `memory: 20Gi`; Workload is admitted and charged `gpu.memory=40Gi` | To be automated |
-| DE5 | No matching capacity dimension or selector is inadmissible | Workload with a non-matching capacity dimension or device selector gets `QuotaReserved=False`, `Reason=Inadmissible` | To be automated |
-| DE6 | Multiple workloads share consumable capacity | ClusterQueue quota is `gpu.memory=2Gi`; two Jobs each request `memory: 1Gi`; both admit, reservation reaches `gpu.memory=2Gi`, and quota is fully used | To be automated |
-| DE7 | Capacity quota exhaustion blocks admission | ClusterQueue quota is lower than the computed capacity charge; workload remains inadmissible/pending | To be automated |
-| DE8 | Runtime CR update adding Capacity rolls controller | Adding Capacity config to an existing Kueue CR refreshes the ConfigMap and recovers controller readiness | To be automated |
+| DE3 | Explicit capacity request Job admitted and charged | `dra-example-driver` publishes capacity, Job requests `memory: 20Gi`, Workload is admitted, and `resourceUsage["gpu.memory"] == 20Gi` | Implemented in [#2690](https://github.com/openshift/kueue-operator/pull/2690) |
+| DE4 | Capacity request count multiplication | ResourceClaimTemplate uses `count: 2` with `memory: 20Gi`; Workload is admitted and charged `gpu.memory=40Gi` | Implemented in [#2690](https://github.com/openshift/kueue-operator/pull/2690) |
+| DE5 | No matching capacity dimension or selector is inadmissible | Workload with a non-matching capacity dimension or device selector gets `QuotaReserved=False` and reports insufficient matching devices | Implemented in [#2690](https://github.com/openshift/kueue-operator/pull/2690) |
+| DE6 | Multiple workloads share consumable capacity | ClusterQueue quota is `gpu.memory=40Gi`; two Jobs each request `memory: 20Gi`; both admit, reservation reaches `gpu.memory=40Gi`, and a third Job remains pending with `QuotaReserved=False` and an insufficient unused quota message | Implemented in [#2690](https://github.com/openshift/kueue-operator/pull/2690) |
+| DE7 | Capacity quota exhaustion blocks admission | ClusterQueue quota is lower than the computed capacity charge; workload remains pending with `QuotaReserved=False` and an insufficient-quota message | Implemented in [#2690](https://github.com/openshift/kueue-operator/pull/2690) |
+| DE8 | Runtime CR update adding Capacity rolls controller | Adding Capacity config to an existing Kueue CR refreshes the ConfigMap and recovers controller readiness | Implemented in [#2690](https://github.com/openshift/kueue-operator/pull/2690) |
 | DE9 | Unsupported cluster reports missing dependency without crashlooping the operand | Apply a Capacity source. Operator reports `Degraded=True`, `Reason=MissingDependencies`. The condition message contains the band-specific string below. `kueue-controller-manager` stays Available (not CrashLoopBackOff). Skip on 4.23/5.0+. | Implemented in [#2687](https://github.com/openshift/kueue-operator/pull/2687) |
 
 DE9 expected `Degraded` message substrings (from [#2546](https://github.com/openshift/kueue-operator/pull/2546)):
