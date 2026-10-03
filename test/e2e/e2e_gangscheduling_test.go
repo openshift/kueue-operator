@@ -35,10 +35,20 @@ import (
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 )
 
+const (
+	// FieldNotSet is a sentinel value indicating that an optional config field should be omitted.
+	// Use this for int32 parameters in makeGangSchedulingConfig when the field should not be set.
+	FieldNotSet int32 = -1
+
+	// Admission mode constants for makeGangSchedulingConfig
+	AdmissionSequential int32 = 0
+	AdmissionParallel   int32 = 1
+)
+
 var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 	var (
 		initialKueueInstance *ssv1.Kueue
-		gangLocalQueueName   = "local-queue"
+		gangLocalQueueName = "local-queue"
 	)
 
 	When("Policy is ByWorkload and Admission is Sequential", func() {
@@ -49,29 +59,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			initialKueueInstance = kueueInstance.DeepCopy()
 
 			By("Configuring Kueue with gangScheduling: policy=ByWorkload, admission=Sequential")
-			newConfig := ssv1.KueueConfiguration{
-				Integrations: ssv1.Integrations{
-					Frameworks: []ssv1.KueueIntegration{
-						ssv1.KueueIntegrationBatchJob,
-					},
-				},
-				GangScheduling: ssv1.GangScheduling{
-					Policy: ssv1.GangSchedulingPolicyByWorkload,
-					ByWorkload: &ssv1.ByWorkload{
-						Admission: ssv1.GangSchedulingWorkloadAdmissionSequential,
-					},
-				},
-			}
+			newConfig := makeGangSchedulingConfig(AdmissionSequential, FieldNotSet, FieldNotSet, FieldNotSet, FieldNotSet, FieldNotSet)
 			applyKueueConfig(ctx, newConfig, kubeClient)
-
-			By("Waiting for Kueue configuration to be applied")
-			Eventually(func(g Gomega) {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.Policy).To(Equal(ssv1.GangSchedulingPolicyByWorkload))
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload).ToNot(BeNil())
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload.Admission).To(Equal(ssv1.GangSchedulingWorkloadAdmissionSequential))
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue configuration should be applied")
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -194,29 +183,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			initialKueueInstance = kueueInstance.DeepCopy()
 
 			By("Configuring Kueue with gangScheduling: policy=ByWorkload, admission=Parallel")
-			newConfig := ssv1.KueueConfiguration{
-				Integrations: ssv1.Integrations{
-					Frameworks: []ssv1.KueueIntegration{
-						ssv1.KueueIntegrationBatchJob,
-					},
-				},
-				GangScheduling: ssv1.GangScheduling{
-					Policy: ssv1.GangSchedulingPolicyByWorkload,
-					ByWorkload: &ssv1.ByWorkload{
-						Admission: ssv1.GangSchedulingWorkloadAdmissionParallel,
-					},
-				},
-			}
+			newConfig := makeGangSchedulingConfig(AdmissionParallel, FieldNotSet, FieldNotSet, FieldNotSet, FieldNotSet, FieldNotSet)
 			applyKueueConfig(ctx, newConfig, kubeClient)
-
-			By("Waiting for Kueue configuration to be applied")
-			Eventually(func(g Gomega) {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.Policy).To(Equal(ssv1.GangSchedulingPolicyByWorkload))
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload).ToNot(BeNil())
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload.Admission).To(Equal(ssv1.GangSchedulingWorkloadAdmissionParallel))
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue configuration should be applied")
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -261,7 +229,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 		})
 	})
 
-	When("Policy is ByWorkload with minimum timeout is set", func() {
+	When("Policy is ByWorkload with timeout and retry limit allows requeue", func() {
 
 		BeforeAll(func(ctx context.Context) {
 			By("Saving initial Kueue configuration")
@@ -269,36 +237,9 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance = kueueInstance.DeepCopy()
 
-			By("Configuring Kueue with gangScheduling: policy=ByWorkload, timeoutSeconds=30, retryLimit=3")
-			newConfig := ssv1.KueueConfiguration{
-				Integrations: ssv1.Integrations{
-					Frameworks: []ssv1.KueueIntegration{
-						ssv1.KueueIntegrationBatchJob,
-					},
-				},
-				GangScheduling: ssv1.GangScheduling{
-					Policy: ssv1.GangSchedulingPolicyByWorkload,
-					ByWorkload: &ssv1.ByWorkload{
-						TimeoutSeconds: 30,
-						RequeuingStrategy: ssv1.RequeuingStrategy{
-							RetryLimit:         2,
-							BackoffBaseSeconds: 30,
-							BackoffMaxSeconds:  30,
-						},
-					},
-				},
-			}
+			By("Configuring Kueue with gangScheduling: policy=ByWorkload, timeoutSeconds=30, retryLimit=2")
+			newConfig := makeGangSchedulingConfig(FieldNotSet, 30, FieldNotSet, 2, 30, 30)
 			applyKueueConfig(ctx, newConfig, kubeClient)
-
-			By("Waiting for Kueue configuration to be applied")
-			Eventually(func(g Gomega) {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.Policy).To(Equal(ssv1.GangSchedulingPolicyByWorkload))
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload).ToNot(BeNil())
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload.TimeoutSeconds).To(Equal(int32(30)))
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue configuration should be applied")
-
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -410,8 +351,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				"spec.active should remain true (workload should not be deactivated)")
 			Expect(wl.Status.RequeueState).ToNot(BeNil(),
 				"requeueState should be populated after eviction and requeue")
-			Expect(ptr.Deref(wl.Status.RequeueState.Count, 0)).To(BeNumerically("<", int32(3)),
-				"requeueState.count should be below retryLimit=3")
+			Expect(ptr.Deref(wl.Status.RequeueState.Count, 0)).To(BeNumerically("<", int32(2)),
+				"requeueState.count should be below retryLimit=2")
 
 			// After re-admission, Kueue un-gates the new pods. We exec `touch /tmp/ready` into each
 			// running pod. The readiness probe passes, the `until` loop in the main container exits 0,
@@ -446,6 +387,93 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 
 			By("Waiting for the job to complete successfully (readiness probe unblocked by exec)")
 			checkWorkloadCondition(ctx, namespace.Name, string(job.UID), kueuev1beta2.WorkloadFinished, "gang-timeout")
+		})
+	})
+
+	When("Policy is ByWorkload with timeout and retry limit causes deactivation", func() {
+
+		BeforeAll(func(ctx context.Context) {
+			By("Saving initial Kueue configuration")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance = kueueInstance.DeepCopy()
+
+			By("Configuring Kueue with gangScheduling: policy=ByWorkload, timeoutSeconds=30, retryLimit=1")
+			newConfig := makeGangSchedulingConfig(FieldNotSet, 30, FieldNotSet, 1, 30, 30)
+			applyKueueConfig(ctx, newConfig, kubeClient)
+		})
+
+		AfterAll(func(ctx context.Context) {
+			By("Restoring initial Kueue configuration")
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		})
+
+		It("should deactivate workload after requeues exhaust the retry limit", func(ctx context.Context) {
+			cq, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"retry-exhaust-", gangLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("500m").WithMemory("512Mi")
+				})
+
+			// Create a never-ready job — readiness probe checks /tmp/ready, which we never create.
+			// The workload will be evicted at every admission until retryLimit is exhausted.
+			By("Creating gang job that will never become ready")
+			job, err := createReadinessProbeGangJob(ctx, "job-retry-exhaust", namespace.Name,
+				gangLocalQueueName, "100m", "128Mi", 2)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create never-ready gang job")
+			defer testutils.CleanUpJob(ctx, kubeClient, job.Namespace, job.Name)
+
+			By("Verifying workload is created and admitted (first attempt)")
+			wlName := verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job.UID))
+
+			By("Waiting for workload to be deactivated after exhausting retryLimit")
+			var maxObservedCount int32
+			Eventually(func(g Gomega) {
+				wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, wlName, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+
+				// Track max observed requeueState.count (may be reset on deactivation).
+				if wl.Status.RequeueState != nil && ptr.Deref(wl.Status.RequeueState.Count, 0) > maxObservedCount {
+					maxObservedCount = ptr.Deref(wl.Status.RequeueState.Count, 0)
+				}
+
+				// Terminal condition: spec.active=false
+				g.Expect(ptr.Deref(wl.Spec.Active, true)).To(BeFalse(),
+					"spec.active should be false after retryLimit exhausted")
+
+				// Verify workload is not admitted after deactivation.
+				g.Expect(apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueuev1beta2.WorkloadAdmitted)).To(BeFalse(),
+					"WorkloadAdmitted should be False after deactivation")
+
+				// Verify the Evicted condition reason indicates deactivation due to requeuing limit.
+				cond := apimeta.FindStatusCondition(wl.Status.Conditions, kueuev1beta2.WorkloadEvicted)
+				g.Expect(cond).NotTo(BeNil(), "WorkloadEvicted condition should exist")
+				g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "WorkloadEvicted should be True")
+				g.Expect(cond.Reason).To(ContainSubstring(kueuev1beta2.WorkloadDeactivated),
+					"Evicted condition reason should indicate Deactivated")
+				g.Expect(cond.Reason).To(ContainSubstring(kueuev1beta2.WorkloadRequeuingLimitExceeded),
+					"Evicted condition reason should indicate RequeuingLimitExceeded")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"workload should be deactivated after exhausting retryLimit (expected ~90s)")
+
+			By("Verifying requeueState.count reached retryLimit")
+			Expect(maxObservedCount).To(BeNumerically(">=", int32(1)),
+				"requeueState.count should have reached retryLimit=1 before deactivation")
+
+			By("Verifying ClusterQueue CPU reservation returns to 0 after deactivation")
+			Eventually(func(g Gomega) {
+				cqObj, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				for _, flavor := range cqObj.Status.FlavorsReservation {
+					for _, res := range flavor.Resources {
+						if res.Name == corev1.ResourceCPU {
+							g.Expect(res.Total.IsZero()).To(BeTrue(),
+								"ClusterQueue CPU reservation should be 0 after deactivation, got %s", res.Total.String())
+						}
+					}
+				}
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"ClusterQueue usage should return to 0 after workload deactivation")
 		})
 	})
 
@@ -504,4 +532,60 @@ func createReadinessProbeGangJob(ctx context.Context, name, namespace, queueName
 		},
 	}
 	return kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+}
+
+// makeGangSchedulingConfig creates a KueueConfiguration with ByWorkload gang scheduling policy.
+func makeGangSchedulingConfig(
+	admission int32,
+	timeoutSeconds int32,
+	recoveryTimeoutSeconds int32,
+	retryLimit int32,
+	backoffBase int32,
+	backoffMax int32,
+) ssv1.KueueConfiguration {
+	// Parameter values:
+	//   admission:              FieldNotSet (omit), AdmissionSequential (0), AdmissionParallel (1)
+	//   timeoutSeconds:         FieldNotSet (omit), or >0 (API min: 30)
+	//   recoveryTimeoutSeconds: FieldNotSet (omit), 0 (disabled), or >0 (API min: 30)
+	//   retryLimit:             FieldNotSet (omit), or >0 (API min: 1)
+	//   backoffBase:            FieldNotSet (omit), or >0 (API min: 30, must set if retryLimit set)
+	//   backoffMax:             FieldNotSet (omit), or >0 (API min: 30, must set if retryLimit set)
+
+	config := ssv1.KueueConfiguration{
+		Integrations: ssv1.Integrations{
+			Frameworks: []ssv1.KueueIntegration{
+				ssv1.KueueIntegrationBatchJob,
+			},
+		},
+		GangScheduling: ssv1.GangScheduling{
+			Policy:     ssv1.GangSchedulingPolicyByWorkload,
+			ByWorkload: &ssv1.ByWorkload{},
+		},
+	}
+
+	switch admission {
+	case AdmissionSequential:
+		config.GangScheduling.ByWorkload.Admission = ssv1.GangSchedulingWorkloadAdmissionSequential
+	case AdmissionParallel:
+		config.GangScheduling.ByWorkload.Admission = ssv1.GangSchedulingWorkloadAdmissionParallel
+	// FieldNotSet: omit admission field
+	}
+
+	if timeoutSeconds >= 0 {
+		config.GangScheduling.ByWorkload.TimeoutSeconds = timeoutSeconds
+	}
+
+	if recoveryTimeoutSeconds >= 0 {
+		config.GangScheduling.ByWorkload.RecoveryTimeoutSeconds = ptr.To(recoveryTimeoutSeconds)
+	}
+
+	if retryLimit >= 0 {
+		config.GangScheduling.ByWorkload.RequeuingStrategy = ssv1.RequeuingStrategy{
+			RetryLimit:         retryLimit,
+			BackoffBaseSeconds: backoffBase,
+			BackoffMaxSeconds:  backoffMax,
+		}
+	}
+
+	return config
 }
