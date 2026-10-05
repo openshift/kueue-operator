@@ -35,6 +35,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	kueuev1beta2 "sigs.k8s.io/kueue/apis/kueue/v1beta2"
 )
 
@@ -424,94 +426,120 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
 				"ClusterQueue usage should return to 0 after workload deactivation")
 		})
-		It("should evict statefulset workload when pods do not become ready within PodsReadyTimeout", func(ctx context.Context) {
-			createdStatefulSet, err := createReadinessProbeStatefulSet(ctx, "statefulset-gang-timeout",
-				namespace.Name, gangLocalQueueName, 2)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create statefulset")
-			DeferCleanup(func() {
-				_ = genericClient.Delete(ctx, createdStatefulSet)
-			})
 
-			By("Verifying the statefulset workload is admitted (/tmp/ready absent → pods not Ready)")
-			workloadName := verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(createdStatefulSet.UID))
-
-			By("Waiting for both pods to run, then signalling readiness on only one replica (the other stays unready)")
-			Eventually(func() error {
-				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
-					LabelSelector: "app=test-statefulset",
-				})
-				if err != nil {
-					return fmt.Errorf("listing pods: %w", err)
-				}
-				var running []corev1.Pod
-				for _, p := range pods.Items {
-					if p.Status.Phase == corev1.PodRunning && p.DeletionTimestamp == nil {
-						running = append(running, p)
+		// Each entry drives one It that verifies a workload with pods that never all
+		// become Ready is evicted by PodsReadyTimeout. They differ only in the resource
+		// kind created, the container to exec into, and the pod label selector.
+		gangEvictionResources := []struct {
+			kind          string
+			containerName string
+			create        func(ctx context.Context, ns, queueName string) (client.Object, string, string, error)
+		}{
+			{
+				kind:          "statefulset",
+				containerName: "test-container",
+				create: func(ctx context.Context, ns, queueName string) (client.Object, string, string, error) {
+					sts, err := createReadinessProbeStatefulSet(ctx, "statefulset-gang-timeout", ns, queueName, 2)
+					if err != nil {
+						return nil, "", "", err
 					}
-				}
-				if len(running) < 2 {
-					return fmt.Errorf("only %d/2 pods running", len(running))
-				}
-				if _, _, execErr := Kexecute(ctx, clients.RestConfig, kubeClient,
-					namespace.Name, running[0].Name, "test-container",
-					[]string{"touch", "/tmp/ready"}); execErr != nil {
-					return fmt.Errorf("touch /tmp/ready failed in pod %s: %w", running[0].Name, execErr)
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.DeletionPoll).Should(Succeed(),
-				"should mark one of the two running pods ready")
+					return sts, string(sts.UID), "app=test-statefulset", nil
+				},
+			},
+			{
+				kind:          "jobset",
+				containerName: "test-jobset",
+				create: func(ctx context.Context, ns, queueName string) (client.Object, string, string, error) {
+					js, err := createReadinessProbeJobSet(ctx, "jobset-gang-timeout", ns, queueName, 2)
+					if err != nil {
+						return nil, "", "", err
+					}
+					return js, string(js.UID), fmt.Sprintf("jobset.sigs.k8s.io/jobset-name=%s", js.Name), nil
+				},
+			},
+		}
 
-			By("Verifying the workload stays PodsReady=False while one replica remains unready")
-			Consistently(func() bool {
-				wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, workloadName, metav1.GetOptions{})
-				if err != nil {
-					return false
-				}
-				cond := apimeta.FindStatusCondition(wl.Status.Conditions, kueuev1beta2.WorkloadPodsReady)
-				return cond != nil && cond.Status == metav1.ConditionFalse
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue(),
-				"workload should consistently remain PodsReady=False while one StatefulSet pod is unready")
+		for _, tc := range gangEvictionResources {
+			It(fmt.Sprintf("should evict %s workload when pods do not become ready within PodsReadyTimeout", tc.kind), func(ctx context.Context) {
+				obj, uid, podSelector, err := tc.create(ctx, namespace.Name, gangLocalQueueName)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create %s", tc.kind)
+				DeferCleanup(func() {
+					_ = genericClient.Delete(ctx, obj)
+				})
 
-			By("Waiting for workload to be evicted with PodsReadyTimeout reason (timeoutSeconds=30)")
-			waitForWorkloadEvictedByPodsReadyTimeout(ctx, namespace.Name, workloadName)
+				By(fmt.Sprintf("Verifying the %s workload is admitted (/tmp/ready absent → pods not Ready)", tc.kind))
+				workloadName := verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, uid)
 
-			By("Verifying kueue_evicted_workloads_once_total metric is present with PodsReadyTimeout reason")
-			findEvictionMetric(ctx, cq)
-		})
+				By("Waiting for both pods to run, then signalling readiness on only one replica (the other stays unready)")
+				var readyPodName string
+				Eventually(func() error {
+					pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
+						LabelSelector: podSelector,
+					})
+					if err != nil {
+						return fmt.Errorf("listing pods: %w", err)
+					}
+					var running []corev1.Pod
+					for _, p := range pods.Items {
+						if p.Status.Phase == corev1.PodRunning && p.DeletionTimestamp == nil {
+							running = append(running, p)
+						}
+					}
+					if len(running) < 2 {
+						return fmt.Errorf("only %d/2 pods running", len(running))
+					}
+					if _, _, execErr := Kexecute(ctx, clients.RestConfig, kubeClient,
+						namespace.Name, running[0].Name, tc.containerName,
+						[]string{"touch", "/tmp/ready"}); execErr != nil {
+						return fmt.Errorf("touch /tmp/ready failed in pod %s: %w", running[0].Name, execErr)
+					}
+					readyPodName = running[0].Name
 
-	})
+					return nil
+				}, testutils.PodReadinessTimeout, testutils.PodReadinessPoll).Should(Succeed(),
+					"should mark one of the two running pods ready")
 
-})
+				By("Waiting for the signalled pod to move to Ready")
+				Eventually(func() error {
+					pod, err := kubeClient.CoreV1().Pods(namespace.Name).Get(ctx, readyPodName, metav1.GetOptions{})
+					if err != nil {
+						return fmt.Errorf("getting pod %s: %w", readyPodName, err)
+					}
+					for _, cond := range pod.Status.Conditions {
+						if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+							return nil
+						}
+					}
+					return fmt.Errorf("pod %s is not Ready yet", readyPodName)
+				}, testutils.PodReadinessTimeout, testutils.PodReadinessPoll).Should(Succeed(),
+					fmt.Sprintf("signalled pod %s should become Ready", readyPodName))
 
-func findEvictionMetric(ctx context.Context, cq *kueuev1beta2.ClusterQueue) {
-	Eventually(func() error {
-		metricsOutput, _, err := Kexecute(ctx, clients.RestConfig, kubeClient,
-			testutils.OperatorNamespace, "curl-metrics-test", "curl-metrics",
-			[]string{
-				"/bin/sh", "-c",
-				fmt.Sprintf(
-					"curl --fail --silent --show-error --cacert /etc/kueue/metrics/certs/ca.crt -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://kueue-controller-manager-metrics-service.%s.svc.cluster.local:8443/metrics",
-					testutils.OperatorNamespace,
-				),
+				By("Verifying the workload stays PodsReady=False while one replica remains unready")
+				Consistently(func() bool {
+					wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, workloadName, metav1.GetOptions{})
+					if err != nil {
+						return false
+					}
+					cond := apimeta.FindStatusCondition(wl.Status.Conditions, kueuev1beta2.WorkloadPodsReady)
+					return cond != nil && cond.Status == metav1.ConditionFalse
+				}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue(),
+					fmt.Sprintf("workload should consistently remain PodsReady=False while one %s pod is unready", tc.kind))
+
+				By("Waiting for workload to be evicted with PodsReadyTimeout reason (timeoutSeconds=30)")
+				waitForWorkloadEvictedByPodsReadyTimeout(ctx, namespace.Name, workloadName)
+
+				By("Verifying kueue_evicted_workloads_once_total metric is present with PodsReadyTimeout reason")
+				findGangSchedulingMetric(ctx, "kueue_evicted_workloads_once_total", map[string]string{
+					"cluster_queue":    cq.Name,
+					"priority_class":   "",
+					"reason":           "PodsReadyTimeout",
+					"replica_role":     "leader",
+					"underlying_cause": "WaitForStart",
+				})
 			})
-		if err != nil {
-			return fmt.Errorf("exec into curl pod failed: %w", err)
 		}
-
-		parser := expfmt.NewTextParser(model.UTF8Validation)
-		metricFamilies, err := parser.TextToMetricFamilies(strings.NewReader(string(metricsOutput)))
-		if err != nil {
-			return fmt.Errorf("failed to parse Prometheus metrics: %w", err)
-		}
-
-		return findMetricWithLabels(metricFamilies, "kueue_evicted_workloads_once_total", map[string]string{
-			"cluster_queue":    cq.Name,
-			"priority_class":   "",
-			"reason":           "PodsReadyTimeout",
-			"underlying_cause": "WaitForStart",
-		})
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue_evicted_workloads_once_total should be present")
-}
+	})
+})
 
 // createJobGang creates a job with an init container that delays pod readiness by 10 seconds.
 // Parallelism specifies how many pods should run in parallel (for gang scheduling tests).
@@ -563,8 +591,57 @@ func createReadinessProbeStatefulSet(ctx context.Context, name, namespace, queue
 				Command: []string{"test", "-f", "/tmp/ready"},
 			},
 		},
+		PeriodSeconds: 1,
 	}
 	return kubeClient.AppsV1().StatefulSets(namespace).Create(ctx, sts, metav1.CreateOptions{})
+}
+
+// createReadinessProbeJobSet creates a JobSet with a single replicated job of `replicas`
+// pods that block on /tmp/ready:
+//   - Each pod's main container loops until /tmp/ready exists, then sleeps so the pod stays Running.
+//   - A readiness probe passes only once /tmp/ready exists.
+//
+// All pods belong to one podset so the workload only becomes PodsReady once every replica is ready.
+func createReadinessProbeJobSet(ctx context.Context, name, namespace, queueName string, replicas int32) (*jobsetapi.JobSet, error) {
+	builder := testutils.NewTestResourceBuilder(namespace, queueName)
+	jobSet := builder.NewJobSet()
+	jobSet.Name = name
+	jobSet.GenerateName = ""
+	jobSet.Labels[testutils.QueueLabel] = queueName
+
+	rj := &jobSet.Spec.ReplicatedJobs[0]
+	rj.Replicas = replicas
+	rj.Template.Spec.Parallelism = ptr.To(int32(1))
+	rj.Template.Spec.Completions = ptr.To(int32(1))
+	rj.Template.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	container := &rj.Template.Spec.Template.Spec.Containers[0]
+	container.Image = testutils.GetContainerImageForWorkloads()
+	container.Args = nil
+	container.Command = []string{"sh", "-c", "until test -f /tmp/ready; do sleep 1; done; sleep 3600"}
+	container.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("100m"),
+		corev1.ResourceMemory: resource.MustParse("128Mi"),
+	}
+	container.ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"test", "-f", "/tmp/ready"},
+			},
+		},
+		PeriodSeconds: 1,
+	}
+	container.SecurityContext = &corev1.SecurityContext{
+		AllowPrivilegeEscalation: ptr.To(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+	}
+
+	if err := genericClient.Create(ctx, jobSet); err != nil {
+		return nil, err
+	}
+	return jobSet, nil
 }
 
 // waitForWorkloadEvictedByPodsReadyTimeout polls until the named workload reports
