@@ -402,7 +402,7 @@ var _ = Describe("Hierarchical Cohorts", Label("cohort"), Ordered, func() {
 				}
 
 				return nil
-			}, 3*time.Minute, 2*time.Second).Should(Succeed(), "cohort metrics should be present at TLS endpoint")
+			}, testutils.MetricsReadyTime, testutils.MetricsPoll).Should(Succeed(), "cohort metrics should be present at TLS endpoint")
 		})
 	})
 })
