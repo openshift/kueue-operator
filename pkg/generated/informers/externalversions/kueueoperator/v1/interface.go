@@ -24,7 +24,7 @@ import (
 // Interface provides access to all the informers in this group version.
 type Interface interface {
 	// Kueues returns a KueueInformer.
-	Kueues() KueueInformer
+	Kueues() TypedKueueInformer
 }
 
 type version struct {
@@ -38,7 +38,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// Kueues returns a KueueInformer.
-func (v *version) Kueues() KueueInformer {
+// Kueues returns a TypedKueueInformer.
+func (v *version) Kueues() TypedKueueInformer {
 	return &kueueInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

@@ -31,7 +31,7 @@ import (
 //
 // Kueue is the CRD to represent the Kueue operator.
 type KueueApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration `json:",inline"`
+	metav1.TypeMetaApplyConfiguration `json:""`
 	// metadata for Kueue.
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	// spec holds user settable values for configuration
