@@ -34,4 +34,6 @@ const (
 	DeviceClassKind         = "DeviceClass"
 	PodReadinessTimeout     = 1 * time.Minute
 	PodReadinessPoll        = 2 * time.Second
+	MetricsPoll             = 2 * time.Second
+	MetricsTimeout          = 2 * time.Minute
 )
