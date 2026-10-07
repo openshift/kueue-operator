@@ -36,4 +36,6 @@ const (
 	PodReadinessPoll        = 2 * time.Second
 	MetricsPoll             = 2 * time.Second
 	MetricsTimeout          = 2 * time.Minute
+	WorkloadPoll            = 3 * time.Second
+	WorkloadTimeout         = 2 * time.Minute
 )
