@@ -149,7 +149,8 @@ for folder in $E2E_TARGET_FOLDERS; do
   fi
 
   report_name="${folder//\//-}"
-  "$GINKGO" "${folder_ginkgo_args[@]}" \
+  # Upstream requires Go 1.27 even while the operator's CI builder uses Go 1.26.
+  GOTOOLCHAIN=go1.27.0 "$GINKGO" "${folder_ginkgo_args[@]}" \
     --skip="${GINKGO_SKIP_PATTERN}" \
     --junit-report="e2e-upstream-${report_name}-junit.xml" \
     --json-report="e2e-upstream-${report_name}.json" \
