@@ -430,90 +430,68 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				"ClusterQueue usage should return to 0 after workload deactivation")
 		})
 
-		// Each entry drives one It that verifies a workload with pods that never all
-		// become Ready is evicted by PodsReadyTimeout. They differ only in the resource
-		// kind created, the container to exec into, and the pod label selector.
+		// Each entry drives one It that verifies that a workload where only SOME pods are
+		// Ready is still evicted by PodsReadyTimeout (gang scheduling requires ALL pods Ready).
+		// Pod index 0 pre-seeds /tmp/ready in its container command so it becomes Ready
+		// immediately; all other pods never create the file.
 		gangEvictionResources := []struct {
-			kind          string
-			containerName string
-			create        func(ctx context.Context, ns, queueName string) (client.Object, string, string, error)
+			kind             string
+			readyPodSelector string // selects the single pod that pre-seeds /tmp/ready (index 0)
+			create           func(ctx context.Context, ns, queueName string) (client.Object, string, error)
 		}{
 			{
-				kind:          "statefulset",
-				containerName: "test-container",
-				create: func(ctx context.Context, ns, queueName string) (client.Object, string, string, error) {
+				kind: "statefulset",
+				// StatefulSet pods carry apps.kubernetes.io/pod-index (set by k8s since 1.28).
+				readyPodSelector: "apps.kubernetes.io/pod-index=0",
+				create: func(ctx context.Context, ns, queueName string) (client.Object, string, error) {
 					sts, err := createReadinessProbeStatefulSet(ctx, "statefulset-gang-timeout", ns, queueName, 2)
 					if err != nil {
-						return nil, "", "", err
+						return nil, "", err
 					}
-					return sts, string(sts.UID), "app=test-statefulset", nil
+					return sts, string(sts.UID), nil
 				},
 			},
 			{
-				kind:          "jobset",
-				containerName: "test-jobset",
-				create: func(ctx context.Context, ns, queueName string) (client.Object, string, string, error) {
+				kind: "jobset",
+				// JobSet labels pods with jobset.sigs.k8s.io/job-index; job 0 pre-seeds /tmp/ready.
+				readyPodSelector: "jobset.sigs.k8s.io/job-index=0",
+				create: func(ctx context.Context, ns, queueName string) (client.Object, string, error) {
 					js, err := createReadinessProbeJobSet(ctx, "jobset-gang-timeout", ns, queueName, 2)
 					if err != nil {
-						return nil, "", "", err
+						return nil, "", err
 					}
-					return js, string(js.UID), fmt.Sprintf("jobset.sigs.k8s.io/jobset-name=%s", js.Name), nil
+					return js, string(js.UID), nil
 				},
 			},
 		}
 
 		for _, tc := range gangEvictionResources {
 			It(fmt.Sprintf("should evict %s workload when pods do not become ready within PodsReadyTimeout", tc.kind), func(ctx context.Context) {
-				obj, uid, podSelector, err := tc.create(ctx, namespace.Name, gangLocalQueueName)
+				obj, uid, err := tc.create(ctx, namespace.Name, gangLocalQueueName)
 				Expect(err).NotTo(HaveOccurred(), "Failed to create %s", tc.kind)
 				defer testutils.CleanUpObject(ctx, genericClient, obj)
 
-				By(fmt.Sprintf("Verifying the %s workload is admitted (/tmp/ready absent → pods not Ready)", tc.kind))
+				By(fmt.Sprintf("Verifying the %s workload is admitted (pod-0 will become Ready; pod-1 never will)", tc.kind))
 				workloadName := verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, uid)
 
-				By("Waiting for both pods to run, then signalling readiness on only one replica (the other stays unready)")
-				var readyPodName string
+				By("Waiting for pod-0 to become Ready (pre-seeded /tmp/ready via container command)")
 				Eventually(func() error {
 					pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
-						LabelSelector: podSelector,
+						LabelSelector: tc.readyPodSelector,
 					})
 					if err != nil {
-						return fmt.Errorf("listing pods: %w", err)
+						return fmt.Errorf("listing pods with selector %q: %w", tc.readyPodSelector, err)
 					}
-					var running []corev1.Pod
 					for _, p := range pods.Items {
-						if p.Status.Phase == corev1.PodRunning && p.DeletionTimestamp == nil {
-							running = append(running, p)
+						for _, cond := range p.Status.Conditions {
+							if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+								return nil
+							}
 						}
 					}
-					if len(running) < 2 {
-						return fmt.Errorf("only %d/2 pods running", len(running))
-					}
-					if _, _, execErr := Kexecute(ctx, clients.RestConfig, kubeClient,
-						namespace.Name, running[0].Name, tc.containerName,
-						[]string{"touch", "/tmp/ready"}); execErr != nil {
-						return fmt.Errorf("touch /tmp/ready failed in pod %s: %w", running[0].Name, execErr)
-					}
-					readyPodName = running[0].Name
-
-					return nil
-				}, testutils.PodReadinessTimeout, testutils.PodReadinessPoll).Should(Succeed(),
-					"should mark one of the two running pods ready")
-
-				By("Waiting for the signalled pod to move to Ready")
-				Eventually(func() error {
-					pod, err := kubeClient.CoreV1().Pods(namespace.Name).Get(ctx, readyPodName, metav1.GetOptions{})
-					if err != nil {
-						return fmt.Errorf("getting pod %s: %w", readyPodName, err)
-					}
-					for _, cond := range pod.Status.Conditions {
-						if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-							return nil
-						}
-					}
-					return fmt.Errorf("pod %s is not Ready yet", readyPodName)
-				}, testutils.PodReadinessTimeout, testutils.PodReadinessPoll).Should(Succeed(),
-					fmt.Sprintf("signalled pod %s should become Ready", readyPodName))
+					return fmt.Errorf("no pod matching %q is Ready yet", tc.readyPodSelector)
+				}, time.Duration(timeoutSeconds)*time.Second, testutils.PodReadinessPoll).Should(Succeed(),
+					"pod-0 should become Ready via pre-seeded /tmp/ready")
 
 				By("Verifying the workload stays PodsReady=False while one replica remains unready")
 				Consistently(func() bool {
@@ -526,8 +504,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(BeTrue(),
 					fmt.Sprintf("workload should consistently remain PodsReady=False while one %s pod is unready", tc.kind))
 
-				By("Waiting for workload to be evicted with PodsReadyTimeout reason (timeoutSeconds=30)")
-				waitForWorkloadEvictedByPodsReadyTimeout(ctx, namespace.Name, workloadName, int32(timeoutSeconds))
+				By(fmt.Sprintf("Waiting for workload to be evicted with PodsReadyTimeout reason (timeoutSeconds=%d)", timeoutSeconds))
+				waitForWorkloadEvictedByPodsReadyTimeout(ctx, namespace.Name, workloadName, timeoutSeconds)
 
 				By("Verifying kueue_evicted_workloads_once_total metric is present with PodsReadyTimeout reason")
 				findGangSchedulingMetric(ctx, "kueue_evicted_workloads_once_total", map[string]string{
@@ -584,7 +562,19 @@ func createReadinessProbeStatefulSet(ctx context.Context, name, namespace, queue
 	sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
 
 	container := &sts.Spec.Template.Spec.Containers[0]
-	container.Command = []string{"sh", "-c", "until test -f /tmp/ready; do sleep 1; done; sleep 3600"}
+	// Pod-index 0 creates /tmp/ready immediately so it becomes Ready.
+	// All other pods never create the file, so their readiness probe never passes.
+	// This lets us verify that gang scheduling requires ALL pods to be Ready, not just some.
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: "POD_INDEX",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.labels['apps.kubernetes.io/pod-index']",
+			},
+		},
+	})
+	container.Command = []string{"sh", "-c",
+		`if [ "$POD_INDEX" = "0" ]; then touch /tmp/ready; fi; until test -f /tmp/ready; do sleep 1; done; sleep 3600`}
 	container.ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
@@ -621,7 +611,19 @@ func createReadinessProbeJobSet(ctx context.Context, name, namespace, queueName 
 	container := &rj.Template.Spec.Template.Spec.Containers[0]
 	container.Image = testutils.GetContainerImageForWorkloads()
 	container.Args = nil
-	container.Command = []string{"sh", "-c", "until test -f /tmp/ready; do sleep 1; done; sleep 3600"}
+	// Job-index 0 creates /tmp/ready immediately so it becomes Ready.
+	// Job-index 1 never creates the file, so its readiness probe never passes.
+	// JOB_INDEX is injected from the jobset.sigs.k8s.io/job-index pod label via the downward API.
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: "JOB_INDEX",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.labels['jobset.sigs.k8s.io/job-index']",
+			},
+		},
+	})
+	container.Command = []string{"sh", "-c",
+		`if [ "$JOB_INDEX" = "0" ]; then touch /tmp/ready; fi; until test -f /tmp/ready; do sleep 1; done; sleep 3600`}
 	container.Resources.Requests = corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("100m"),
 		corev1.ResourceMemory: resource.MustParse("128Mi"),
