@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/gomega"
 	ssv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -49,29 +51,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			initialKueueInstance = kueueInstance.DeepCopy()
 
 			By("Configuring Kueue with gangScheduling: policy=ByWorkload, admission=Sequential")
-			newConfig := ssv1.KueueConfiguration{
-				Integrations: ssv1.Integrations{
-					Frameworks: []ssv1.KueueIntegration{
-						ssv1.KueueIntegrationBatchJob,
-					},
-				},
-				GangScheduling: ssv1.GangScheduling{
-					Policy: ssv1.GangSchedulingPolicyByWorkload,
-					ByWorkload: &ssv1.ByWorkload{
-						Admission: ssv1.GangSchedulingWorkloadAdmissionSequential,
-					},
-				},
-			}
-			applyKueueConfig(ctx, newConfig, kubeClient)
-
-			By("Waiting for Kueue configuration to be applied")
-			Eventually(func(g Gomega) {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.Policy).To(Equal(ssv1.GangSchedulingPolicyByWorkload))
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload).ToNot(BeNil())
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload.Admission).To(Equal(ssv1.GangSchedulingWorkloadAdmissionSequential))
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue configuration should be applied")
+			byWorkload := ssv1.ByWorkload{Admission: ssv1.GangSchedulingWorkloadAdmissionSequential}
+			applyKueueConfig(ctx, makeGangSchedulingConfig(byWorkload), kubeClient)
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -194,29 +175,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			initialKueueInstance = kueueInstance.DeepCopy()
 
 			By("Configuring Kueue with gangScheduling: policy=ByWorkload, admission=Parallel")
-			newConfig := ssv1.KueueConfiguration{
-				Integrations: ssv1.Integrations{
-					Frameworks: []ssv1.KueueIntegration{
-						ssv1.KueueIntegrationBatchJob,
-					},
-				},
-				GangScheduling: ssv1.GangScheduling{
-					Policy: ssv1.GangSchedulingPolicyByWorkload,
-					ByWorkload: &ssv1.ByWorkload{
-						Admission: ssv1.GangSchedulingWorkloadAdmissionParallel,
-					},
-				},
-			}
-			applyKueueConfig(ctx, newConfig, kubeClient)
-
-			By("Waiting for Kueue configuration to be applied")
-			Eventually(func(g Gomega) {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.Policy).To(Equal(ssv1.GangSchedulingPolicyByWorkload))
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload).ToNot(BeNil())
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload.Admission).To(Equal(ssv1.GangSchedulingWorkloadAdmissionParallel))
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue configuration should be applied")
+			byWorkload := ssv1.ByWorkload{Admission: ssv1.GangSchedulingWorkloadAdmissionParallel}
+			applyKueueConfig(ctx, makeGangSchedulingConfig(byWorkload), kubeClient)
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -261,7 +221,7 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 		})
 	})
 
-	When("Policy is ByWorkload with minimum timeout is set", func() {
+	When("Policy is ByWorkload with timeout and retry limit", func() {
 
 		BeforeAll(func(ctx context.Context) {
 			By("Saving initial Kueue configuration")
@@ -269,36 +229,33 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
 			initialKueueInstance = kueueInstance.DeepCopy()
 
-			By("Configuring Kueue with gangScheduling: policy=ByWorkload, timeoutSeconds=30, retryLimit=3")
-			newConfig := ssv1.KueueConfiguration{
-				Integrations: ssv1.Integrations{
-					Frameworks: []ssv1.KueueIntegration{
-						ssv1.KueueIntegrationBatchJob,
-					},
-				},
-				GangScheduling: ssv1.GangScheduling{
-					Policy: ssv1.GangSchedulingPolicyByWorkload,
-					ByWorkload: &ssv1.ByWorkload{
-						TimeoutSeconds: 30,
-						RequeuingStrategy: ssv1.RequeuingStrategy{
-							RetryLimit:         2,
-							BackoffBaseSeconds: 30,
-							BackoffMaxSeconds:  30,
-						},
-					},
+			By("Configuring Kueue with gangScheduling: policy=ByWorkload, timeoutSeconds=30, retryLimit=1")
+			byWorkload := ssv1.ByWorkload{
+				TimeoutSeconds: 30,
+				RequeuingStrategy: ssv1.RequeuingStrategy{
+					RetryLimit:         1,
+					BackoffBaseSeconds: 30,
+					BackoffMaxSeconds:  30,
 				},
 			}
-			applyKueueConfig(ctx, newConfig, kubeClient)
+			applyKueueConfig(ctx, makeGangSchedulingConfig(byWorkload), kubeClient)
 
-			By("Waiting for Kueue configuration to be applied")
-			Eventually(func(g Gomega) {
-				kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.Policy).To(Equal(ssv1.GangSchedulingPolicyByWorkload))
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload).ToNot(BeNil())
-				g.Expect(kueueInstance.Spec.Config.GangScheduling.ByWorkload.TimeoutSeconds).To(Equal(int32(30)))
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Kueue configuration should be applied")
+			By("Creating curl pod to scrape metrics")
+			curlPod := testutils.MakeCurlMetricsPod(testutils.OperatorNamespace)
+			podCleanupFn, err := testutils.CreatePod(kubeClient, curlPod.Obj())
+			Expect(err).NotTo(HaveOccurred(), "failed to create curl metrics pod")
+			DeferCleanup(podCleanupFn)
 
+			Eventually(func() error {
+				pod, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).Get(ctx, "curl-metrics-test", metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get curl pod: %w", err)
+				}
+				if pod.Status.Phase != corev1.PodRunning {
+					return fmt.Errorf("curl pod not running yet, phase: %s", pod.Status.Phase)
+				}
+				return nil
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "curl metrics pod should be running")
 		})
 
 		AfterAll(func(ctx context.Context) {
@@ -312,23 +269,6 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				func(cq *testutils.ClusterQueueWrapper) {
 					cq.WithCPU("500m").WithMemory("512Mi")
 				})
-
-			By("Creating curl pod to scrape metrics")
-			curlPod := testutils.MakeCurlMetricsPod(testutils.OperatorNamespace)
-			podCleanupFn, err := testutils.CreatePod(kubeClient, curlPod.Obj())
-			Expect(err).NotTo(HaveOccurred(), "failed to create curl metrics pod")
-			defer podCleanupFn()
-
-			Eventually(func() error {
-				pod, err := kubeClient.CoreV1().Pods(testutils.OperatorNamespace).Get(ctx, "curl-metrics-test", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to get curl pod: %w", err)
-				}
-				if pod.Status.Phase != corev1.PodRunning {
-					return fmt.Errorf("curl pod not running yet, phase: %s", pod.Status.Phase)
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "curl metrics pod should be running")
 
 			// Pods have a readiness probe that checks for /tmp/ready.
 			// First attempt: file absent → probe fails → pods never Ready → PodsReadyTimeout → eviction.
@@ -360,30 +300,13 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 				"workload should be evicted due to PodsReadyTimeout")
 
 			By("Verifying kueue_evicted_workloads_once_total metric is present with PodsReadyTimeout reason")
-			var out string
-			Eventually(func() error {
-				metricsOutput, _, err := Kexecute(ctx, clients.RestConfig, kubeClient,
-					testutils.OperatorNamespace, "curl-metrics-test", "curl-metrics",
-					[]string{
-						"/bin/sh", "-c",
-						fmt.Sprintf(
-							"curl -s --cacert /etc/kueue/metrics/certs/ca.crt -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://kueue-controller-manager-metrics-service.%s.svc.cluster.local:8443/metrics",
-							testutils.OperatorNamespace,
-						),
-					})
-				if err != nil {
-					return fmt.Errorf("exec into curl pod failed: %w", err)
-				}
-				out = string(metricsOutput)
-				metric := fmt.Sprintf(
-					`kueue_evicted_workloads_once_total{`+
-						`cluster_queue="%s",priority_class="",reason="PodsReadyTimeout",replica_role="leader",underlying_cause="WaitForStart"}`, cq.Name,
-				)
-				if !strings.Contains(out, metric) {
-					return fmt.Errorf("PodsReadyTimeout label not found in kueue_evicted_workloads_once_total")
-				}
-				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "kueue_evicted_workloads_once_total should be present")
+			findGangSchedulingMetric(ctx, "kueue_evicted_workloads_once_total", map[string]string{
+				"cluster_queue":    cq.Name,
+				"priority_class":   "",
+				"reason":           "PodsReadyTimeout",
+				"replica_role":     "leader",
+				"underlying_cause": "WaitForStart",
+			})
 
 			By("Verifying ClusterQueue CPU reservation returns to 0 after eviction")
 			Eventually(func(g Gomega) {
@@ -403,15 +326,15 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			By("Waiting for workload to be re-admitted on requeue (after backoff)")
 			checkWorkloadCondition(ctx, namespace.Name, string(job.UID), kueuev1beta2.WorkloadAdmitted, "admitted on requeue backoff")
 
-			By("Verifying spec.active remains true and requeueState.count is below retryLimit")
+			By("Verifying spec.active remains true and requeueState.count reached retryLimit")
 			wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, evictedWorkloadName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ptr.Deref(wl.Spec.Active, true)).To(BeTrue(),
 				"spec.active should remain true (workload should not be deactivated)")
 			Expect(wl.Status.RequeueState).ToNot(BeNil(),
 				"requeueState should be populated after eviction and requeue")
-			Expect(ptr.Deref(wl.Status.RequeueState.Count, 0)).To(BeNumerically("<", int32(3)),
-				"requeueState.count should be below retryLimit=3")
+			Expect(ptr.Deref(wl.Status.RequeueState.Count, 0)).To(Equal(int32(1)),
+				"requeueState.count should equal retryLimit=1 after the first requeue")
 
 			// After re-admission, Kueue un-gates the new pods. We exec `touch /tmp/ready` into each
 			// running pod. The readiness probe passes, the `until` loop in the main container exits 0,
@@ -446,6 +369,74 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 
 			By("Waiting for the job to complete successfully (readiness probe unblocked by exec)")
 			checkWorkloadCondition(ctx, namespace.Name, string(job.UID), kueuev1beta2.WorkloadFinished, "gang-timeout")
+		})
+
+		It("should deactivate workload after requeues exhaust the retry limit", func(ctx context.Context) {
+			cq, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"retry-exhaust-", gangLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("500m").WithMemory("512Mi")
+				})
+
+			// Create a never-ready job — readiness probe checks /tmp/ready, which we never create.
+			// The workload will be evicted at every admission until retryLimit is exhausted.
+			By("Creating gang job that will never become ready")
+			job, err := createReadinessProbeGangJob(ctx, "job-retry-exhaust", namespace.Name,
+				gangLocalQueueName, "100m", "128Mi", 2)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create never-ready gang job")
+			defer testutils.CleanUpJob(ctx, kubeClient, job.Namespace, job.Name)
+
+			By("Verifying workload is created and admitted (first attempt)")
+			wlName := verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job.UID))
+
+			By("Waiting for workload to be deactivated after exhausting retryLimit")
+			Eventually(func(g Gomega) {
+				wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, wlName, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+
+				// Terminal condition: spec.active=false
+				g.Expect(ptr.Deref(wl.Spec.Active, true)).To(BeFalse(),
+					"spec.active should be false after retryLimit exhausted")
+
+				// Verify workload is not admitted after deactivation.
+				g.Expect(apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueuev1beta2.WorkloadAdmitted)).To(BeFalse(),
+					"WorkloadAdmitted should be False after deactivation")
+
+				// Verify the Evicted condition reason indicates deactivation due to requeuing limit.
+				cond := apimeta.FindStatusCondition(wl.Status.Conditions, kueuev1beta2.WorkloadEvicted)
+				g.Expect(cond).NotTo(BeNil(), "WorkloadEvicted condition should exist")
+				g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "WorkloadEvicted should be True")
+				g.Expect(cond.Reason).To(ContainSubstring(kueuev1beta2.WorkloadDeactivated),
+					"Evicted condition reason should indicate Deactivated")
+				g.Expect(cond.Reason).To(ContainSubstring(kueuev1beta2.WorkloadRequeuingLimitExceeded),
+					"Evicted condition reason should indicate RequeuingLimitExceeded")
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"workload should be deactivated after exhausting retryLimit (expected ~90s)")
+
+			By("Verifying LocalQueue eviction metric reports deactivation due to requeuing limit")
+			findGangSchedulingMetric(ctx, "kueue_local_queue_evicted_workloads_total", map[string]string{
+				"name":             gangLocalQueueName,
+				"namespace":        namespace.Name,
+				"priority_class":   "",
+				"reason":           "Deactivated",
+				"replica_role":     "leader",
+				"underlying_cause": "RequeuingLimitExceeded",
+			})
+
+			By("Verifying ClusterQueue CPU reservation returns to 0 after deactivation")
+			Eventually(func(g Gomega) {
+				cqObj, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				for _, flavor := range cqObj.Status.FlavorsReservation {
+					for _, res := range flavor.Resources {
+						if res.Name == corev1.ResourceCPU {
+							g.Expect(res.Total.IsZero()).To(BeTrue(),
+								"ClusterQueue CPU reservation should be 0 after deactivation, got %s", res.Total.String())
+						}
+					}
+				}
+			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+				"ClusterQueue usage should return to 0 after workload deactivation")
 		})
 	})
 
@@ -504,4 +495,44 @@ func createReadinessProbeGangJob(ctx context.Context, name, namespace, queueName
 		},
 	}
 	return kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+}
+
+func findGangSchedulingMetric(ctx context.Context, metricName string, expectedLabels map[string]string) {
+	Eventually(func() error {
+		metricsOutput, _, err := Kexecute(ctx, clients.RestConfig, kubeClient,
+			testutils.OperatorNamespace, "curl-metrics-test", "curl-metrics",
+			[]string{
+				"/bin/sh", "-c",
+				fmt.Sprintf(
+					"curl --fail --silent --show-error --max-time 10 --cacert /etc/kueue/metrics/certs/ca.crt -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://kueue-controller-manager-metrics-service.%s.svc.cluster.local:8443/metrics",
+					testutils.OperatorNamespace,
+				),
+			})
+		if err != nil {
+			return fmt.Errorf("exec into curl pod failed: %w", err)
+		}
+
+		parser := expfmt.NewTextParser(model.UTF8Validation)
+		metricFamilies, err := parser.TextToMetricFamilies(strings.NewReader(string(metricsOutput)))
+		if err != nil {
+			return fmt.Errorf("failed to parse Prometheus metrics: %w", err)
+		}
+
+		return findMetricWithLabels(metricFamilies, metricName, expectedLabels)
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), fmt.Sprintf("%s should be present", metricName))
+}
+
+// makeGangSchedulingConfig creates a KueueConfiguration with ByWorkload gang scheduling policy.
+func makeGangSchedulingConfig(byWorkload ssv1.ByWorkload) ssv1.KueueConfiguration {
+	return ssv1.KueueConfiguration{
+		Integrations: ssv1.Integrations{
+			Frameworks: []ssv1.KueueIntegration{
+				ssv1.KueueIntegrationBatchJob,
+			},
+		},
+		GangScheduling: ssv1.GangScheduling{
+			Policy:     ssv1.GangSchedulingPolicyByWorkload,
+			ByWorkload: &byWorkload,
+		},
+	}
 }
