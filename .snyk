@@ -17,6 +17,7 @@ exclude:
     # sha1 hash not used for cryptographic purposes
     - upstream/kueue/src/pkg/controller/admissionchecks/provisioning/controller.go
     - upstream/kueue/src/pkg/controller/jobframework/workload_names.go
+    - upstream/kueue/src/pkg/cache/scheduler/was/virtual_pods.go
     # Disable test code
     - upstream/kueue/src/test/**
     # ginkgo-top is used for displaying test results
