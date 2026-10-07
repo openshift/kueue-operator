@@ -705,6 +705,7 @@ func MakeCurlMetricsPod(namespace string) *PodWrapper {
 			ReadOnly:  true,
 		},
 	}
+	pw.Spec.TerminationGracePeriodSeconds = ptr.To(int64(1))
 	return pw
 }
 
