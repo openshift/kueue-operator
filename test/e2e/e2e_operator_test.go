@@ -1027,7 +1027,7 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 				}
 
 				return nil
-			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "No workload should be created in unlabeled namespace")
+			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed(), "No workload should be created in unlabeled namespace")
 
 			By("verifying LeaderWorkerSet pods are running in unlabeled namespace")
 			Eventually(func() error {
@@ -1772,7 +1772,7 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 		}
 
 		return fmt.Errorf("no workload found in namespace %s with uid %s", namespace, uid)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+	}, testutils.WorkloadTimeout, testutils.WorkloadPoll).Should(Succeed())
 
 	Eventually(func() error {
 		updatedWorkload, err := kueueClient.KueueV1beta2().Workloads(namespace).Get(ctx, workload.Name, metav1.GetOptions{})
@@ -1785,7 +1785,7 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 			return nil
 		}
 		return fmt.Errorf("workload %s/%s not admitted or finished", namespace, workload.Name)
-	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+	}, testutils.WorkloadTimeout, testutils.WorkloadPoll).Should(Succeed())
 	return workload.Name
 }
 

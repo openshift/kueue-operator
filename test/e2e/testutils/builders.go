@@ -54,6 +54,7 @@ func (b *TestResourceBuilder) NewPod() *corev1.Pod {
 			},
 		},
 		Spec: corev1.PodSpec{
+			TerminationGracePeriodSeconds: ptr.To(int64(1)),
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: ptr.To(true),
 				SeccompProfile: &corev1.SeccompProfile{
@@ -123,6 +124,7 @@ func (b *TestResourceBuilder) NewStatefulSet() *appsv1.StatefulSet {
 					Labels: map[string]string{"app": "test-statefulset"},
 				},
 				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: ptr.To(int64(1)),
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
@@ -168,6 +170,7 @@ func (b *TestResourceBuilder) NewDeployment() *appsv1.Deployment {
 					Labels: map[string]string{"app": "test-deployment"},
 				},
 				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: ptr.To(int64(1)),
 					Containers: []corev1.Container{
 						{
 							Name:    "test-container",
@@ -294,6 +297,7 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet(opts LeaderWorkerSetOptions) *l
 				Size: ptr.To(int32(size)),
 				LeaderTemplate: &corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						TerminationGracePeriodSeconds: ptr.To(int64(1)),
 						Containers: []corev1.Container{
 							{
 								Name:  "leader",
@@ -319,6 +323,7 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet(opts LeaderWorkerSetOptions) *l
 				},
 				WorkerTemplate: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						TerminationGracePeriodSeconds: ptr.To(int64(1)),
 						Containers: []corev1.Container{
 							{
 								Name:  "worker",
