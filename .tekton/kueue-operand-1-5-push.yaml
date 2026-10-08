@@ -7,8 +7,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "release-1.5"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "release-1.5" && ( "upstream/kueue/***".pathChanged() || "Dockerfile.kueue".pathChanged() || ".tekton/kueue-operand-1-5-push.yaml".pathChanged() )
   labels:
     appstudio.openshift.io/application: kueue-operator-1-5
     appstudio.openshift.io/component: kueue-operand-1-5
