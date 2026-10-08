@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -224,6 +225,119 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 		})
 	})
 
+	When("Policy is ByWorkload with recovery timeout disabled", func() {
+		BeforeAll(func(ctx context.Context) {
+			By("Saving initial Kueue configuration")
+			kueueInstance, err := clients.KueueClient.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred(), "Failed to fetch Kueue instance")
+			initialKueueInstance = kueueInstance.DeepCopy()
+
+			By("Configuring Kueue with gangScheduling: policy=ByWorkload, timeoutSeconds=30, recoveryTimeoutSeconds=0")
+			byWorkload := ssv1.ByWorkload{
+				Admission:              ssv1.GangSchedulingWorkloadAdmissionParallel,
+				TimeoutSeconds:         30,
+				RecoveryTimeoutSeconds: ptr.To(int32(0)),
+			}
+			applyKueueConfig(ctx, makeGangSchedulingConfig(initialKueueInstance.Spec.Config.Integrations, byWorkload), kubeClient)
+		})
+
+		AfterAll(func(ctx context.Context) {
+			By("Restoring initial Kueue configuration")
+			applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		})
+
+		It("should keep an unready workload admitted and retain its quota", func(ctx context.Context) {
+			cq, namespace := testutils.SetupTestEnv(ctx, kubeClient, clients.UpstreamKueueClient,
+				"recovery-disabled-", gangLocalQueueName,
+				func(cq *testutils.ClusterQueueWrapper) {
+					cq.WithCPU("500m").WithMemory("512Mi")
+				})
+
+			By("Creating a gang job whose pods initially become ready")
+			job := newLongRunningJob("job-recovery-disabled", namespace.Name, gangLocalQueueName, "100m", "128Mi")
+			job.Spec.Parallelism = ptr.To(int32(2))
+			job.Spec.Completions = ptr.To(int32(2))
+			job.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To(int64(0))
+			container := &job.Spec.Template.Spec.Containers[0]
+			container.Command = []string{"sh", "-c", "touch /tmp/ready; sleep 3600"}
+			container.ReadinessProbe = &corev1.Probe{
+				ProbeHandler:  corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"test", "-f", "/tmp/ready"}}},
+				PeriodSeconds: 1,
+			}
+			job, err := kubeClient.BatchV1().Jobs(namespace.Name).Create(ctx, job, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred(), "Failed to create gang job")
+			defer testutils.CleanUpJob(ctx, kubeClient, job.Namespace, job.Name)
+
+			By("Verifying first job workload is created and admitted")
+			workloadName := verifyWorkloadCreated(clients.UpstreamKueueClient, namespace.Name, string(job.UID))
+
+			By("Waiting for the workload to reach its first full readiness")
+			checkWorkloadCondition(ctx, namespace.Name, string(job.UID), kueuev1beta2.WorkloadPodsReady, job.Name)
+
+			By("Removing the readiness marker from one pod")
+			var unreadyPodName string
+			Eventually(func(g Gomega) {
+				pods, err := kubeClient.CoreV1().Pods(namespace.Name).List(ctx, metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", job.Name),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				for _, pod := range pods.Items {
+					if pod.Status.Phase != corev1.PodRunning || pod.DeletionTimestamp != nil {
+						continue
+					}
+					_, _, err := Kexecute(ctx, clients.RestConfig, kubeClient, namespace.Name, pod.Name,
+						"test-container", []string{"rm", "-f", "/tmp/ready"})
+					g.Expect(err).NotTo(HaveOccurred(), "removing readiness marker from pod %s", pod.Name)
+					unreadyPodName = pod.Name
+					return
+				}
+				g.Expect(unreadyPodName).NotTo(BeEmpty(), "no running pod found")
+			}, testutils.PodReadinessTimeout, testutils.PodReadinessPoll).Should(Succeed())
+
+			By("Waiting for the workload to report readiness loss")
+			Eventually(func(g Gomega) {
+				wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, workloadName, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				cond := apimeta.FindStatusCondition(wl.Status.Conditions, kueuev1beta2.WorkloadPodsReady)
+				g.Expect(cond).NotTo(BeNil())
+				g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(cond.Reason).To(Equal(kueuev1beta2.WorkloadWaitForRecovery))
+			}, testutils.PodReadinessTimeout, testutils.PodReadinessPoll).Should(Succeed(),
+				"workload should report readiness loss after pod %s becomes unready", unreadyPodName)
+
+			By("Verifying the workload remains admitted and retains quota while recovery is disabled")
+			Consistently(func(g Gomega) {
+				wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace.Name).Get(ctx, workloadName, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueuev1beta2.WorkloadAdmitted)).To(BeTrue())
+				g.Expect(wl.Status.Admission).NotTo(BeNil())
+				g.Expect(apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueuev1beta2.WorkloadEvicted)).To(BeFalse())
+				g.Expect(ptr.Deref(wl.Status.SchedulingStats, kueuev1beta2.SchedulingStats{}).Evictions).
+					To(BeEmpty(), "readiness loss with recovery disabled should not record evictions")
+				g.Expect(apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueuev1beta2.WorkloadQuotaReserved)).To(BeTrue())
+				podsReady := apimeta.FindStatusCondition(wl.Status.Conditions, kueuev1beta2.WorkloadPodsReady)
+				g.Expect(podsReady).NotTo(BeNil())
+				g.Expect(podsReady.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(podsReady.Reason).To(Equal(kueuev1beta2.WorkloadWaitForRecovery))
+
+				cqObj, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				expectedCPU := resource.MustParse("200m")
+				foundCPU := false
+				for _, flavor := range cqObj.Status.FlavorsReservation {
+					for _, res := range flavor.Resources {
+						if res.Name == corev1.ResourceCPU {
+							g.Expect(res.Total.Cmp(expectedCPU)).To(Equal(0), "ClusterQueue CPU reservation should remain %s", expectedCPU.String())
+							foundCPU = true
+						}
+					}
+				}
+				g.Expect(foundCPU).To(BeTrue(), "ClusterQueue CPU reservation not found")
+			}, 40*time.Second, testutils.ConsistentlyPoll).Should(Succeed(),
+				"recoveryTimeoutSeconds=0 should prevent eviction and quota release")
+		})
+	})
+
 	When("Policy is ByWorkload with timeout and retry limit", func() {
 		const (
 			timeoutSeconds = int32(30)
@@ -247,7 +361,13 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 					BackoffMaxSeconds:  30,
 				},
 			}
-			applyKueueConfig(ctx, makeGangSchedulingConfig(initialKueueInstance.Spec.Config.Integrations, byWorkload), kubeClient)
+			config := makeGangSchedulingConfig(initialKueueInstance.Spec.Config.Integrations, byWorkload)
+			for _, integration := range []ssv1.KueueIntegration{ssv1.KueueIntegrationStatefulSet, ssv1.KueueIntegrationJobSet} {
+				if !slices.Contains(config.Integrations.Frameworks, integration) {
+					config.Integrations.Frameworks = append(config.Integrations.Frameworks, integration)
+				}
+			}
+			applyKueueConfig(ctx, config, kubeClient)
 
 			By("Creating curl pod to scrape metrics")
 			curlPod := testutils.MakeCurlMetricsPod(testutils.OperatorNamespace)
@@ -296,15 +416,8 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 			By("Waiting for workload to be evicted with PodsReadyTimeout reason (timeoutSeconds=30)")
 			waitForWorkloadEvictedByPodsReadyTimeout(ctx, namespace.Name, evictedWorkloadName, timeoutSeconds)
 
-			By("Verifying kueue_evicted_workloads_once_total metric is present with PodsReadyTimeout reason")
-			findGangSchedulingMetric(ctx, "kueue_evicted_workloads_once_total", map[string]string{
-				"cluster_queue":    cq.Name,
-				"priority_class":   "",
-				"reason":           "PodsReadyTimeout",
-				"replica_role":     "leader",
-				"underlying_cause": "WaitForStart",
-			})
-
+			// Check transient eviction state before scraping cumulative metrics:
+			// a slow scrape can miss re-admission and exhaust the retry limit.
 			By("Verifying ClusterQueue CPU reservation returns to 0 after eviction")
 			Eventually(func(g Gomega) {
 				cqObj, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cq.Name, metav1.GetOptions{})
@@ -361,11 +474,20 @@ var _ = Describe("Gangscheduling", Label("gangscheduling"), Ordered, func() {
 					}
 				}
 				return nil
-			}, testutils.OperatorReadyTime, testutils.DeletionPoll).Should(Succeed(),
+			}, testutils.OperatorReadyTime, testutils.ConsistentlyPoll).Should(Succeed(),
 				"should touch /tmp/ready in all running pods before second timeout fires")
 
 			By("Waiting for the job to complete successfully (readiness probe unblocked by exec)")
 			checkWorkloadCondition(ctx, namespace.Name, string(job.UID), kueuev1beta2.WorkloadFinished, "gang-timeout")
+
+			By("Verifying kueue_evicted_workloads_once_total metric is present with PodsReadyTimeout reason")
+			findGangSchedulingMetric(ctx, "kueue_evicted_workloads_once_total", map[string]string{
+				"cluster_queue":    cq.Name,
+				"priority_class":   "",
+				"reason":           "PodsReadyTimeout",
+				"replica_role":     "leader",
+				"underlying_cause": "WaitForStart",
+			})
 		})
 
 		It("should deactivate workload after requeues exhaust the retry limit", func(ctx context.Context) {
@@ -529,6 +651,7 @@ func createJobGang(ctx context.Context, name, namespace, queueName, cpu, memory 
 	job.Labels[testutils.QueueLabel] = queueName
 	job.Spec.Parallelism = ptr.To(parallelism)
 	job.Spec.Completions = ptr.To(parallelism)
+	job.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To(int64(0))
 	job.Spec.Template.Spec.InitContainers = []corev1.Container{
 		{
 			Name:    "delay-ready",
@@ -690,6 +813,7 @@ func createReadinessProbeGangJob(ctx context.Context, name, namespace, queueName
 	job.Labels[testutils.QueueLabel] = queueName
 	job.Spec.Parallelism = ptr.To(parallelism)
 	job.Spec.Completions = ptr.To(parallelism)
+	job.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To(int64(0))
 	// Loop until /tmp/ready appears, then exit 0 so the pod succeeds and the job completes.
 	job.Spec.Template.Spec.Containers[0].Command = []string{"sh", "-c",
 		"until test -f /tmp/ready; do sleep 1; done; echo 'ready file found, completing'"}
