@@ -33,11 +33,39 @@ import (
 )
 
 // KueueInformer provides access to a shared informer and lister for
-// Kueues.
+// Kueues. Prefer using the type-safe variant (see [TypedKueueInformer]).
 type KueueInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() kueueoperatorv1.KueueLister
 }
+
+// TypedKueueInformer provides access to a shared informer and lister for
+// Kueues, including the type-safe TypedInformer variant.
+// It is a superset of KueueInformer.
+type TypedKueueInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() KueueIndexInformer
+	Lister() kueueoperatorv1.KueueLister
+}
+
+// KueueIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type KueueIndexInformer cache.TypedSharedIndexInformer[*apiskueueoperatorv1.Kueue]
+
+// KueueHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for Kueue.
+type KueueHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apiskueueoperatorv1.Kueue]
+
+// KueueDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for Kueue.
+type KueueDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apiskueueoperatorv1.Kueue]
+
+// KueueFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for Kueue.
+type KueueFilteringHandler = cache.TypedFilteringResourceEventHandler[*apiskueueoperatorv1.Kueue]
+
+// KueueIndexers is a specialization of [cache.TypedIndexers] for Kueue.
+type KueueIndexers = cache.TypedIndexers[*apiskueueoperatorv1.Kueue]
+
+// DeletedKueue is a specialization of [cache.DeletedObject] for Kueue.
+type DeletedKueue = cache.DeletedObject[*apiskueueoperatorv1.Kueue]
 
 type kueueInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -47,25 +75,49 @@ type kueueInformer struct {
 // NewKueueInformer constructs a new informer for Kueue type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedKueueInformer]).
 func NewKueueInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedKueueInformer constructs a new informer for Kueue type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedKueueInformer(client versioned.Interface, resyncPeriod time.Duration, indexers KueueIndexers) KueueIndexInformer {
+	return NewTypedKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredKueueInformer constructs a new informer for Kueue type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredKueueInformer]).
 func NewFilteredKueueInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredKueueInformer constructs a new informer for Kueue type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredKueueInformer(client versioned.Interface, resyncPeriod time.Duration, indexers KueueIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) KueueIndexInformer {
+	return NewTypedKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewKueueInformerWithOptions constructs a new informer for Kueue type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedKueueInformerWithOptions]).
 func NewKueueInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedKueueInformerWithOptions(client, options)
+}
+
+// NewTypedKueueInformerWithOptions constructs a new informer for Kueue type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedKueueInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) KueueIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "kueue.openshift.io", Version: "v1", Resource: "kueues"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apiskueueoperatorv1.Kueue](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -98,17 +150,57 @@ func NewKueueInformerWithOptions(client versioned.Interface, options internalint
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *kueueInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedKueueInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *kueueInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apiskueueoperatorv1.Kueue{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *kueueInformer) TypedInformer() KueueIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apiskueueoperatorv1.Kueue](f.factory.InformerFor(&apiskueueoperatorv1.Kueue{}, f.defaultInformer))
 }
 
 func (f *kueueInformer) Lister() kueueoperatorv1.KueueLister {
 	return kueueoperatorv1.NewKueueLister(f.Informer().GetIndexer())
+}
+
+// ToTypedKueueInformer converts an untyped informer into a TypedKueueInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Kueue. If that is not the case, calling type-safe methods of the returned
+// TypedKueueInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedKueueInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedKueueInformer(informer KueueInformer) TypedKueueInformer {
+	if informer, ok := informer.(TypedKueueInformer); ok {
+		return informer
+	}
+	return &kueueTypedInformerAdapter{informer}
+}
+
+type kueueTypedInformerAdapter struct {
+	KueueInformer
+}
+
+func (a *kueueTypedInformerAdapter) TypedInformer() KueueIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apiskueueoperatorv1.Kueue](a.Informer())
+}
+
+// ToKueueIndexInformer converts an untyped informer into a KueueIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Kueue. If that is not the case, calling type-safe methods of the returned
+// KueueIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a KueueIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToKueueIndexInformer(informer cache.SharedIndexInformer) KueueIndexInformer {
+	if informer, ok := informer.(KueueIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apiskueueoperatorv1.Kueue](informer)
 }
