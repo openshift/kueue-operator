@@ -2,4 +2,4 @@ packageName: kueue-operator
 defaultChannel: stable
 channels:
 - name: stable
-  currentCSV: kueue-operator.v1.4.3
+  currentCSV: kueue-operator.v1.4.4
