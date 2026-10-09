@@ -1,9 +1,11 @@
 package operator
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/kueue-operator/bindata"
 	kueuev1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
@@ -116,6 +118,138 @@ func TestIsKubernetesMinorAtLeast(t *testing.T) {
 			}, 36)
 			if got != tc.want {
 				t.Fatalf("isKubernetesMinorAtLeast() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func customNoUpgradeFeatureGate(enabled, disabled []string) *configv1.FeatureGate {
+	toNames := func(in []string) []configv1.FeatureGateName {
+		if in == nil {
+			return nil
+		}
+		names := make([]configv1.FeatureGateName, 0, len(in))
+		for _, name := range in {
+			names = append(names, configv1.FeatureGateName(name))
+		}
+		return names
+	}
+	return &configv1.FeatureGate{
+		Spec: configv1.FeatureGateSpec{
+			FeatureGateSelection: configv1.FeatureGateSelection{
+				FeatureSet: configv1.CustomNoUpgrade,
+				CustomNoUpgrade: &configv1.CustomFeatureGates{
+					Enabled:  toNames(enabled),
+					Disabled: toNames(disabled),
+				},
+			},
+		},
+	}
+}
+
+func TestDRAFeatureGateState(t *testing.T) {
+	readErr := errors.New("simulated FeatureGate read failure")
+
+	tests := map[string]struct {
+		consultFeatureGate          bool
+		versionEnablesConsumable    bool
+		versionEnablesPartitionable bool
+		previousConsumable          bool
+		previousPartitionable       bool
+		featureGate                 *configv1.FeatureGate
+		featureGateErr              error
+		wantConsumable              bool
+		wantPartitionable           bool
+	}{
+		// Issue 1: on K8s 1.36+ a FeatureGate read failure must not clear the
+		// version-default-on gates. DRAPartitionableDevices must stay enabled,
+		// matching DRAConsumableCapacity.
+		"featuregate read error on 1.36+ keeps version defaults": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    true,
+			versionEnablesPartitionable: true,
+			previousConsumable:          false,
+			previousPartitionable:       false,
+			featureGateErr:              readErr,
+			wantConsumable:              true,
+			wantPartitionable:           true,
+		},
+		"featuregate read error below 1.36 preserves previous state": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    false,
+			versionEnablesPartitionable: false,
+			previousConsumable:          true,
+			previousPartitionable:       true,
+			featureGateErr:              readErr,
+			wantConsumable:              true,
+			wantPartitionable:           true,
+		},
+		// Issue 2: on K8s 1.36+ an admin can opt out through CustomNoUpgrade.Disabled.
+		"custom no upgrade disabled on 1.36+ turns gates off": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    true,
+			versionEnablesPartitionable: true,
+			featureGate:                 customNoUpgradeFeatureGate(nil, []string{draPartitionableDevicesFeatureGate, draConsumableCapacityFeatureGate}),
+			wantConsumable:              false,
+			wantPartitionable:           false,
+		},
+		"custom no upgrade disables only partitionable on 1.36+": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    true,
+			versionEnablesPartitionable: true,
+			featureGate:                 customNoUpgradeFeatureGate(nil, []string{draPartitionableDevicesFeatureGate}),
+			wantConsumable:              true,
+			wantPartitionable:           false,
+		},
+		"custom no upgrade enabled below 1.36 turns gates on": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    false,
+			versionEnablesPartitionable: false,
+			featureGate:                 customNoUpgradeFeatureGate([]string{draPartitionableDevicesFeatureGate, draConsumableCapacityFeatureGate}, nil),
+			wantConsumable:              true,
+			wantPartitionable:           true,
+		},
+		"custom no upgrade disabled overrides enabled for same gate": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    false,
+			versionEnablesPartitionable: false,
+			featureGate:                 customNoUpgradeFeatureGate([]string{draPartitionableDevicesFeatureGate}, []string{draPartitionableDevicesFeatureGate}),
+			wantConsumable:              false,
+			wantPartitionable:           false,
+		},
+		"no featuregate consult on 1.36+ uses version defaults": {
+			consultFeatureGate:          false,
+			versionEnablesConsumable:    true,
+			versionEnablesPartitionable: true,
+			wantConsumable:              true,
+			wantPartitionable:           true,
+		},
+		"default featureset on 1.36+ keeps version defaults": {
+			consultFeatureGate:          true,
+			versionEnablesConsumable:    true,
+			versionEnablesPartitionable: true,
+			featureGate:                 &configv1.FeatureGate{},
+			wantConsumable:              true,
+			wantPartitionable:           true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			gotConsumable, gotPartitionable := draFeatureGateState(
+				tc.consultFeatureGate,
+				tc.versionEnablesConsumable,
+				tc.versionEnablesPartitionable,
+				tc.previousConsumable,
+				tc.previousPartitionable,
+				tc.featureGate,
+				tc.featureGateErr,
+			)
+			if gotConsumable != tc.wantConsumable {
+				t.Errorf("consumableCapacityEnabled = %v, want %v", gotConsumable, tc.wantConsumable)
+			}
+			if gotPartitionable != tc.wantPartitionable {
+				t.Errorf("partitionableDevicesEnabled = %v, want %v", gotPartitionable, tc.wantPartitionable)
 			}
 		})
 	}
