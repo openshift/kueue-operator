@@ -1,4 +1,9 @@
+# Temporarily use upstream Go until a Red Hat Go 1.27 builder is available.
+FROM docker.io/library/golang:1.27.0@sha256:4013ae0f9e7994f8535c58c811f8f863fbed38b72e0d51e6592156f758d66146 AS golang
+
 FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.26-rhel9 AS builder
+COPY --from=golang /usr/local/go /usr/local/go
+ENV GOROOT=/usr/local/go PATH=/usr/local/go/bin:${PATH} GOTOOLCHAIN=local
 
 ARG TARGETOS
 ARG TARGETARCH
