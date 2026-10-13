@@ -1044,6 +1044,120 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"dra with multiple mappings each with one capacity source": {
+			draConsumableCapacityEnabled: true,
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob},
+				},
+				Resources: kueue.Resources{
+					DeviceClassMappings: []kueue.DeviceClassMapping{
+						{
+							Name:             "gpu.memory",
+							DeviceClassNames: []kueue.DeviceClassName{"gpu.example.com"},
+							Sources: []kueue.DeviceClassSourceConfig{
+								{
+									Type: kueue.DeviceClassSourceTypeCapacity,
+									Capacity: kueue.DeviceClassCapacitySource{
+										Name:   "memory",
+										Driver: "gpu.example.com",
+										DeviceSelector: kueue.DeviceSelector{
+											Type: kueue.DeviceSelectorTypeCEL,
+											CEL:  kueue.CELDeviceSelector{Expression: "device.driver == 'gpu.example.com'"},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:             "gpu.compute",
+							DeviceClassNames: []kueue.DeviceClassName{"gpu-compute.example.com"},
+							Sources: []kueue.DeviceClassSourceConfig{
+								{
+									Type: kueue.DeviceClassSourceTypeCapacity,
+									Capacity: kueue.DeviceClassCapacitySource{
+										Name:   "compute",
+										Driver: "gpu-compute.example.com",
+										DeviceSelector: kueue.DeviceSelector{
+											Type: kueue.DeviceSelectorTypeCEL,
+											CEL:  kueue.CELDeviceSelector{Expression: "device.driver == 'gpu-compute.example.com'"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  KueueDRAIntegrationConsumableCapacity: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - batch/job
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+resources:
+  deviceClassMappings:
+  - deviceClassNames:
+    - gpu.example.com
+    name: gpu.memory
+    sources:
+    - capacity:
+        deviceSelector:
+          cel:
+            expression: device.driver == 'gpu.example.com'
+        driver: gpu.example.com
+        name: memory
+  - deviceClassNames:
+    - gpu-compute.example.com
+    name: gpu.compute
+    sources:
+    - capacity:
+        deviceSelector:
+          cel:
+            expression: device.driver == 'gpu-compute.example.com'
+        driver: gpu-compute.example.com
+        name: compute
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"dra capacity source skipped when gate disabled": {
 			draConsumableCapacityEnabled: false,
 			configuration: kueue.KueueConfiguration{
@@ -1715,6 +1829,8 @@ webhook:
 }
 
 func TestBuildFeatureGatesForDRASources(t *testing.T) {
+	const consumableCapacityGate = "KueueDRAIntegrationConsumableCapacity"
+
 	capacityResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Sources: []kueue.DeviceClassSourceConfig{{Type: kueue.DeviceClassSourceTypeCapacity}}}}}
 	noSourceResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Name: "gpu.memory"}}}
 
@@ -1727,7 +1843,21 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: true,
 			want: map[string]bool{
-				"KueueDRAIntegrationConsumableCapacity": true,
+				consumableCapacityGate: true,
+			},
+		},
+		"capacity source in a later mapping enables consumable capacity gate": {
+			kueueCfg: kueue.KueueConfiguration{
+				Resources: kueue.Resources{
+					DeviceClassMappings: []kueue.DeviceClassMapping{
+						noSourceResources.DeviceClassMappings[0],
+						capacityResources.DeviceClassMappings[0],
+					},
+				},
+			},
+			draConsumableCapacityEnabled: true,
+			want: map[string]bool{
+				consumableCapacityGate: true,
 			},
 		},
 		"mappings without sources enable no gate": {
