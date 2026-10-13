@@ -20,8 +20,14 @@ After updating the submodule, verify that all carry patches in `upstream/kueue/p
 still apply cleanly to the updated upstream code:
 
 ```bash
-cd upstream/kueue/src && git apply --check ../patch/*.patch
+cd upstream/kueue/src
+for p in ../patch/*.patch; do
+  echo "Checking $(basename "$p")..."
+  git apply --check "$p"
+done
 ```
+
+Note: check each patch individually so all failures are reported, not just the first.
 
 If any patch fails to apply (context conflicts due to upstream code changes), regenerate
 it. Carry patches contain OCP-specific modifications to upstream e2e test files (e.g.,
