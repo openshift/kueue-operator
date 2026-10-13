@@ -208,6 +208,27 @@ var _ = Describe("ConsumableCapacityCEL", func() {
 		Expect(apierrors.IsInvalid(err)).To(BeTrue())
 	})
 
+	It("should reject mixed Counter and Capacity sources on one mapping", func(ctx context.Context) {
+		sources := append(validCapacitySources(), kueueopv1.DeviceClassSourceConfig{
+			Type: kueueopv1.DeviceClassSourceTypeCounter,
+			Counter: kueueopv1.DeviceClassCounterSource{
+				Name:   "memory",
+				Driver: "gpu.example.com",
+				DeviceSelector: kueueopv1.DeviceSelector{
+					Type: kueueopv1.DeviceSelectorTypeCEL,
+					CEL:  kueueopv1.CELDeviceSelector{Expression: "device.driver == 'gpu.example.com'"},
+				},
+			},
+		})
+		err := updateWithSources(ctx, sources)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+		Expect(err).To(MatchError(And(
+			ContainSubstring("spec.config.resources.deviceClassMappings[0].sources"),
+			ContainSubstring("must have at most 1 item"),
+		)))
+	})
+
 	It("should reject more than 1 source", func(ctx context.Context) {
 		err := updateWithSources(ctx, append(validCapacitySources(), validCapacitySources()...))
 		Expect(err).To(HaveOccurred())

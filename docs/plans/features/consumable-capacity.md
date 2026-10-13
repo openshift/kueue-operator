@@ -22,12 +22,12 @@
 | Type | Link |
 |------|------|
 | Testing Epic | [OCPKUEUE-724](https://redhat.atlassian.net/browse/OCPKUEUE-724) |
-| CI Integration Story | [OCPKUEUE-847](https://redhat.atlassian.net/browse/OCPKUEUE-847) — Enable upstream DRA Consumable Capacity e2e suite in downstream CI |
+| CI Integration Story | [OCPKUEUE-847](https://redhat.atlassian.net/browse/OCPKUEUE-847) — Enable upstream DRA Consumable Capacity e2e suite in downstream CI; runner support implemented in [#2666](https://github.com/openshift/kueue-operator/pull/2666) |
 | Kubernetes KEP | [KEP-5075: DRA Consumable Capacity](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/5075-dra-consumable-capacity) |
 | Upstream Kueue docs | [Counter-based vs Capacity-based Quota](https://github.com/kubernetes-sigs/kueue/blob/main/site/content/en/docs/concepts/dynamic_resource_allocation.md#counter-based-vs-capacity-based-quota) |
 | Upstream Kueue tests | [PR #13274](https://github.com/kubernetes-sigs/kueue/pull/13274) (consumable capacity quota accounting) |
 | Upstream Kueue implementation | [PR #13152](https://github.com/kubernetes-sigs/kueue/pull/13152) |
-| Downstream operator tests | [PR #2546](https://github.com/openshift/kueue-operator/pull/2546) (operator CRD, config rendering, e2e) |
+| Downstream operator tests | [#2546](https://github.com/openshift/kueue-operator/pull/2546) (CRD, config rendering, controller unit tests); [#2687](https://github.com/openshift/kueue-operator/pull/2687) (DE1, DE2, DE9); [#2690](https://github.com/openshift/kueue-operator/pull/2690) (DE3–DE8) |
 | Partitionable Devices reference | [PR #2069](https://github.com/openshift/kueue-operator/pull/2069) (operator integration) |
 | **Bugs** | [#14846](https://github.com/kubernetes-sigs/kueue/issues/14846) (closed by [#14951](https://github.com/kubernetes-sigs/kueue/pull/14951)) — `validateQualifiedName` silently accepted multi-slash capacity names (e.g. `a/b/c`); covered by upstream C3 |
 
@@ -55,7 +55,7 @@
 
 **Downstream owns operator wiring.** Downstream tests validate CRD shapes, config rendering, feature-gate auto-enable, and operator lifecycle—operator-specific concerns only.
 
-**E2E validates both through CI integration.** Rather than re-test upstream quota/preemption/exhaustion scenarios downstream, downstream CI will leverage (pull and run) upstream's 7 E2E tests (`test/e2e/dra/capacity`) to prove the full stack works through the OpenShift operator path. This is tracked in [OCPKUEUE-847](https://redhat.atlassian.net/browse/OCPKUEUE-847).
+**E2E validates both through CI integration.** The downstream runner supports upstream's 7 E2E tests (`test/e2e/dra/capacity`) through the OpenShift operator path via [#2666](https://github.com/openshift/kueue-operator/pull/2666), which configures the Capacity mapping before the suite and restores default DRA mappings afterward. Recurring downstream periodic Prow execution is configured and stable execution has been validated as part of [OCPKUEUE-847](https://redhat.atlassian.net/browse/OCPKUEUE-847).
 
 **Strategy:** Single comprehensive test suite across layers; no duplicate efforts; full end-to-end coverage through both upstream (KIND) and downstream (OCP) CI.
 
@@ -75,14 +75,14 @@ Upstream tests comprehensively validate **generic Kueue scheduling and quota sem
 
 Downstream tests validate **operator-specific and OpenShift-specific wiring**:
 
-**Unit Tests (DU1–DU5):** Config rendering, feature-gate wiring, Counter compatibility, source detection, and Capacity source filtering when its gate is disabled
+**Unit Tests (DU1–DU6):** Config rendering for single and multiple Capacity mappings, feature-gate wiring across mappings, Counter compatibility, source detection, and Capacity source filtering when its gate is disabled
 **CEL Validation (DC1–DC8):** Downstream API rejects malformed Capacity source configurations before rendering
 **Controller Unit Tests (DI1–DI2):** Dependency/version detection and missing-dependency reporting
 **E2E / Manual Tests (DE1–DE9):** Operator-managed install, live ConfigMap verification, workload charging, count multiplication, inadmissibility, sharing, quota exhaustion, runtime update, and unsupported-version handling
 **Optional Phase 2 (DOPT1–DOPT4):** Lower-priority lifecycle, metrics, and upgrade coverage
-**E2E via Upstream Leverage (upstream E1–E7):** Pull upstream `test/e2e/dra/capacity` into downstream CI (OCPKUEUE-847) to prove operator-managed Kueue passes the same quota/admission/sharing tests on OCP
+**E2E via Upstream Leverage (upstream E1–E7):** Upstream `test/e2e/dra/capacity` runs in downstream periodic Prow jobs with stable execution validated (OCPKUEUE-847), proving operator-managed Kueue passes the same quota/admission/sharing tests on OCP
 
-**PR Status:** [#2546](https://github.com/openshift/kueue-operator/pull/2546) implements downstream unit/CEL/controller tests; downstream e2e/manual validation remains tracked in OCPKUEUE-847 and this manual guide.
+**PR Status:** [#2546](https://github.com/openshift/kueue-operator/pull/2546) implements downstream unit/CEL/controller tests. [#2687](https://github.com/openshift/kueue-operator/pull/2687) implements DE1, DE2, and DE9; [#2690](https://github.com/openshift/kueue-operator/pull/2690) implements DE3–DE8. [#2666](https://github.com/openshift/kueue-operator/pull/2666) enables the upstream capacity suite in the downstream runner; recurring downstream periodic Prow execution is configured and stable execution has been validated as part of OCPKUEUE-847.
 
 ---
 
@@ -173,10 +173,11 @@ Locations:
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
 | DU1 | Capacity source renders into `kueue-manager-config` | Downstream `type: Capacity` renders to upstream Kueue Configuration `deviceClassMappings[].sources[].capacity` with nested `name`, `driver`, and `deviceSelector.cel.expression` | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
-| DU2 | Capacity source enables only the consumable-capacity feature gate | `KueueDRAIntegrationConsumableCapacity` is emitted when a Capacity source is configured and the dependency is available | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| DU2 | Capacity source enables only the consumable-capacity feature gate | `KueueDRAIntegrationConsumableCapacity` is emitted when a Capacity source is configured and the dependency is available, including when the first mapping has no sources and only a later mapping contains a Capacity source | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546); later-mapping detection covered in [#2794](https://github.com/openshift/kueue-operator/pull/2794) |
 | DU3 | Counter source path remains independent | Existing Partitionable Devices `type: Counter` rendering and `KueueDRAIntegrationPartitionableDevices` behavior are unchanged | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | DU4 | Generic DRA source detection helper distinguishes source types | `HasSourceOfType(resources, sourceType)` returns true only when a source matching the requested Capacity or Counter type is configured | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | DU5 | Capacity source skipped when gate is disabled | When `draConsumableCapacityEnabled` is false, a configured Capacity source is not rendered into the ConfigMap, preventing upstream from rejecting the ungated source | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
+| DU6 | Multiple mappings, each with one Capacity source | Two mappings on distinct device classes (`gpu.memory` / `memory` and `gpu.compute` / `compute`), each with one Capacity source, render with their names, drivers, and CEL selectors intact and in order; the consumable-capacity feature gate is enabled | Implemented in [#2794](https://github.com/openshift/kueue-operator/pull/2794) ([OCPKUEUE-891](https://redhat.atlassian.net/browse/OCPKUEUE-891)) |
 
 #### CEL / CRD Validation Tests
 
@@ -192,7 +193,7 @@ Location:
 | DC5 | Capacity required fields and names validated | Empty `capacity.name`, invalid qualified dimension names, and invalid `capacity.driver` values are rejected | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | DC6 | Device selector validation enforced | Invalid `deviceSelector.type` and empty CEL expression are rejected | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
 | DC7 | Single source per mapping enforced | `MaxItems=1` is a deliberate limitation for this release ([#2546](https://github.com/openshift/kueue-operator/pull/2546) API godoc, [KEP-2941](https://github.com/kubernetes-sigs/kueue/blob/main/keps/2941-DRA/README.md)). Multi-dimensional quota (multiple capacity sources on one mapping, e.g. GPU memory and compute) is out of scope until a later release. CEL rejects a second Capacity source. | Implemented in [#2546](https://github.com/openshift/kueue-operator/pull/2546) |
-| DC8 | Mixed Counter + Capacity on one mapping rejected | `MaxItems=1` rejects a mapping that has both a Counter source and a Capacity source. Those use different `listMapKey=type` values, so this hits `MaxItems` rather than a duplicate map key. | To be automated |
+| DC8 | Mixed Counter + Capacity on one mapping rejected | `MaxItems=1` rejects a mapping that has both a Counter source and a Capacity source. Those use different `listMapKey=type` values, so this hits `MaxItems` rather than a duplicate map key. The error identifies the `sources` field and single-item limit. | Implemented in [#2794](https://github.com/openshift/kueue-operator/pull/2794) ([OCPKUEUE-875](https://redhat.atlassian.net/browse/OCPKUEUE-875)) |
 
 #### Controller Unit Tests
 
@@ -270,12 +271,13 @@ The operator wraps those strings as `Please install the following on your cluste
 ### Upstream (Kueue) Deliverables
 
 - **PR #13274** (or successor) — Integration tests for quota charging, exhaustion, release, preemption, and coexistence
-- **Upstream CI (Prow)** — The upstream e2e tests pulled into downstream should run as a periodic Prow job
+- **Upstream CI (Prow)** — The upstream capacity e2e suite runs in downstream periodic Prow jobs with stable execution validated
 
 ### Downstream (Operator) Deliverables
 
 - **PR #2546** (or successor) — Unit tests, CEL/envtest API validation, and controller unit tests for config rendering, feature-gate wiring, and dependency handling
-- **E2E tests automated**
+- **E2E tests automated** — DE1, DE2, and DE9 in [#2687](https://github.com/openshift/kueue-operator/pull/2687); DE3–DE8 in [#2690](https://github.com/openshift/kueue-operator/pull/2690)
+- **Upstream capacity suite runner support** — config setup and restoration in [#2666](https://github.com/openshift/kueue-operator/pull/2666)
 - **Downstream PRs with e2e tests in kueue-operator (Prow CI)**
 - **Test report with information for the Docs team**
 
@@ -283,11 +285,11 @@ The operator wraps those strings as `Please install the following on your cluste
 
 ## Test Tasks
 
-- [ ] **Test plan creation and review** — finalize scope, upstream/downstream ownership, and deferred optional scenarios.
-- [ ] **Implement downstream unit test suite** — one story covering config rendering, feature-gate wiring, Counter compatibility, source detection, CEL/envtest validation, and controller dependency handling.
-- [ ] **Automate downstream e2e tests** — create one JIRA story per e2e scenario (DE1–DE9) and implement in `test/e2e/e2e_dra_consumable_capacity_test.go`.
+- [x] **Test plan creation and review** — finalize scope, upstream/downstream ownership, and deferred optional scenarios.
+- [x] **Implement downstream unit test suite** — one story covering config rendering, feature-gate wiring, Counter compatibility, source detection, CEL/envtest validation, and controller dependency handling.
+- [x] **Automate downstream e2e tests** — DE1–DE9 implemented in `test/e2e/e2e_dra_consumable_capacity_test.go`.
 - [ ] **Remediate testing defects** — fix issues found during manual validation, e2e automation, or CI runs.
-- [ ] **Automate and validate recurring Prow CI executions** — wire the upstream DRA capacity e2e coverage into downstream periodic Prow jobs and confirm stable execution.
+- [x] **Automate and validate recurring Prow CI executions** — runner support and downstream periodic Prow jobs are configured; stable execution of the upstream DRA capacity e2e suite has been validated.
 - [ ] **Write technical documentation and code examples** — provide setup/configuration examples and test results input for the Docs team.
 
 ---
