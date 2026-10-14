@@ -19,6 +19,22 @@ export E2E_KIND_VERSION=""
 # Space-separated list of e2e test folders to run (e.g. "singlecluster certmanager").
 E2E_TARGET_FOLDERS="${E2E_TARGET_FOLDERS:-${E2E_TARGET_FOLDER:-singlecluster}}"
 
+# Temporary, test-only workaround until CI has a supported Red Hat Go 1.27 builder.
+# This is not ideal: it can download an upstream toolchain and bypasses the builder's
+# compliance wrapper, which forces GOTOOLCHAIN=local even when explicitly overridden.
+# Remove this workaround once the test runner's builder provides Go 1.27.
+bootstrap_go=$(command -v go.real || command -v go)
+toolchain_root=$(
+  GOEXPERIMENT='' GOTOOLCHAIN=go1.27.0 "$bootstrap_go" env GOROOT
+)
+export GOROOT="$toolchain_root"
+export PATH="$GOROOT/bin:$PATH"
+export GOEXPERIMENT=
+export GOTOOLCHAIN=local
+
+echo "Using upstream Go toolchain for E2E tests (temporary workaround):"
+go version
+
 function label_worker_nodes() {
   echo "Labeling two worker nodes for e2e tests..."
   # Retrieve the names of nodes with the "worker" role.
@@ -149,8 +165,7 @@ for folder in $E2E_TARGET_FOLDERS; do
   fi
 
   report_name="${folder//\//-}"
-  # Upstream requires Go 1.27 even while the operator's CI builder uses Go 1.26.
-  GOTOOLCHAIN=go1.27.0 "$GINKGO" "${folder_ginkgo_args[@]}" \
+  "$GINKGO" "${folder_ginkgo_args[@]}" \
     --skip="${GINKGO_SKIP_PATTERN}" \
     --junit-report="e2e-upstream-${report_name}-junit.xml" \
     --json-report="e2e-upstream-${report_name}.json" \
