@@ -1,3 +1,2 @@
 ---
-# No external images — all images in the CSV are built by ART.
-# ART replaces pullspecs using image-references during rebase.
+external-images: []
