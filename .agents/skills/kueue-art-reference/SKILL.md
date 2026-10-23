@@ -30,8 +30,12 @@ The Konflux tenant for kueue is `art-kueue-tenant` on `kflux-ocp-p01`.
 
 | Dashboard | URL |
 | --- | --- |
-| ART Builds (1.4) | [ART Dashboard](https://art-dash.engineering.redhat.com/build_health/kueue-1.4) |
-| ART Builds (1.5) | [ART Dashboard](https://art-dash.engineering.redhat.com/build_health/kueue-1.5) |
+| ART Build Health (1.4) | [ART Dashboard](https://art-dash.engineering.redhat.com/build_health/kueue-1.4) |
+| ART Build Health (1.5) | [ART Dashboard](https://art-dash.engineering.redhat.com/build_health/kueue-1.5) |
+| ART Build History (1.4) | [Build History](https://art-build-history-art-build-history.apps.artc2023.pc3z.p1.openshiftapps.com/?group=kueue-1.4&assembly=stream&engine=konflux&hermetic=both&buildtype=image&buildtype=bundle&buildtype=fbc) |
+| ART Build History (1.5) | [Build History](https://art-build-history-art-build-history.apps.artc2023.pc3z.p1.openshiftapps.com/?group=kueue-1.5&assembly=stream&engine=konflux&hermetic=both&buildtype=image&buildtype=bundle&buildtype=fbc) |
+
+> **Tip:** Switch between kueue versions by changing the `group` parameter in the Build History URL (e.g. `group=kueue-1.4` or `group=kueue-1.5`). You can also filter by `outcome`, `dateRange`, and other query parameters.
 
 ## Configuration
 
