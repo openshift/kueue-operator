@@ -1,0 +1,12 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: art-kueue
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: <REPLACE with FBC image from get-fbc-images.sh for this OCP version>
+  publisher: art
+  updateStrategy:
+    registryPoll:
+      interval: 10m0s
