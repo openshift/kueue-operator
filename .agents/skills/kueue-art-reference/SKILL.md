@@ -116,8 +116,8 @@ Located in `gitlab.cee.redhat.com/releng/konflux-release-data`:
 
 | Role | Contact |
 | --- | --- |
-| ART team | [#team-art](https://redhat-internal.slack.com/archives/CBN38N3MW) |
-| Kueue engineering | [#forum-kueue](https://redhat-internal.slack.com/archives/C07GP6TUXE9) |
+| ART team | [#forum-ocp-art](https://redhat-internal.slack.com/archives/CBN38N3MW) |
+| Kueue engineering | [#forum-ocp-kueue](https://redhat-internal.slack.com/archives/C07GP6TUXE9) |
 
 ## Tooling
 

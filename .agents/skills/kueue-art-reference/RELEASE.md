@@ -18,7 +18,7 @@ The `release-from-fbc` Tekton pipeline triggers a stage release from FBC images.
 4. Apply in the `art-kueue-tenant` namespace on `kflux-ocp-p01`
 
 ```bash
-oc apply -f release-from-fbc.yaml
+oc create -f release-from-fbc.yaml
 ```
 
 ## Production Release (trigger-prod-release pipeline)
@@ -30,7 +30,7 @@ oc apply -f release-from-fbc.yaml
 3. Apply in the `art-kueue-tenant` namespace on `kflux-ocp-p01`
 
 ```bash
-oc apply -f trigger-prod-release.yaml
+oc create -f trigger-prod-release.yaml
 ```
 
 ## Stage Testing
