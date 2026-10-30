@@ -385,6 +385,16 @@ func createNamespaceAndLocalQueueDefault(ctx context.Context, labels map[string]
 	ns, err = kubeClient.CoreV1().Namespaces().Create(ctx, namespaceSpec, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	By(fmt.Sprintf("Created namespace %s", ns.Name))
+	// Wait until the namespace is fully provisioned before creating workloads in it.
+	// This is a fix for the flaky LocalQueueDefaulting test (OCPKUEUE-409).
+	Eventually(func() bool {
+		updatedNs, err := kubeClient.CoreV1().Namespaces().Get(ctx, ns.Name, metav1.GetOptions{})
+		if err != nil {
+			return false
+		}
+		_, hasSCCUIDRange := updatedNs.Annotations["openshift.io/sa.scc.uid-range"]
+		return hasSCCUIDRange
+	}, testutils.NamespaceReadyTimeout, testutils.NamespaceReadyPoll).Should(BeTrue(), "namespace %s is not fully provisioned: missing SCC annotations", ns.Name)
 	builder = testutils.NewTestResourceBuilder(ns.Name, testutils.DefaultLocalQueueName)
 	defaultLocalQueueClean, err = testutils.CreateLocalQueue(ctx, kueueClient, ns.Name, testutils.DefaultLocalQueueName)
 	Expect(err).NotTo(HaveOccurred())
