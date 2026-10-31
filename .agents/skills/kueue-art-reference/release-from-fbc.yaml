@@ -1,0 +1,21 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: release-from-fbc-
+  namespace: art-kueue-tenant
+spec:
+  pipelineRef:
+    name: release-from-fbc
+  params:
+    - name: group
+      value: "<GROUP>"
+    - name: assembly
+      value: "<ASSEMBLY_VERSION>"
+    - name: fbc-pullspecs
+      value: "<FBC_PULLSPECS>"
+    - name: force
+      value: "false"
+    - name: dry-run
+      value: "true"
+  timeouts:
+    pipeline: 3h0m0s
