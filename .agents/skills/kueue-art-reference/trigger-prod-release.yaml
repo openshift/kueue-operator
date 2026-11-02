@@ -1,0 +1,13 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: trigger-prod-release-
+  namespace: art-kueue-tenant
+spec:
+  pipelineRef:
+    name: trigger-prod-release
+  params:
+    - name: mr-url
+      value: "https://gitlab.cee.redhat.com/hybrid-platforms/art/ocp-shipment-data/-/merge_requests/<MR_IID>"
+    - name: dry-run
+      value: "true"
