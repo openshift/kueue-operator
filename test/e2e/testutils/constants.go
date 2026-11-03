@@ -38,4 +38,6 @@ const (
 	MetricsTimeout          = 2 * time.Minute
 	WorkloadPoll            = 3 * time.Second
 	WorkloadTimeout         = 2 * time.Minute
+	NamespaceReadyTimeout   = 1 * time.Minute
+	NamespaceReadyPoll      = 2 * time.Second
 )
