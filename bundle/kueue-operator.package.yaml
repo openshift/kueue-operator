@@ -1,5 +1,5 @@
 packageName: kueue-operator
 channels:
-  - name: alpha
+  - name: stable-v1.5
     currentCSV: kueue-operator.v1.5.0
-defaultChannel: alpha
+defaultChannel: stable-v1.5
