@@ -39,8 +39,8 @@ LABEL io.openshift.tags="openshift,kueue-operator-bundle"
 LABEL description="kueue-operator-bundle"
 LABEL distribution-scope="public"
 LABEL cpe="cpe:/a:redhat:kueue_operator:1.5::el9"
-LABEL release=1.5.0
-LABEL version=1.5.0
+LABEL release=1.5.1
+LABEL version=1.5.1
 
 LABEL maintainer="Node team, <aos-node@redhat.com>"
 
