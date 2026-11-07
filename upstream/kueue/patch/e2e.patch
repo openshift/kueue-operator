@@ -1,24 +1,20 @@
 diff --git a/test/e2e/certmanager/certmanager_test.go b/test/e2e/certmanager/certmanager_test.go
-index 192fc8916..2b8708ca0 100644
+index e4a348d..f4a4dec 100644
 --- a/test/e2e/certmanager/certmanager_test.go
 +++ b/test/e2e/certmanager/certmanager_test.go
-@@ -40,7 +40,10 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
- 
+@@ -41,6 +41,7 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
  	ginkgo.BeforeEach(func() {
  		ns = &corev1.Namespace{
--			ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-cert-manager-"},
-+			ObjectMeta: metav1.ObjectMeta{
-+				GenerateName: "e2e-cert-manager-",
-+				Labels:       map[string]string{"kueue.openshift.io/managed": "true"},
-+			},
+ 			GenerateName: "e2e-cert-manager-",
++			Labels:       map[string]string{"kueue.openshift.io/managed": "true"},
  		}
- 		util.MustCreate(ctx, k8sClient, ns)
+ 		behavioral.MustCreate(ctx, k8sClient, ns)
  
 diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
-index 0cc393c98..eabe91047 100644
+index 111fe03..2f88a22 100644
 --- a/test/e2e/certmanager/metrics_test.go
 +++ b/test/e2e/certmanager/metrics_test.go
-@@ -40,7 +40,7 @@ const (
+@@ -39,7 +39,7 @@ const (
  	serviceAccountName           = "kueue-controller-manager"
  	metricsReaderClusterRoleName = "kueue-metrics-reader"
  	metricsServiceName           = "kueue-controller-manager-metrics-service"
@@ -28,7 +24,7 @@ index 0cc393c98..eabe91047 100644
  )
  
 diff --git a/test/e2e/sequential/baseline/admission_fair_sharing_test.go b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
-index 1cd6a7126..7757f919f 100644
+index 24811bd..307dbd6 100644
 --- a/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 +++ b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 @@ -17,8 +17,6 @@ limitations under the License.
@@ -48,46 +44,36 @@ index 1cd6a7126..7757f919f 100644
  	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta2"
  	utiltestingapi "sigs.k8s.io/kueue/pkg/util/testing/v1beta2"
  	jobtesting "sigs.k8s.io/kueue/pkg/util/testingjobs/job"
-@@ -41,12 +38,13 @@ var _ = ginkgo.Describe("Admission Fair Sharing", ginkgo.Label("feature:admissio
+@@ -42,12 +39,7 @@ var _ = ginkgo.Describe("Admission Fair Sharing", ginkgo.Label("feature:admissio
  	)
  
  	ginkgo.BeforeAll(func() {
--		util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName, func(cfg *configapi.Configuration) {
+-		e2e.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName, func(cfg *configapi.Configuration) {
 -			cfg.AdmissionFairSharing = &configapi.AdmissionFairSharing{
 -				UsageHalfLifeTime:     metav1.Duration{Duration: 1 * time.Second},
 -				UsageSamplingInterval: metav1.Duration{Duration: 1 * time.Second},
 -			}
 -		})
-+		// On OCP, admissionFairSharing is configured via the Kueue CR in e2e-test-ocp.sh
-+		// util.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName, func(cfg *configapi.Configuration) {
-+		// 	cfg.AdmissionFairSharing = &configapi.AdmissionFairSharing{
-+		// 		UsageHalfLifeTime:     metav1.Duration{Duration: 1 * time.Second},
-+		// 		UsageSamplingInterval: metav1.Duration{Duration: 1 * time.Second},
-+		// 	}
-+		// })
++		// On OCP, admissionFairSharing is configured via the Kueue CR in e2e-test-ocp.sh.
  
  		rf = utiltestingapi.MakeResourceFlavor("afs-rf").Obj()
- 		util.MustCreate(ctx, k8sClient, rf)
+ 		behavioral.MustCreate(ctx, k8sClient, rf)
 diff --git a/test/e2e/singlecluster/extended/suite_test.go b/test/e2e/singlecluster/extended/suite_test.go
-index 4bbee0840..201c01148 100644
+index 27829fd..3e612b2 100644
 --- a/test/e2e/singlecluster/extended/suite_test.go
 +++ b/test/e2e/singlecluster/extended/suite_test.go
-@@ -54,12 +54,12 @@ var _ = ginkgo.BeforeSuite(func() {
+@@ -55,12 +55,8 @@ var _ = ginkgo.BeforeSuite(func() {
  	waitForAvailableStart := time.Now()
- 	util.WaitForKueueAvailability(ctx, k8sClient)
+ 	e2e.WaitForKueueAvailability(ctx, k8sClient)
  	labelFilter := ginkgo.GinkgoLabelFilter()
 -	if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
--		util.WaitForJobSetAvailability(ctx, k8sClient)
+-		e2e.WaitForJobSetAvailability(ctx, k8sClient)
 -	}
 -	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
--		util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
+-		e2e.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
 -	}
-+	// if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
-+	// 	util.WaitForJobSetAvailability(ctx, k8sClient)
-+	// }
-+	// if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
-+	// 	util.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
-+	// }
++	// On OCP, JobSet and LeaderWorkerSet operators run in different namespaces,
++	// so skip the upstream availability checks for them.
  	if ginkgo.Label("feature:appwrapper").MatchesLabelFilter(labelFilter) {
- 		util.WaitForAppWrapperAvailability(ctx, k8sClient)
+ 		e2e.WaitForAppWrapperAvailability(ctx, k8sClient)
  	}

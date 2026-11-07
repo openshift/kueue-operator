@@ -1,38 +1,35 @@
-diff --git a/test/util/e2e.go b/test/util/e2e.go
-index 3e527e5e6..48711ca06 100644
---- a/test/util/e2e.go
-+++ b/test/util/e2e.go
-@@ -718,8 +718,13 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
+diff --git a/test/util/behavioral/e2e/metrics.go b/test/util/behavioral/e2e/metrics.go
+index 46a8796..23a0979 100644
+--- a/test/util/behavioral/e2e/metrics.go
++++ b/test/util/behavioral/e2e/metrics.go
+@@ -81,7 +81,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
+ 		metricsOutput, stderr, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred(), "stderr: %s", stderr)
+ 		g.Expect(metricsOutput).Should(utiltesting.ContainMetrics(metrics))
+-	}, behavioral.LongTimeout, behavioral.Interval).Should(gomega.Succeed())
++	}, behavioral.VeryLongTimeout, behavioral.Interval).Should(gomega.Succeed())
+ }
+ 
+ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restClient *rest.RESTClient, curlPodName, curlContainerName string, metrics [][]string) {
+@@ -90,5 +90,5 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
+ 		metricsOutput, stderr, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
+ 		g.Expect(err).NotTo(gomega.HaveOccurred(), "stderr: %s", stderr)
+ 		g.Expect(metricsOutput).Should(utiltesting.ExcludeMetrics(metrics))
+-	}, behavioral.LongTimeout, behavioral.Interval).Should(gomega.Succeed())
++	}, behavioral.VeryLongTimeout, behavioral.Interval).Should(gomega.Succeed())
+ }
+diff --git a/test/util/behavioral/namespace.go b/test/util/behavioral/namespace.go
+index df091a8..1f58c0e 100644
+--- a/test/util/behavioral/namespace.go
++++ b/test/util/behavioral/namespace.go
+@@ -43,6 +43,10 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
  }
  
  func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
--	MustCreate(ctx, k8sClient, ns)
--	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns.Name)
-+	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns)
 +	if ns.Labels == nil {
 +		ns.Labels = make(map[string]string)
 +	}
 +	ns.Labels["kueue.openshift.io/managed"] = "true"
-+	gomega.Expect(k8sClient.Create(ctx, ns)).To(gomega.Succeed())
-+	ginkgo.GinkgoLogr.Info(fmt.Sprintf("Created namespace: %s", ns.Name))
+ 	MustCreate(ctx, k8sClient, ns)
+ 	ginkgo.GinkgoLogr.Info("Created namespace", "namespace", ns.Name)
  	return ns
- }
- 
-@@ -753,7 +758,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
- 		metricsOutput, stderr, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
- 		g.Expect(err).NotTo(gomega.HaveOccurred(), "stderr: %s", stderr)
- 		g.Expect(metricsOutput).Should(utiltesting.ContainMetrics(metrics))
--	}, LongTimeout, Interval).Should(gomega.Succeed())
-+	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
- }
- 
- func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restClient *rest.RESTClient, curlPodName, curlContainerName string, metrics [][]string) {
-@@ -762,7 +767,7 @@ func ExpectMetricsNotToBeAvailable(ctx context.Context, cfg *rest.Config, restCl
- 		metricsOutput, stderr, err := GetKueueMetrics(ctx, cfg, restClient, curlPodName, curlContainerName)
- 		g.Expect(err).NotTo(gomega.HaveOccurred(), "stderr: %s", stderr)
- 		g.Expect(metricsOutput).Should(utiltesting.ExcludeMetrics(metrics))
--	}, LongTimeout, Interval).Should(gomega.Succeed())
-+	}, VeryLongTimeout, Interval).Should(gomega.Succeed())
- }
- 
- func WaitForPodRunning(ctx context.Context, k8sClient client.Client, pod *corev1.Pod) {

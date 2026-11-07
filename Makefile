@@ -152,7 +152,7 @@ lint-api-fix: golangci-lint-kal
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.12.2
+GOLANGCI_LINT_VERSION ?= v2.13.2
 GOLANGCI_LINT_KAL = $(shell pwd)/bin/golangci-lint-kube-api-linter
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
@@ -162,7 +162,7 @@ golangci-lint:
 
 .PHONY: golangci-lint-kal
 golangci-lint-kal: golangci-lint ## Build golangci-lint-kal from custom configuration.
-	export HOME=/tmp; export GOCACHE=/tmp/; export GOLANGCI_LINT_CACHE=/tmp/.cache; cd hack/golangci-kal; $(GOLANGCI_LINT) custom; mv bin/golangci-lint-kube-api-linter ${LOCALBIN}
+	export HOME=/tmp; export GOCACHE=/tmp/; export GOLANGCI_LINT_CACHE=/tmp/.cache; cd hack/golangci-kal && $(GOLANGCI_LINT) custom -v && mv bin/golangci-lint-kube-api-linter ${LOCALBIN}
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
