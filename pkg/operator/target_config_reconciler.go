@@ -86,6 +86,8 @@ const (
 	kueueAPIVersion                        = "kueue.openshift.io/v1"
 	kindKueue                              = "Kueue"
 	draConsumableCapacityMissingDependency = "DRA Consumable Capacity requires Kubernetes 1.36+ (OCP 4.23+) and the DRAConsumableCapacity feature gate to be enabled"
+	draPartitionableDevicesFeatureGate     = "DRAPartitionableDevices"
+	draConsumableCapacityFeatureGate       = "DRAConsumableCapacity"
 	secretMetricsServerCert                = "metrics-server-cert"
 	certMetricsCerts                       = "metrics-certs"
 	secretKueueVisibilityServerCert        = "kueue-visibility-server-cert"
@@ -364,36 +366,32 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 
 	// Check whether DRA feature gates are enabled on the cluster.
-	// DRAConsumableCapacity is beta/default-on in Kubernetes 1.36+.
-	// DRAExtendedResource and DRAPartitionableDevices are alpha Kubernetes feature
-	// gates not yet in openshift/api, so they can only be enabled via CustomNoUpgrade.
+	// DRAConsumableCapacity and DRAPartitionableDevices are beta/default-on in
+	// Kubernetes 1.36+ (OCP 5.0+). DRAExtendedResource is also beta in K8s 1.36+
+	// but does not currently have a corresponding reconciler field.
+	// On older clusters, these can be enabled via CustomNoUpgrade featureSet.
 	// DRAPartitionableDevices is checked for degraded status reporting when
 	// counter-based sources are configured.
 	versionEnablesConsumableCapacity := draAPIsAvailable && isKubernetesMinorAtLeast(c.discoveryClient, 36)
-	previousConsumableCapacityEnabled := c.draConsumableCapacityEnabled
-	c.draConsumableCapacityEnabled = versionEnablesConsumableCapacity
-	if c.isOpenShift && draAPIsAvailable {
-		fg, err := c.openshiftConfigClient.ConfigV1().FeatureGates().Get(ctx, "cluster", metav1.GetOptions{})
-		if err != nil {
-			klog.Warningf("unable to read FeatureGate CR, preserving previous state: %v", err)
-			if !versionEnablesConsumableCapacity {
-				c.draConsumableCapacityEnabled = previousConsumableCapacityEnabled
-			}
-		} else {
-			c.draPartitionableDevicesEnabled = false
-			c.draConsumableCapacityEnabled = versionEnablesConsumableCapacity
-			if fg.Spec.FeatureSet == configv1.CustomNoUpgrade && fg.Spec.CustomNoUpgrade != nil {
-				for _, gate := range fg.Spec.CustomNoUpgrade.Enabled {
-					switch string(gate) {
-					case "DRAPartitionableDevices":
-						c.draPartitionableDevicesEnabled = true
-					case "DRAConsumableCapacity":
-						c.draConsumableCapacityEnabled = true
-					}
-				}
-			}
+	versionEnablesPartitionableDevices := draAPIsAvailable && isKubernetesMinorAtLeast(c.discoveryClient, 36)
+	consultFeatureGate := c.isOpenShift && draAPIsAvailable
+	var featureGate *configv1.FeatureGate
+	var featureGateErr error
+	if consultFeatureGate {
+		featureGate, featureGateErr = c.openshiftConfigClient.ConfigV1().FeatureGates().Get(ctx, "cluster", metav1.GetOptions{})
+		if featureGateErr != nil {
+			klog.Warningf("unable to read FeatureGate CR, preserving previous state: %v", featureGateErr)
 		}
 	}
+	c.draConsumableCapacityEnabled, c.draPartitionableDevicesEnabled = draFeatureGateState(
+		consultFeatureGate,
+		versionEnablesConsumableCapacity,
+		versionEnablesPartitionableDevices,
+		c.draConsumableCapacityEnabled,
+		c.draPartitionableDevicesEnabled,
+		featureGate,
+		featureGateErr,
+	)
 
 	resources := kueue.Spec.Config.Resources
 	if util.HasSourceOfType(resources, kueuev1.DeviceClassSourceTypeCounter) && !c.draPartitionableDevicesEnabled {
@@ -2448,6 +2446,62 @@ func isKubernetesMinorAtLeast(discoveryClient discovery.DiscoveryInterface, mino
 		return false
 	}
 	return parsedMinor >= minor
+}
+
+// draFeatureGateState resolves whether the DRAConsumableCapacity and
+// DRAPartitionableDevices feature gates are effectively enabled on the cluster.
+//
+// Both gates are beta and default-on in Kubernetes 1.36+ (OCP 5.0+), captured by
+// the versionEnables* inputs. On OpenShift the FeatureGate CR may additionally
+// toggle them through the CustomNoUpgrade featureSet: Enabled forces a gate on and
+// Disabled forces it off. When the FeatureGate CR cannot be read
+// (featureGateErr != nil), the previously observed state is preserved unless the
+// running Kubernetes version already enables the gate by default.
+func draFeatureGateState(
+	consultFeatureGate bool,
+	versionEnablesConsumableCapacity bool,
+	versionEnablesPartitionableDevices bool,
+	previousConsumableCapacityEnabled bool,
+	previousPartitionableDevicesEnabled bool,
+	featureGate *configv1.FeatureGate,
+	featureGateErr error,
+) (consumableCapacityEnabled bool, partitionableDevicesEnabled bool) {
+	// Start from the Kubernetes version defaults for both gates.
+	consumableCapacityEnabled = versionEnablesConsumableCapacity
+	partitionableDevicesEnabled = versionEnablesPartitionableDevices
+	if !consultFeatureGate {
+		return consumableCapacityEnabled, partitionableDevicesEnabled
+	}
+	if featureGateErr != nil {
+		// Preserve the previously observed state unless the running Kubernetes
+		// version already enables the gate by default.
+		if !versionEnablesConsumableCapacity {
+			consumableCapacityEnabled = previousConsumableCapacityEnabled
+		}
+		if !versionEnablesPartitionableDevices {
+			partitionableDevicesEnabled = previousPartitionableDevicesEnabled
+		}
+		return consumableCapacityEnabled, partitionableDevicesEnabled
+	}
+	if featureGate.Spec.FeatureSet == configv1.CustomNoUpgrade && featureGate.Spec.CustomNoUpgrade != nil {
+		for _, gate := range featureGate.Spec.CustomNoUpgrade.Enabled {
+			switch string(gate) {
+			case draPartitionableDevicesFeatureGate:
+				partitionableDevicesEnabled = true
+			case draConsumableCapacityFeatureGate:
+				consumableCapacityEnabled = true
+			}
+		}
+		for _, gate := range featureGate.Spec.CustomNoUpgrade.Disabled {
+			switch string(gate) {
+			case draPartitionableDevicesFeatureGate:
+				partitionableDevicesEnabled = false
+			case draConsumableCapacityFeatureGate:
+				consumableCapacityEnabled = false
+			}
+		}
+	}
+	return consumableCapacityEnabled, partitionableDevicesEnabled
 }
 
 func missingConsumableCapacityDependencies(resources kueuev1.Resources, enabled bool) []string {
