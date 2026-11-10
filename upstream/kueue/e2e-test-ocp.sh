@@ -69,6 +69,10 @@ function ginkgo_label_filter() {
 skips=(
   "StatefulSet created with WorkloadPriorityClass"
   "LeaderWorkerSet created with WorkloadPriorityClass"
+  # The "Metrics access control" test enables the MetricsAccessControl feature gate and
+  # directly patches the kueue deployment, but the kueue-operator reconciles the deployment
+  # back — so the test cannot pass in an operator-managed cluster.
+  "Metrics access control"
 )
 
 skipsRegex=$(
