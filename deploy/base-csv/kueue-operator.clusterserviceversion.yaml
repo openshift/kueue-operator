@@ -4,6 +4,7 @@ metadata:
   annotations:
     capabilities: Basic Install
     createdAt: "2025-08-14T18:25:23Z"
+    repository: https://github.com/openshift/kueue-operator
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/operator-monitoring-default: "true"
@@ -55,7 +56,11 @@ spec:
   keywords:
     - kueue-operator
   links:
-    - name: Kueue Operator
+    - name: Documentation
+      url: https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/ai_workloads/red-hat-build-of-kueue
+    - name: Operand Source Code
+      url: https://github.com/kubernetes-sigs/kueue
+    - name: Operator Source Code
       url: https://github.com/openshift/kueue-operator
   maintainers:
     - email: aos-node@redhat.com
