@@ -285,10 +285,21 @@ push-must:
 	$(CONTAINER_TOOL) push $(MUST_GATHER_IMAGE)
 
 .PHONY: run-must
-run-must: get-kueue-must-gather-image
+# KUEUE_MUST_GATHER_IMAGE is set only by the ART CI flow. Every other caller -
+# Konflux-based CI jobs and local usage - leaves it unset and gets the
+# previous behavior verbatim.
+run-must:
+	@if [ -n "$(KUEUE_MUST_GATHER_IMAGE)" ]; then \
+	  echo "Using KUEUE_MUST_GATHER_IMAGE=$(KUEUE_MUST_GATHER_IMAGE)"; \
+	else \
+	  echo "KUEUE_MUST_GATHER_IMAGE not set; resolving the Konflux build"; \
+	  $(MAKE) get-kueue-must-gather-image; \
+	fi
 	@echo "Running must-gather to gather diagnostics..."
 	@mkdir -p $${ARTIFACT_DIR:-must-gather}/must-gather
-	oc adm must-gather --image=$$(cat .must_gather_image) --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
+	oc adm must-gather \
+	  --image=$(if $(KUEUE_MUST_GATHER_IMAGE),$(KUEUE_MUST_GATHER_IMAGE),$$(cat .must_gather_image)) \
+	  --dest-dir=$${ARTIFACT_DIR:-must-gather}/must-gather
 	@rm -f .must_gather_image
 
 .PHONY: clean-must
