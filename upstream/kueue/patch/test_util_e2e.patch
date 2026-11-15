@@ -1,5 +1,5 @@
 diff --git a/test/util/behavioral/e2e/metrics.go b/test/util/behavioral/e2e/metrics.go
-index 46a8796..23a0979 100644
+index 46a8796e4..23a09794d 100644
 --- a/test/util/behavioral/e2e/metrics.go
 +++ b/test/util/behavioral/e2e/metrics.go
 @@ -81,7 +81,7 @@ func ExpectMetricsToBeAvailable(ctx context.Context, cfg *rest.Config, restClien
@@ -19,13 +19,13 @@ index 46a8796..23a0979 100644
 +	}, behavioral.VeryLongTimeout, behavioral.Interval).Should(gomega.Succeed())
  }
 diff --git a/test/util/behavioral/namespace.go b/test/util/behavioral/namespace.go
-index df091a8..1f58c0e 100644
+index 1ea083659..8a9c111f8 100644
 --- a/test/util/behavioral/namespace.go
 +++ b/test/util/behavioral/namespace.go
-@@ -43,6 +43,10 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
- }
+@@ -44,6 +44,10 @@ func CreateNamespaceFromPrefixWithLog(ctx context.Context, k8sClient client.Clie
  
  func CreateNamespaceFromObjectWithLog(ctx context.Context, k8sClient client.Client, ns *corev1.Namespace) *corev1.Namespace {
+ 	ginkgo.GinkgoHelper()
 +	if ns.Labels == nil {
 +		ns.Labels = make(map[string]string)
 +	}

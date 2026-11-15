@@ -1,5 +1,5 @@
 diff --git a/test/e2e/certmanager/certmanager_test.go b/test/e2e/certmanager/certmanager_test.go
-index e4a348d..f4a4dec 100644
+index e4a348db5..f4a4dec28 100644
 --- a/test/e2e/certmanager/certmanager_test.go
 +++ b/test/e2e/certmanager/certmanager_test.go
 @@ -41,6 +41,7 @@ var _ = ginkgo.Describe("CertManager", ginkgo.Ordered, func() {
@@ -11,7 +11,7 @@ index e4a348d..f4a4dec 100644
  		behavioral.MustCreate(ctx, k8sClient, ns)
  
 diff --git a/test/e2e/certmanager/metrics_test.go b/test/e2e/certmanager/metrics_test.go
-index 111fe03..2f88a22 100644
+index 6f479dd31..c85cc894c 100644
 --- a/test/e2e/certmanager/metrics_test.go
 +++ b/test/e2e/certmanager/metrics_test.go
 @@ -39,7 +39,7 @@ const (
@@ -24,7 +24,7 @@ index 111fe03..2f88a22 100644
  )
  
 diff --git a/test/e2e/sequential/baseline/admission_fair_sharing_test.go b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
-index 24811bd..307dbd6 100644
+index 24811bd7d..307dbd677 100644
 --- a/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 +++ b/test/e2e/sequential/baseline/admission_fair_sharing_test.go
 @@ -17,8 +17,6 @@ limitations under the License.
@@ -59,7 +59,7 @@ index 24811bd..307dbd6 100644
  		rf = utiltestingapi.MakeResourceFlavor("afs-rf").Obj()
  		behavioral.MustCreate(ctx, k8sClient, rf)
 diff --git a/test/e2e/singlecluster/extended/suite_test.go b/test/e2e/singlecluster/extended/suite_test.go
-index 27829fd..3e612b2 100644
+index 9f27f4b48..3e612b22f 100644
 --- a/test/e2e/singlecluster/extended/suite_test.go
 +++ b/test/e2e/singlecluster/extended/suite_test.go
 @@ -55,12 +55,8 @@ var _ = ginkgo.BeforeSuite(func() {
@@ -70,7 +70,7 @@ index 27829fd..3e612b2 100644
 -		e2e.WaitForJobSetAvailability(ctx, k8sClient)
 -	}
 -	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
--		e2e.WaitForLeaderWorkerSetAvailability(ctx, k8sClient)
+-		e2e.WaitForLeaderWorkerSetAvailability(ctx, k8sClient, cfg)
 -	}
 +	// On OCP, JobSet and LeaderWorkerSet operators run in different namespaces,
 +	// so skip the upstream availability checks for them.

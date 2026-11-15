@@ -10,7 +10,6 @@ metadata:
 spec:
   group: visibility.kueue.x-k8s.io
   groupPriorityMinimum: 100
-  insecureSkipTLSVerify: true
   service:
     name: kueue-visibility-server
     namespace: kueue-system
