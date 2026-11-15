@@ -1,4 +1,6 @@
 FROM registry.redhat.io/rhel9/go-toolset:1.27 AS builder
+# go-toolset runs as UID 1001; the build writes into the root-owned COPY tree.
+USER 0
 WORKDIR /go/src/github.com/openshift/kueue-operator
 COPY . .
 RUN make build --warn-undefined-variables
