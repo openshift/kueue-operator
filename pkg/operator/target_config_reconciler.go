@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -27,7 +26,6 @@ import (
 	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
-	"github.com/openshift/kueue-operator/pkg/storageversion"
 	"github.com/openshift/kueue-operator/pkg/tlsprofile"
 	"github.com/openshift/kueue-operator/pkg/util"
 	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
@@ -129,10 +127,6 @@ type TargetConfigReconciler struct {
 	isOpenShift                    bool
 	draPartitionableDevicesEnabled bool
 	draConsumableCapacityEnabled   bool
-	// storedVersionsVerified holds the names of the embedded CRDs whose check
-	// passed: the CRD was not installed, or its stored versions are all listed
-	// by the embedded CRD.
-	storedVersionsVerified sync.Map
 }
 
 // computeSpecHash computes a SHA256 hash of the given object's spec.
@@ -463,14 +457,6 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		}
 
 		return nil
-	}
-
-	// Check the installed Kueue CRDs before changing any operand resource, so
-	// that an upgrade that cannot apply them leaves the previous operand and
-	// its configuration as they are. See manageCustomResourcesWith.
-	if err := c.checkKueueCustomResourceDefinitions(ctx); err != nil {
-		klog.Errorf("unable to update the Kueue CustomResourceDefinitions: %v", err)
-		return err
 	}
 
 	issuer, _, err := c.manageIssuerCR(ctx, kueue)
@@ -1617,41 +1603,31 @@ func (c *TargetConfigReconciler) manageClusterRoles(ctx context.Context, specAnn
 // kueueCRDNames returns the names of all non-alpha Kueue CRDs by reading the
 // embedded CRD assets, keeping the list in sync with deployed resources.
 func kueueCRDNames() ([]string, error) {
-	crds, err := kueueCustomResourceDefinitions()
-	if err != nil {
-		return nil, err
-	}
-
-	names := make([]string, 0, len(crds))
-	for _, crd := range crds {
-		names = append(names, crd.Name)
-	}
-	slices.Sort(names)
-	return names, nil
-}
-
-// kueueCustomResourceDefinitions returns the embedded Kueue CRDs that the
-// operator installs. CRDs with an alpha version are not installed.
-func kueueCustomResourceDefinitions() ([]*apiextensionsv1.CustomResourceDefinition, error) {
 	crdDir := "assets/kueue-operator/crds"
 	files, err := bindata.AssetDir(crdDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read crd directory: %w", err)
 	}
 
-	var crds []*apiextensionsv1.CustomResourceDefinition
+	var names []string
 	for _, file := range files {
-		crd := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(filepath.Join(crdDir, file)))
-		isAlpha := slices.ContainsFunc(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) bool {
-			return strings.HasPrefix(version.Name, "v1alpha")
-		})
+		assetPath := filepath.Join(crdDir, file)
+		crd := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
+
+		isAlpha := false
+		for _, version := range crd.Spec.Versions {
+			if strings.HasPrefix(version.Name, "v1alpha") {
+				isAlpha = true
+				break
+			}
+		}
 		if isAlpha {
-			klog.V(3).Infof("Skipping alpha CRD: %s", crd.Name)
 			continue
 		}
-		crds = append(crds, crd)
+		names = append(names, crd.Name)
 	}
-	return crds, nil
+	slices.Sort(names)
+	return names, nil
 }
 
 // scopeManagerRoleResourceNames restricts the webhook configuration and CRD
@@ -1887,25 +1863,31 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ctx context
 }
 
 func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, specAnnotations map[string]string) error {
-	return c.manageCustomResourcesWith(ctx, specAnnotations, c.checkStoredVersions, c.applyCustomResourceDefinitionWithCache)
-}
+	crdDir := "assets/kueue-operator/crds"
 
-// crdCheckFunc checks, without writing, that the installed CRD named by its
-// argument lists no stored version that the argument drops.
-type crdCheckFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) error
-
-// crdApplyFunc applies a CRD and returns the result.
-type crdApplyFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, bool, error)
-
-// manageCustomResourcesWith installs the embedded Kueue CRDs with the given
-// check and apply steps.
-func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, specAnnotations map[string]string, check crdCheckFunc, apply crdApplyFunc) error {
-	requiredCRDs, err := kueueCustomResourceDefinitions()
+	files, err := bindata.AssetDir(crdDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read crd directory: %w", err)
 	}
 
-	for _, required := range requiredCRDs {
+	var hash string
+	for _, file := range files {
+		assetPath := filepath.Join(crdDir, file)
+		required := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
+
+		isAlphaVersion := false
+		for _, version := range required.Spec.Versions {
+			if strings.HasPrefix(version.Name, "v1alpha") {
+				isAlphaVersion = true
+				break
+			}
+		}
+
+		if isAlphaVersion {
+			klog.V(3).Infof("Skipping installation of alpha CRD: %s", required.Name)
+			continue
+		}
+
 		required.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
 
 		// Update conversion webhook namespace if it exists
@@ -1916,23 +1898,8 @@ func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, 
 				required.Spec.Conversion.Webhook.ClientConfig.Service.Namespace = c.operatorNamespace
 			}
 		}
-	}
 
-	// Every installed CRD is checked before any CRD is applied. The API server
-	// rejects a CRD update that drops a version still listed in
-	// status.storedVersions, and the new operand could not read objects stored
-	// in that version. Completing that storage migration is a prerequisite of
-	// the upgrade, so a failed check stops the sync before any CRD is applied
-	// or the operand is replaced later in the sync, and the sync is retried.
-	// sync already ran the checks before changing any operand resource; CRDs
-	// that passed are not read again.
-	if err := checkCustomResourceDefinitions(ctx, requiredCRDs, check); err != nil {
-		return err
-	}
-
-	var hash string
-	for _, required := range requiredCRDs {
-		crd, _, err := apply(ctx, required)
+		crd, _, err := c.applyCustomResourceDefinitionWithCache(ctx, required)
 		if err != nil {
 			return err
 		}
@@ -1942,49 +1909,6 @@ func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, 
 		}
 		specAnnotations["crd/"+crd.Name] = hash
 	}
-	return nil
-}
-
-// checkCustomResourceDefinitions runs check on every required CRD and returns
-// all failures.
-func checkCustomResourceDefinitions(
-	ctx context.Context, requiredCRDs []*apiextensionsv1.CustomResourceDefinition, check crdCheckFunc,
-) error {
-	var errs []error
-	for _, required := range requiredCRDs {
-		if err := check(ctx, required); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return utilerror.NewAggregate(errs)
-}
-
-// checkKueueCustomResourceDefinitions checks the stored versions of every
-// embedded Kueue CRD.
-func (c *TargetConfigReconciler) checkKueueCustomResourceDefinitions(ctx context.Context) error {
-	requiredCRDs, err := kueueCustomResourceDefinitions()
-	if err != nil {
-		return err
-	}
-	return checkCustomResourceDefinitions(ctx, requiredCRDs, c.checkStoredVersions)
-}
-
-// checkStoredVersions checks that the installed CRD named by required does not
-// list a stored version that required drops. It reads the live CRD, because
-// the CRD informer strips status, and never writes. A CRD that passes is not
-// checked again in this process: a missing CRD is created from required, and
-// an installed CRD stores objects in a version listed in status.storedVersions,
-// which required therefore lists.
-func (c *TargetConfigReconciler) checkStoredVersions(ctx context.Context, required *apiextensionsv1.CustomResourceDefinition) error {
-	if _, verified := c.storedVersionsVerified.Load(required.Name); verified {
-		return nil
-	}
-
-	if err := storageversion.Check(ctx, c.crdClient, required); err != nil {
-		c.eventRecorder.Warningf("StoredVersionsCheckFailed", "Not applying the Kueue CustomResourceDefinitions: %v", err)
-		return err
-	}
-	c.storedVersionsVerified.Store(required.Name, struct{}{})
 	return nil
 }
 
