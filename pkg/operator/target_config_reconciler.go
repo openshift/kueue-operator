@@ -1878,6 +1878,19 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ctx context
 }
 
 func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, specAnnotations map[string]string) error {
+	return c.manageCustomResourcesWith(ctx, specAnnotations, c.migrateStoredVersions, c.applyCustomResourceDefinitionWithCache)
+}
+
+// crdMigrateFunc migrates the stored objects of the installed CRD named by its
+// argument before that CRD is applied.
+type crdMigrateFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) error
+
+// crdApplyFunc applies a CRD and returns the result.
+type crdApplyFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, bool, error)
+
+// manageCustomResourcesWith installs the embedded Kueue CRDs with the given
+// migration and apply steps.
+func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, specAnnotations map[string]string, migrate crdMigrateFunc, apply crdApplyFunc) error {
 	requiredCRDs, err := kueueCustomResourceDefinitions()
 	if err != nil {
 		return err
@@ -1905,14 +1918,14 @@ func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, spec
 	// If they cannot, the migration fails and the sync is retried without
 	// applying any CRD or replacing the operand.
 	for _, required := range requiredCRDs {
-		if err := c.migrateStoredVersions(ctx, required); err != nil {
+		if err := migrate(ctx, required); err != nil {
 			return err
 		}
 	}
 
 	var hash string
 	for _, required := range requiredCRDs {
-		crd, _, err := c.applyCustomResourceDefinitionWithCache(ctx, required)
+		crd, _, err := apply(ctx, required)
 		if err != nil {
 			return err
 		}

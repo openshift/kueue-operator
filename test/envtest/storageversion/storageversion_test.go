@@ -43,6 +43,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -54,6 +56,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
@@ -273,6 +276,32 @@ func (e *testEnv) install(t *testing.T, crd *apiextensionsv1.CustomResourceDefin
 		t.Fatalf("failed to install CRD %s: %v", crd.Name, err)
 	}
 	e.waitServed(t, crd)
+	e.waitDiscovered(t, crd)
+}
+
+// waitDiscovered waits until API discovery lists every served version of crd,
+// which clients that map kinds through discovery need.
+func (e *testEnv) waitDiscovered(t *testing.T, crd *apiextensionsv1.CustomResourceDefinition) {
+	t.Helper()
+	var missing string
+	err := poll(t.Context(), func(context.Context) (bool, error) {
+		for _, v := range crd.Spec.Versions {
+			if !v.Served {
+				continue
+			}
+			resources, err := e.kube.Discovery().ServerResourcesForGroupVersion(crd.Spec.Group + "/" + v.Name)
+			if err != nil || !slices.ContainsFunc(resources.APIResources, func(r metav1.APIResource) bool {
+				return r.Name == crd.Spec.Names.Plural
+			}) {
+				missing = v.Name
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Fatalf("%s is not discovered as %s: %v", crd.Spec.Names.Plural, missing, err)
+	}
 }
 
 // applyCurrent applies the current CRD with the operator's apply function and
@@ -285,17 +314,10 @@ func (e *testEnv) applyCurrent(t *testing.T, plural string) error {
 	if _, _, err := resourceapply.ApplyCustomResourceDefinitionV1(t.Context(), e.crds, e.recorder, required); err != nil {
 		return err
 	}
+	e.waitDiscovered(t, required)
 	removed := schema.GroupVersionResource{Group: kueueGroup, Version: "v1beta1", Resource: plural}
 	var lastErr error
 	err := poll(t.Context(), func(ctx context.Context) (bool, error) {
-		resources, err := e.kube.Discovery().ServerResourcesForGroupVersion(kueueGroup + "/v1beta2")
-		discovered := err == nil && slices.ContainsFunc(resources.APIResources, func(r metav1.APIResource) bool {
-			return r.Name == plural
-		})
-		if !discovered {
-			lastErr = fmt.Errorf("%s is not discovered as v1beta2: %w", plural, err)
-			return false, nil
-		}
 		_, lastErr = e.dynamic.Resource(removed).List(ctx, metav1.ListOptions{Limit: 1})
 		return apierrors.IsNotFound(lastErr), nil
 	})
@@ -1031,4 +1053,371 @@ func TestPruningStoredVersionsAloneLosesObjects(t *testing.T) {
 			t.Fatalf("%s is persisted as %s, want v1beta1", ref, got)
 		}
 	}
+}
+
+// admissionServer stands in for the previous operand's validating webhook for
+// Workload updates. The API server sends it the old and the new object of
+// every rewrite, and a rejection fails the request. It models two properties
+// only: it rejects a rewrite that changes the object, which Kueue's
+// immutability checks for admitted Workloads would reject, and it rejects the
+// object named in deny, as Kueue's validation would reject a legacy object it
+// considers invalid. It does not run Kueue's own validation.
+type admissionServer struct {
+	server   *httptest.Server
+	caBundle []byte
+
+	mu        sync.Mutex
+	deny      string
+	onMigrate func(name string)
+	reviewed  []string
+}
+
+func newAdmissionServer(t *testing.T) *admissionServer {
+	t.Helper()
+	as := &admissionServer{}
+	as.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var review admissionv1.AdmissionReview
+		if err := json.NewDecoder(r.Body).Decode(&review); err != nil || review.Request == nil {
+			http.Error(w, "invalid admission review", http.StatusBadRequest)
+			return
+		}
+		req := review.Request
+		response := &admissionv1.AdmissionResponse{UID: req.UID, Allowed: true}
+		var options struct {
+			FieldManager string `json:"fieldManager"`
+		}
+		_ = json.Unmarshal(req.Options.Raw, &options)
+		if options.FieldManager == storageversion.FieldManager {
+			unchanged := sameObject(req.Object.Raw, req.OldObject.Raw)
+			as.mu.Lock()
+			denied := req.Name == as.deny
+			hook := as.onMigrate
+			if req.DryRun == nil || !*req.DryRun {
+				as.reviewed = append(as.reviewed, req.Name)
+			}
+			as.mu.Unlock()
+			switch {
+			case !unchanged:
+				response.Allowed = false
+				response.Result = &metav1.Status{Message: "the migration changed the object"}
+			case denied:
+				response.Allowed = false
+				response.Result = &metav1.Status{Message: "rejected by the test validator"}
+			case hook != nil:
+				hook(req.Name)
+			}
+		}
+		reply := admissionv1.AdmissionReview{TypeMeta: review.TypeMeta, Response: response}
+		if err := json.NewEncoder(w).Encode(reply); err != nil {
+			t.Errorf("failed to write the admission response: %v", err)
+		}
+	}))
+	t.Cleanup(as.server.Close)
+	as.caBundle = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: as.server.Certificate().Raw})
+	return as
+}
+
+func (as *admissionServer) set(deny string, onMigrate func(name string)) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	as.deny, as.onMigrate = deny, onMigrate
+}
+
+// reviewedRewrites returns the names of the objects whose rewrites were reviewed.
+func (as *admissionServer) reviewedRewrites() []string {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	return slices.Clone(as.reviewed)
+}
+
+// sameObject reports whether two objects differ only in bookkeeping fields.
+func sameObject(a, b []byte) bool {
+	var objects [2]map[string]any
+	for i, raw := range [][]byte{a, b} {
+		if err := json.Unmarshal(raw, &objects[i]); err != nil {
+			return false
+		}
+		unstructured.RemoveNestedField(objects[i], "metadata", "resourceVersion")
+		unstructured.RemoveNestedField(objects[i], "metadata", "managedFields")
+	}
+	return cmp.Equal(objects[0], objects[1])
+}
+
+// registerWorkloadAdmission makes the API server send every Workload update
+// to as, and waits until it does.
+func (e *testEnv) registerWorkloadAdmission(t *testing.T, as *admissionServer, probe objectRef) {
+	t.Helper()
+	ctx := t.Context()
+	config := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "workload-update-validator"},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{{
+			Name: "vworkload.test.kueue.x-k8s.io",
+			ClientConfig: admissionregistrationv1.WebhookClientConfig{
+				URL: ptr.To(as.server.URL + "/validate"), CABundle: as.caBundle,
+			},
+			Rules: []admissionregistrationv1.RuleWithOperations{{
+				Operations: []admissionregistrationv1.OperationType{admissionregistrationv1.Update},
+				Rule: admissionregistrationv1.Rule{
+					APIGroups: []string{kueueGroup}, APIVersions: []string{"v1beta2"}, Resources: []string{"workloads"},
+				},
+			}},
+			FailurePolicy:           ptr.To(admissionregistrationv1.Fail),
+			MatchPolicy:             ptr.To(admissionregistrationv1.Equivalent),
+			SideEffects:             ptr.To(admissionregistrationv1.SideEffectClassNone),
+			AdmissionReviewVersions: []string{"v1"},
+			TimeoutSeconds:          ptr.To[int32](30),
+		}},
+	}
+	webhooks := e.kube.AdmissionregistrationV1().ValidatingWebhookConfigurations()
+	if _, err := webhooks.Create(ctx, config, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("failed to register the admission webhook: %v", err)
+	}
+	// A dry-run change sent as the migration is rejected once the webhook is active.
+	changed := []byte(`{"metadata":{"labels":{"example.com/probe":"true"}}}`)
+	var lastErr error
+	err := poll(ctx, func(ctx context.Context) (bool, error) {
+		_, lastErr = e.resource(probe, "v1beta2").Patch(ctx, probe.key.Name, types.MergePatchType, changed,
+			metav1.PatchOptions{FieldManager: storageversion.FieldManager, DryRun: []string{metav1.DryRunAll}})
+		return lastErr != nil && strings.Contains(lastErr.Error(), "the migration changed the object"), nil
+	})
+	if err != nil {
+		t.Fatalf("the admission webhook did not become active: %v (last error: %v)", err, lastErr)
+	}
+}
+
+// v1beta1StorageOnly returns crd as a single-version CRD storing v1beta1, as
+// operator 1.2 installed it.
+func v1beta1StorageOnly(crd *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition {
+	old := crd.DeepCopy()
+	old.Spec.Versions = slices.DeleteFunc(old.Spec.Versions, func(v apiextensionsv1.CustomResourceDefinitionVersion) bool {
+		return v.Name != "v1beta1"
+	})
+	old.Spec.Versions[0].Served, old.Spec.Versions[0].Storage = true, true
+	old.Spec.Conversion = &apiextensionsv1.CustomResourceConversion{Strategy: apiextensionsv1.NoneConverter}
+	return old
+}
+
+func workloadV1beta1(name string) *kueuev1beta1.Workload {
+	return &kueuev1beta1.Workload{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: teamNamespace},
+		Spec: kueuev1beta1.WorkloadSpec{
+			QueueName: "user-queue",
+			PodSets: []kueuev1beta1.PodSet{{
+				Name:  "main",
+				Count: 2,
+				Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{{
+						Name:  "job",
+						Image: "registry.example.com/job:1",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")},
+						},
+					}},
+				}},
+			}},
+		},
+	}
+}
+
+// TestMigrateWorkloads reproduces the upgrade for Workloads, the most numerous
+// Kueue objects. An admitted Workload persisted as v1beta1 is rewritten
+// through the previous operand's conversion and an UPDATE admission webhook,
+// while other Workloads are deleted and updated and the CRD changes.
+func TestMigrateWorkloads(t *testing.T) {
+	e := startEnv(t)
+	ctx := t.Context()
+	e.install(t, v1beta1StorageOnly(fixtureCRD(t, "release-1.5", "workloads")))
+	if err := e.client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: teamNamespace}}); err != nil {
+		t.Fatalf("failed to create namespace: %v", err)
+	}
+
+	admitted := workloadV1beta1("a-admitted")
+	admitted.Spec.PriorityClassSource = kueuev1beta1.WorkloadPriorityClassSource
+	admitted.Spec.PriorityClassName = "high"
+	admitted.Spec.Priority = ptr.To[int32](100)
+	for _, wl := range []*kueuev1beta1.Workload{admitted, workloadV1beta1("b-deleted"), workloadV1beta1("c-updated")} {
+		if err := e.client.Create(ctx, wl); err != nil {
+			t.Fatalf("failed to create Workload %s: %v", wl.Name, err)
+		}
+	}
+	admitted.Status = kueuev1beta1.WorkloadStatus{
+		Conditions: []metav1.Condition{
+			{Type: "QuotaReserved", Status: metav1.ConditionTrue, Reason: "QuotaReserved", Message: "Quota reserved",
+				LastTransitionTime: transitionTime},
+			{Type: "Admitted", Status: metav1.ConditionTrue, Reason: "Admitted", Message: "Admitted",
+				LastTransitionTime: transitionTime},
+		},
+		Admission: &kueuev1beta1.Admission{
+			ClusterQueue: "team-a-cq",
+			PodSetAssignments: []kueuev1beta1.PodSetAssignment{{
+				Name:          "main",
+				Flavors:       map[corev1.ResourceName]kueuev1beta1.ResourceFlavorReference{corev1.ResourceCPU: "on-demand"},
+				ResourceUsage: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")},
+				Count:         ptr.To[int32](2),
+			}},
+		},
+		AccumulatedPastExexcutionTimeSeconds: ptr.To[int32](42),
+	}
+	if err := e.client.Status().Update(ctx, admitted); err != nil {
+		t.Fatalf("failed to update the Workload status: %v", err)
+	}
+
+	e.install(t, fixtureCRD(t, "release-1.5", "workloads"))
+	ref := func(name string) objectRef {
+		return objectRef{plural: "workloads", key: client.ObjectKey{Namespace: teamNamespace, Name: name}}
+	}
+	admittedRef, deletedRef, updatedRef := ref("a-admitted"), ref("b-deleted"), ref("c-updated")
+	e.expectStoredVersions(t, "workloads", "v1beta1", "v1beta2")
+	e.expectPersisted(t, "v1beta1", admittedRef, deletedRef, updatedRef)
+	before := e.snapshot(t, []objectRef{admittedRef})
+
+	as := newAdmissionServer(t)
+	e.registerWorkloadAdmission(t, as, admittedRef)
+	crdClient, dynamicClient := e.operatorClients(t)
+
+	// A rejected rewrite stops the migration before the stored versions are pruned.
+	as.set("a-admitted", nil)
+	_, err := storageversion.Migrate(ctx, crdClient, dynamicClient, currentCRD("workloads"))
+	if err == nil || !strings.Contains(err.Error(), "a-admitted") ||
+		!strings.Contains(err.Error(), "rejected by the test validator") {
+		t.Fatalf("migrating with a rejecting validator: got %v, want the rejection of a-admitted", err)
+	}
+	t.Logf("with a rejecting validator, the migration fails: %v", err)
+	e.expectStoredVersions(t, "workloads", "v1beta1", "v1beta2")
+	e.expectPersisted(t, "v1beta1", admittedRef, deletedRef, updatedRef)
+
+	// Workloads deleted and updated during the migration are handled, and a
+	// CRD change during the migration blocks the prune.
+	// The API server may send a rewrite twice when it retries a request that
+	// raced with the CRD change, so the changes are made once.
+	var once sync.Once
+	as.set("", func(name string) {
+		if name != admittedRef.key.Name {
+			return
+		}
+		once.Do(func() {
+			if err := e.resource(deletedRef, "v1beta2").Delete(ctx, deletedRef.key.Name, metav1.DeleteOptions{}); err != nil {
+				t.Errorf("failed to delete %s: %v", deletedRef, err)
+			}
+			label := []byte(`{"metadata":{"labels":{"example.com/updated":"true"}}}`)
+			if _, err := e.resource(updatedRef, "v1beta2").Patch(ctx, updatedRef.key.Name, types.MergePatchType, label,
+				metav1.PatchOptions{FieldManager: "test"}); err != nil {
+				t.Errorf("failed to update %s: %v", updatedRef, err)
+			}
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				crd, err := e.crds.CustomResourceDefinitions().Get(ctx, "workloads."+kueueGroup, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				for i := range crd.Spec.Versions {
+					crd.Spec.Versions[i].AdditionalPrinterColumns = append(crd.Spec.Versions[i].AdditionalPrinterColumns,
+						apiextensionsv1.CustomResourceColumnDefinition{Name: "Probe", Type: "string", JSONPath: ".metadata.name"})
+				}
+				_, err = e.crds.CustomResourceDefinitions().Update(ctx, crd, metav1.UpdateOptions{})
+				return err
+			}); err != nil {
+				t.Errorf("failed to change the Workload CRD: %v", err)
+			}
+		})
+	})
+	_, err = storageversion.Migrate(ctx, crdClient, dynamicClient, currentCRD("workloads"))
+	if err == nil || !strings.Contains(err.Error(), "changed during the migration") {
+		t.Fatalf("migrating while the CRD changes: got %v, want a CRD change error", err)
+	}
+	t.Logf("when the CRD changes during the migration, the prune is refused: %v", err)
+	e.expectStoredVersions(t, "workloads", "v1beta1", "v1beta2")
+	// The rewrites persisted before the prune was refused.
+	e.expectPersisted(t, "v1beta2", admittedRef)
+	if _, err := e.get(t, deletedRef, "v1beta2"); !apierrors.IsNotFound(err) {
+		t.Fatalf("getting %s deleted during the migration: got %v, want not found", deletedRef, err)
+	}
+
+	// The retry completes.
+	as.set("", nil)
+	result, err := storageversion.Migrate(ctx, crdClient, dynamicClient, currentCRD("workloads"))
+	if err != nil {
+		t.Fatalf("failed to migrate Workloads: %v", err)
+	}
+	wantResult := storageversion.Result{StaleVersions: []string{"v1beta1"}, StorageVersion: "v1beta2", Rewritten: 2}
+	if diff := cmp.Diff(wantResult, result); diff != "" {
+		t.Fatalf("unexpected result of migrating Workloads (-want,+got):\n%s", diff)
+	}
+	e.expectStoredVersions(t, "workloads", "v1beta2")
+
+	// The admission webhook rejects a rewrite that changes the object, so
+	// every rewrite it reviewed sent the object unchanged.
+	reviews := as.reviewedRewrites()
+	if !slices.Contains(reviews, admittedRef.key.Name) || !slices.Contains(reviews, updatedRef.key.Name) {
+		t.Fatalf("the admission webhook did not review the rewrites: %v", reviews)
+	}
+	t.Logf("the admission webhook reviewed %d rewrites, all with an unchanged object", len(reviews))
+
+	// Without any conversion the Workloads read back unchanged and accept the current CRD.
+	e.conversion.setAvailable(false)
+	if diff := cmp.Diff(before, e.snapshot(t, []objectRef{admittedRef})); diff != "" {
+		t.Fatalf("the admitted Workload changed during the migration (-before +after):\n%s", diff)
+	}
+	if err := e.applyCurrent(t, "workloads"); err != nil {
+		t.Fatalf("failed to apply the current Workload CRD: %v", err)
+	}
+	workloads := schema.GroupVersionResource{Group: kueueGroup, Version: "v1beta2", Resource: "workloads"}
+	list, err := e.dynamic.Resource(workloads).Namespace(teamNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("failed to list Workloads with the current CRD: %v", err)
+	}
+	if len(list.Items) != 2 {
+		t.Fatalf("listed %d Workloads with the current CRD, want 2", len(list.Items))
+	}
+	if e.mustGet(t, updatedRef, "v1beta2").GetLabels()["example.com/updated"] != "true" {
+		t.Fatalf("the update made during the migration was lost")
+	}
+	verifyWorkloadSemantics(t, e, admittedRef)
+}
+
+// verifyWorkloadSemantics checks the admitted Workload created as v1beta1
+// against its expected v1beta2 form, read through the current CRD.
+func verifyWorkloadSemantics(t *testing.T, e *testEnv, ref objectRef) {
+	t.Helper()
+	var wl kueuev1beta2.Workload
+	if err := e.client.Get(t.Context(), ref.key, &wl); err != nil {
+		t.Fatalf("failed to get Workload: %v", err)
+	}
+	check := func(field string, got, want any) {
+		t.Helper()
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Workload %s changed (-want,+got):\n%s", field, diff)
+		}
+	}
+	check("queueName", wl.Spec.QueueName, kueuev1beta2.LocalQueueName("user-queue"))
+	check("priorityClassRef (v1beta1 priorityClassSource and priorityClassName)", wl.Spec.PriorityClassRef,
+		kueuev1beta2.NewWorkloadPriorityClassRef("high"))
+	check("priority", wl.Spec.Priority, ptr.To[int32](100))
+	var podSets []string
+	for _, ps := range wl.Spec.PodSets {
+		for _, c := range ps.Template.Spec.Containers {
+			podSets = append(podSets, fmt.Sprintf("%s count=%d %s cpu=%s",
+				ps.Name, ps.Count, c.Image, c.Resources.Requests.Cpu()))
+		}
+	}
+	check("podSets", podSets, []string{"main count=2 registry.example.com/job:1 cpu=1"})
+	check("accumulatedPastExecutionTimeSeconds (v1beta1 accumulatedPastExexcutionTimeSeconds)",
+		wl.Status.AccumulatedPastExecutionTimeSeconds, ptr.To[int32](42))
+	var assignments []string
+	if wl.Status.Admission != nil {
+		for _, a := range wl.Status.Admission.PodSetAssignments {
+			assignments = append(assignments, fmt.Sprintf("%s/%s flavor=%s usage=%s count=%d",
+				wl.Status.Admission.ClusterQueue, a.Name, a.Flavors[corev1.ResourceCPU], a.ResourceUsage.Cpu(),
+				ptr.Deref(a.Count, 0)))
+		}
+	}
+	check("admission", assignments, []string{"team-a-cq/main flavor=on-demand usage=2 count=2"})
+	conditions := make([]string, 0, len(wl.Status.Conditions))
+	for _, c := range wl.Status.Conditions {
+		transition := c.LastTransitionTime.UTC().Format(time.RFC3339)
+		conditions = append(conditions, fmt.Sprintf("%s=%s %s", c.Type, c.Status, transition))
+	}
+	slices.Sort(conditions)
+	check("conditions", conditions,
+		[]string{"Admitted=True 2026-01-02T03:04:05Z", "QuotaReserved=True 2026-01-02T03:04:05Z"})
 }

@@ -18,9 +18,11 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -38,6 +40,8 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/utils/clock"
+
+	"github.com/openshift/kueue-operator/bindata"
 )
 
 // TestOperatorClusterRoleAllowsStorageVersionMigration checks that the
@@ -224,6 +228,116 @@ func TestMigrateStoredVersions(t *testing.T) {
 			}
 			if _, verified := c.storedVersionsVerified.Load(required.Name); verified != tc.wantVerified {
 				t.Errorf("got verified %t, want %t", verified, tc.wantVerified)
+			}
+		})
+	}
+}
+
+// bundledNonAlphaCRDNames lists the embedded CRDs without an alpha version,
+// independently of kueueCustomResourceDefinitions.
+func bundledNonAlphaCRDNames(t *testing.T) []string {
+	t.Helper()
+	crdDir := "assets/kueue-operator/crds"
+	files, err := bindata.AssetDir(crdDir)
+	if err != nil {
+		t.Fatalf("failed to read the CRD assets: %v", err)
+	}
+	var names []string
+	for _, file := range files {
+		crd := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(filepath.Join(crdDir, file)))
+		if slices.ContainsFunc(crd.Spec.Versions, func(v apiextensionsv1.CustomResourceDefinitionVersion) bool {
+			return strings.HasPrefix(v.Name, "v1alpha")
+		}) {
+			continue
+		}
+		names = append(names, crd.Name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// TestManageCustomResourcesMigratesBeforeApplying checks that the stored
+// objects of every embedded CRD are migrated before any CRD is applied, and
+// that a failed migration applies nothing.
+func TestManageCustomResourcesMigratesBeforeApplying(t *testing.T) {
+	const namespace = "openshift-kueue-operator"
+	all := bundledNonAlphaCRDNames(t)
+	if !slices.Contains(all, "workloads.kueue.x-k8s.io") || !slices.Contains(all, "localqueues.kueue.x-k8s.io") {
+		t.Fatalf("unexpected embedded CRDs: %v", all)
+	}
+
+	testCases := map[string]struct {
+		failMigration  string
+		failApply      string
+		wantMigrations []string
+		wantApplies    []string
+		wantErr        bool
+	}{
+		"every CRD is migrated before the first is applied": {
+			wantMigrations: all,
+			wantApplies:    all,
+		},
+		"a failed migration stops the migrations and applies no CRD": {
+			failMigration:  "localqueues.kueue.x-k8s.io",
+			wantMigrations: all[:slices.Index(all, "localqueues.kueue.x-k8s.io")+1],
+			wantErr:        true,
+		},
+		"a failed apply happens after every migration": {
+			failApply:      all[0],
+			wantMigrations: all,
+			wantApplies:    all[:1],
+			wantErr:        true,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			var steps []string
+			var migrations, applies []string
+			migrate := func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
+				steps = append(steps, "migrate")
+				migrations = append(migrations, crd.Name)
+				if crd.Name == tc.failMigration {
+					return errors.New("migration failed")
+				}
+				return nil
+			}
+			apply := func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, bool, error) {
+				steps = append(steps, "apply")
+				applies = append(applies, crd.Name)
+				if crd.Name == tc.failApply {
+					return nil, false, errors.New("apply failed")
+				}
+				if crd.Annotations["cert-manager.io/inject-ca-from"] == "" {
+					t.Errorf("CRD %s is applied without the CA injection annotation", crd.Name)
+				}
+				if conv := crd.Spec.Conversion; conv != nil && conv.Strategy == apiextensionsv1.WebhookConverter {
+					if conv.Webhook == nil || conv.Webhook.ClientConfig == nil || conv.Webhook.ClientConfig.Service == nil ||
+						conv.Webhook.ClientConfig.Service.Namespace != namespace {
+						t.Errorf("CRD %s does not convert through the operator namespace: %+v", crd.Name, conv.Webhook)
+					}
+				}
+				return crd, true, nil
+			}
+			specAnnotations := map[string]string{}
+			c := &TargetConfigReconciler{operatorNamespace: namespace}
+
+			err := c.manageCustomResourcesWith(t.Context(), specAnnotations, migrate, apply)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("got error %v, want error %t", err, tc.wantErr)
+			}
+
+			// The embedded CRDs are processed in asset order, which sorts by name.
+			if diff := cmp.Diff(tc.wantMigrations, migrations); diff != "" {
+				t.Errorf("unexpected migrations (-want,+got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantApplies, applies); diff != "" {
+				t.Errorf("unexpected applies (-want,+got):\n%s", diff)
+			}
+			if firstApply := slices.Index(steps, "apply"); firstApply >= 0 && slices.Contains(steps[firstApply:], "migrate") {
+				t.Errorf("a migration ran after a CRD was applied: %v", steps)
+			}
+			if tc.failApply == "" && tc.failMigration == "" && len(specAnnotations) != len(all) {
+				t.Errorf("got %d CRD spec annotations, want %d", len(specAnnotations), len(all))
 			}
 		})
 	}
