@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -26,6 +27,7 @@ import (
 	operatorclientinformers "github.com/openshift/kueue-operator/pkg/generated/informers/externalversions/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/pkg/namespace"
 	"github.com/openshift/kueue-operator/pkg/operator/operatorclient"
+	"github.com/openshift/kueue-operator/pkg/storageversion"
 	"github.com/openshift/kueue-operator/pkg/tlsprofile"
 	"github.com/openshift/kueue-operator/pkg/util"
 	utilresourceapply "github.com/openshift/kueue-operator/pkg/util/resourceapply"
@@ -127,6 +129,9 @@ type TargetConfigReconciler struct {
 	isOpenShift                    bool
 	draPartitionableDevicesEnabled bool
 	draConsumableCapacityEnabled   bool
+	// storedVersionsVerified holds the names of CRDs whose stored versions
+	// are all listed by the embedded CRDs.
+	storedVersionsVerified sync.Map
 }
 
 // computeSpecHash computes a SHA256 hash of the given object's spec.
@@ -1603,31 +1608,41 @@ func (c *TargetConfigReconciler) manageClusterRoles(ctx context.Context, specAnn
 // kueueCRDNames returns the names of all non-alpha Kueue CRDs by reading the
 // embedded CRD assets, keeping the list in sync with deployed resources.
 func kueueCRDNames() ([]string, error) {
+	crds, err := kueueCustomResourceDefinitions()
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(crds))
+	for _, crd := range crds {
+		names = append(names, crd.Name)
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
+// kueueCustomResourceDefinitions returns the embedded Kueue CRDs that the
+// operator installs. CRDs with an alpha version are not installed.
+func kueueCustomResourceDefinitions() ([]*apiextensionsv1.CustomResourceDefinition, error) {
 	crdDir := "assets/kueue-operator/crds"
 	files, err := bindata.AssetDir(crdDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read crd directory: %w", err)
 	}
 
-	var names []string
+	var crds []*apiextensionsv1.CustomResourceDefinition
 	for _, file := range files {
-		assetPath := filepath.Join(crdDir, file)
-		crd := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
-
-		isAlpha := false
-		for _, version := range crd.Spec.Versions {
-			if strings.HasPrefix(version.Name, "v1alpha") {
-				isAlpha = true
-				break
-			}
-		}
+		crd := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(filepath.Join(crdDir, file)))
+		isAlpha := slices.ContainsFunc(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) bool {
+			return strings.HasPrefix(version.Name, "v1alpha")
+		})
 		if isAlpha {
+			klog.V(3).Infof("Skipping alpha CRD: %s", crd.Name)
 			continue
 		}
-		names = append(names, crd.Name)
+		crds = append(crds, crd)
 	}
-	slices.Sort(names)
-	return names, nil
+	return crds, nil
 }
 
 // scopeManagerRoleResourceNames restricts the webhook configuration and CRD
@@ -1863,31 +1878,12 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ctx context
 }
 
 func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, specAnnotations map[string]string) error {
-	crdDir := "assets/kueue-operator/crds"
-
-	files, err := bindata.AssetDir(crdDir)
+	requiredCRDs, err := kueueCustomResourceDefinitions()
 	if err != nil {
-		return fmt.Errorf("failed to read crd directory: %w", err)
+		return err
 	}
 
-	var hash string
-	for _, file := range files {
-		assetPath := filepath.Join(crdDir, file)
-		required := resourceread.ReadCustomResourceDefinitionV1OrDie(bindata.MustAsset(assetPath))
-
-		isAlphaVersion := false
-		for _, version := range required.Spec.Versions {
-			if strings.HasPrefix(version.Name, "v1alpha") {
-				isAlphaVersion = true
-				break
-			}
-		}
-
-		if isAlphaVersion {
-			klog.V(3).Infof("Skipping installation of alpha CRD: %s", required.Name)
-			continue
-		}
-
+	for _, required := range requiredCRDs {
 		required.Annotations = cert.InjectCertAnnotation(required.GetAnnotations(), c.operatorNamespace)
 
 		// Update conversion webhook namespace if it exists
@@ -1898,7 +1894,24 @@ func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, spec
 				required.Spec.Conversion.Webhook.ClientConfig.Service.Namespace = c.operatorNamespace
 			}
 		}
+	}
 
+	// Objects persisted in a version that a new CRD no longer lists must be
+	// rewritten before any CRD is applied: the API server rejects the update
+	// while the version is in status.storedVersions, and the new operand cannot
+	// convert it. During an upgrade the installed CRDs and the previous
+	// operand, which serves their conversion webhook until manageDeployment
+	// replaces it later in this sync, can still read every persisted version.
+	// If they cannot, the migration fails and the sync is retried without
+	// applying any CRD or replacing the operand.
+	for _, required := range requiredCRDs {
+		if err := c.migrateStoredVersions(ctx, required); err != nil {
+			return err
+		}
+	}
+
+	var hash string
+	for _, required := range requiredCRDs {
 		crd, _, err := c.applyCustomResourceDefinitionWithCache(ctx, required)
 		if err != nil {
 			return err
@@ -1909,6 +1922,29 @@ func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, spec
 		}
 		specAnnotations["crd/"+crd.Name] = hash
 	}
+	return nil
+}
+
+// migrateStoredVersions rewrites the objects of the installed CRD named by
+// required when its status.storedVersions lists a version that required drops.
+// The decision reads the live CRD: the CRD informer strips status. A CRD found
+// without stale stored versions cannot acquire one, because new writes use a
+// storage version that required lists, so it is not checked again.
+func (c *TargetConfigReconciler) migrateStoredVersions(ctx context.Context, required *apiextensionsv1.CustomResourceDefinition) error {
+	if _, verified := c.storedVersionsVerified.Load(required.Name); verified {
+		return nil
+	}
+
+	result, err := storageversion.Migrate(ctx, c.crdClient, c.dynamicClient, required)
+	if err != nil {
+		c.eventRecorder.Warningf("StorageVersionMigrationFailed", "Failed to migrate stored objects of CustomResourceDefinition %s: %v", required.Name, err)
+		return err
+	}
+	if len(result.StaleVersions) > 0 {
+		c.eventRecorder.Eventf("StorageVersionMigrated", "Migrated %d objects of CustomResourceDefinition %s to %s and removed %v from its stored versions",
+			result.Rewritten, required.Name, result.StorageVersion, result.StaleVersions)
+	}
+	c.storedVersionsVerified.Store(required.Name, struct{}{})
 	return nil
 }
 
