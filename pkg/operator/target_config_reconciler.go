@@ -129,8 +129,9 @@ type TargetConfigReconciler struct {
 	isOpenShift                    bool
 	draPartitionableDevicesEnabled bool
 	draConsumableCapacityEnabled   bool
-	// storedVersionsVerified holds the names of CRDs whose stored versions
-	// are all listed by the embedded CRDs.
+	// storedVersionsVerified holds the names of the embedded CRDs whose check
+	// passed: the CRD was not installed, or its stored versions are all listed
+	// by the embedded CRD.
 	storedVersionsVerified sync.Map
 }
 
@@ -462,6 +463,14 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 		}
 
 		return nil
+	}
+
+	// Check the installed Kueue CRDs before changing any operand resource, so
+	// that an upgrade that cannot apply them leaves the previous operand and
+	// its configuration as they are. See manageCustomResourcesWith.
+	if err := c.checkKueueCustomResourceDefinitions(ctx); err != nil {
+		klog.Errorf("unable to update the Kueue CustomResourceDefinitions: %v", err)
+		return err
 	}
 
 	issuer, _, err := c.manageIssuerCR(ctx, kueue)
@@ -1878,19 +1887,19 @@ func (c *TargetConfigReconciler) manageOpenshiftClusterRolesForKueue(ctx context
 }
 
 func (c *TargetConfigReconciler) manageCustomResources(ctx context.Context, specAnnotations map[string]string) error {
-	return c.manageCustomResourcesWith(ctx, specAnnotations, c.migrateStoredVersions, c.applyCustomResourceDefinitionWithCache)
+	return c.manageCustomResourcesWith(ctx, specAnnotations, c.checkStoredVersions, c.applyCustomResourceDefinitionWithCache)
 }
 
-// crdMigrateFunc migrates the stored objects of the installed CRD named by its
-// argument before that CRD is applied.
-type crdMigrateFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) error
+// crdCheckFunc checks, without writing, that the installed CRD named by its
+// argument lists no stored version that the argument drops.
+type crdCheckFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) error
 
 // crdApplyFunc applies a CRD and returns the result.
 type crdApplyFunc func(context.Context, *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, bool, error)
 
 // manageCustomResourcesWith installs the embedded Kueue CRDs with the given
-// migration and apply steps.
-func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, specAnnotations map[string]string, migrate crdMigrateFunc, apply crdApplyFunc) error {
+// check and apply steps.
+func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, specAnnotations map[string]string, check crdCheckFunc, apply crdApplyFunc) error {
 	requiredCRDs, err := kueueCustomResourceDefinitions()
 	if err != nil {
 		return err
@@ -1909,18 +1918,16 @@ func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, 
 		}
 	}
 
-	// Objects persisted in a version that a new CRD no longer lists must be
-	// rewritten before any CRD is applied: the API server rejects the update
-	// while the version is in status.storedVersions, and the new operand cannot
-	// convert it. During an upgrade the installed CRDs and the previous
-	// operand, which serves their conversion webhook until manageDeployment
-	// replaces it later in this sync, can still read every persisted version.
-	// If they cannot, the migration fails and the sync is retried without
-	// applying any CRD or replacing the operand.
-	for _, required := range requiredCRDs {
-		if err := migrate(ctx, required); err != nil {
-			return err
-		}
+	// Every installed CRD is checked before any CRD is applied. The API server
+	// rejects a CRD update that drops a version still listed in
+	// status.storedVersions, and the new operand could not read objects stored
+	// in that version. Completing that storage migration is a prerequisite of
+	// the upgrade, so a failed check stops the sync before any CRD is applied
+	// or the operand is replaced later in the sync, and the sync is retried.
+	// sync already ran the checks before changing any operand resource; CRDs
+	// that passed are not read again.
+	if err := checkCustomResourceDefinitions(ctx, requiredCRDs, check); err != nil {
+		return err
 	}
 
 	var hash string
@@ -1938,24 +1945,44 @@ func (c *TargetConfigReconciler) manageCustomResourcesWith(ctx context.Context, 
 	return nil
 }
 
-// migrateStoredVersions rewrites the objects of the installed CRD named by
-// required when its status.storedVersions lists a version that required drops.
-// The decision reads the live CRD: the CRD informer strips status. A CRD found
-// without stale stored versions cannot acquire one, because new writes use a
-// storage version that required lists, so it is not checked again.
-func (c *TargetConfigReconciler) migrateStoredVersions(ctx context.Context, required *apiextensionsv1.CustomResourceDefinition) error {
+// checkCustomResourceDefinitions runs check on every required CRD and returns
+// all failures.
+func checkCustomResourceDefinitions(
+	ctx context.Context, requiredCRDs []*apiextensionsv1.CustomResourceDefinition, check crdCheckFunc,
+) error {
+	var errs []error
+	for _, required := range requiredCRDs {
+		if err := check(ctx, required); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return utilerror.NewAggregate(errs)
+}
+
+// checkKueueCustomResourceDefinitions checks the stored versions of every
+// embedded Kueue CRD.
+func (c *TargetConfigReconciler) checkKueueCustomResourceDefinitions(ctx context.Context) error {
+	requiredCRDs, err := kueueCustomResourceDefinitions()
+	if err != nil {
+		return err
+	}
+	return checkCustomResourceDefinitions(ctx, requiredCRDs, c.checkStoredVersions)
+}
+
+// checkStoredVersions checks that the installed CRD named by required does not
+// list a stored version that required drops. It reads the live CRD, because
+// the CRD informer strips status, and never writes. A CRD that passes is not
+// checked again in this process: a missing CRD is created from required, and
+// an installed CRD stores objects in a version listed in status.storedVersions,
+// which required therefore lists.
+func (c *TargetConfigReconciler) checkStoredVersions(ctx context.Context, required *apiextensionsv1.CustomResourceDefinition) error {
 	if _, verified := c.storedVersionsVerified.Load(required.Name); verified {
 		return nil
 	}
 
-	result, err := storageversion.Migrate(ctx, c.crdClient, c.dynamicClient, required)
-	if err != nil {
-		c.eventRecorder.Warningf("StorageVersionMigrationFailed", "Failed to migrate stored objects of CustomResourceDefinition %s: %v", required.Name, err)
+	if err := storageversion.Check(ctx, c.crdClient, required); err != nil {
+		c.eventRecorder.Warningf("StoredVersionsCheckFailed", "Not applying the Kueue CustomResourceDefinitions: %v", err)
 		return err
-	}
-	if len(result.StaleVersions) > 0 {
-		c.eventRecorder.Eventf("StorageVersionMigrated", "Migrated %d objects of CustomResourceDefinition %s to %s and removed %v from its stored versions",
-			result.Rewritten, required.Name, result.StorageVersion, result.StaleVersions)
 	}
 	c.storedVersionsVerified.Store(required.Name, struct{}{})
 	return nil

@@ -121,6 +121,44 @@ oc label namespace <namespace> kueue.openshift.io/managed=true
 
 This label instructs the Kueue Operator that the namespace should be managed by its webhook admission controllers. As a result, any Kueue resources within that namespace will be properly validated and mutated.
 
+## Upgrading from Releases That Served the Kueue v1beta1 API
+
+The Kueue CRDs that this operator installs only define `v1beta2`. The Kubernetes API server refuses to update a CRD so that it drops a version still listed in the CRD's `status.storedVersions`, and objects still stored in a dropped version could no longer be read. Kueue CRDs installed by an earlier release that served `v1beta1` may still list `v1beta1` there.
+
+Complete the storage migration of the Kueue CRDs before upgrading, while the release that serves `v1beta1` is still installed and its Kueue operand is running. With OLM, the Manual install plan approval for the operator's Subscription keeps the upgrade from being installed before the migration is complete.
+
+1. List the stored versions of the Kueue CRDs:
+
+   ```sh
+   oc get crd -o custom-columns=NAME:.metadata.name,STORED:.status.storedVersions | grep kueue.x-k8s.io
+   ```
+
+1. For each CRD that still lists `v1beta1`, check that its storage version is already `v1beta2`:
+
+   ```sh
+   oc get crd <name> -o jsonpath='{.spec.versions[?(@.storage==true)].name}'
+   ```
+
+   If it is still `v1beta1`, objects cannot be moved to `v1beta2` yet: first upgrade to a release whose Kueue CRDs serve `v1beta1` and store `v1beta2`, and let it update the CRDs.
+
+1. Rewrite every object of the CRD so that it is stored as `v1beta2`, for example with Kueue's `hack/migrate-to-v1beta2.sh` (in `upstream/kueue/src/hack/`).
+
+1. Once every object of the CRD has been rewritten, remove `v1beta1` from its stored versions:
+
+   ```sh
+   oc patch crd <name> --subresource=status --type=merge -p '{"status":{"storedVersions":["v1beta2"]}}'
+   ```
+
+See [Upgrade existing objects to a new stored version](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#upgrade-existing-objects-to-a-new-stored-version) in the Kubernetes documentation.
+
+The operator does not rewrite objects or change `status.storedVersions` itself. Before it changes any operand resource, it checks the installed counterpart of each Kueue CRD that it applies, reading it from the API server. A CRD that passed the check is not read again until the operator restarts; a CRD that failed is read again on every retry. If an installed CRD still lists a version that the new CRD drops, the operator applies no Kueue CRD, leaves the Kueue operand and its configuration unchanged, logs the error, emits a `StoredVersionsCheckFailed` warning event that names the CRD and the versions to migrate, and retries. The Kueue CR status is not updated for this failure; check the events in the operator's namespace:
+
+```sh
+oc get events -n openshift-kueue-operator --field-selector reason=StoredVersionsCheckFailed
+```
+
+The operator proceeds once the storage migration has been completed.
+
 ## Git Submodule Management
 
 This project uses a git submodule to track the upstream Kueue repository. The submodule is located in the `upstream/kueue` directory and is used to synchronize manifests and configurations.

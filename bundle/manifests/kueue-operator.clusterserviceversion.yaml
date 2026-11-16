@@ -28,7 +28,7 @@ metadata:
       ]
     capabilities: Basic Install
     console.openshift.io/operator-monitoring-default: "true"
-    createdAt: "2026-11-16T01:32:34Z"
+    createdAt: "2026-10-15T13:56:04Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -209,29 +209,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - apiextensions.k8s.io
-          resources:
-          - customresourcedefinitions/status
-          verbs:
-          - update
-        - apiGroups:
-          - kueue.x-k8s.io
-          resources:
-          - admissionchecks
-          - clusterqueues
-          - cohorts
-          - localqueues
-          - multikueueclusters
-          - multikueueconfigs
-          - provisioningrequestconfigs
-          - resourceflavors
-          - topologies
-          - workloadpriorityclasses
-          - workloads
-          verbs:
-          - list
-          - patch
         - apiGroups:
           - cert-manager.io
           resources:

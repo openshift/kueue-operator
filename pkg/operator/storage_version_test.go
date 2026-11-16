@@ -19,7 +19,6 @@ package operator
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -29,72 +28,23 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	dynamicfake "k8s.io/client-go/dynamic/fake"
-	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/utils/clock"
 
 	"github.com/openshift/kueue-operator/bindata"
 )
 
-// TestOperatorClusterRoleAllowsStorageVersionMigration checks that the
-// operator may rewrite the objects of every Kueue CRD it applies and prune
-// their stored versions, as manageCustomResources requires.
-func TestOperatorClusterRoleAllowsStorageVersionMigration(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "deploy", "02_clusterrole.yaml"))
-	if err != nil {
-		t.Fatalf("failed to read the operator ClusterRole: %v", err)
-	}
-	role := resourceread.ReadClusterRoleV1OrDie(data)
-
-	if !allows(role, "apiextensions.k8s.io", "customresourcedefinitions", "get") ||
-		!allows(role, "apiextensions.k8s.io", "customresourcedefinitions/status", "update") {
-		t.Errorf("the operator ClusterRole does not allow getting CRDs and updating their status")
-	}
-
-	crds, err := kueueCustomResourceDefinitions()
-	if err != nil {
-		t.Fatalf("failed to read the CRD assets: %v", err)
-	}
-	if len(crds) == 0 {
-		t.Fatalf("no CRD assets found")
-	}
-	for _, crd := range crds {
-		for _, verb := range []string{"list", "patch"} {
-			if !allows(role, crd.Spec.Group, crd.Spec.Names.Plural, verb) {
-				t.Errorf("the operator ClusterRole does not allow %s on %s.%s", verb, crd.Spec.Names.Plural, crd.Spec.Group)
-			}
-		}
-	}
-}
-
-func allows(role *rbacv1.ClusterRole, group, resource, verb string) bool {
-	matches := func(values []string, value string) bool {
-		return slices.Contains(values, value) || slices.Contains(values, rbacv1.ResourceAll)
-	}
-	for _, rule := range role.Rules {
-		if matches(rule.APIGroups, group) && matches(rule.Resources, resource) && matches(rule.Verbs, verb) {
-			return true
-		}
-	}
-	return false
-}
-
-// fakeCRDClient serves a single live CRD; methods that are not overridden
-// panic.
+// fakeCRDClient serves the installed CRDs by name. It implements only Get:
+// any write panics through the nil embedded interfaces.
 type fakeCRDClient struct {
 	apiextv1.ApiextensionsV1Interface
 	apiextv1.CustomResourceDefinitionInterface
-	crd           *apiextensionsv1.CustomResourceDefinition
-	gets          int
-	statusUpdates [][]string
+	installed map[string]*apiextensionsv1.CustomResourceDefinition
+	gets      int
 }
 
 func (f *fakeCRDClient) CustomResourceDefinitions() apiextv1.CustomResourceDefinitionInterface {
@@ -103,16 +53,11 @@ func (f *fakeCRDClient) CustomResourceDefinitions() apiextv1.CustomResourceDefin
 
 func (f *fakeCRDClient) Get(_ context.Context, name string, _ metav1.GetOptions) (*apiextensionsv1.CustomResourceDefinition, error) {
 	f.gets++
-	if f.crd == nil {
+	crd, ok := f.installed[name]
+	if !ok {
 		return nil, apierrors.NewNotFound(schema.GroupResource{Group: "apiextensions.k8s.io", Resource: "customresourcedefinitions"}, name)
 	}
-	return f.crd.DeepCopy(), nil
-}
-
-func (f *fakeCRDClient) UpdateStatus(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition, _ metav1.UpdateOptions) (*apiextensionsv1.CustomResourceDefinition, error) {
-	f.statusUpdates = append(f.statusUpdates, crd.Status.StoredVersions)
-	f.crd = crd.DeepCopy()
-	return crd, nil
+	return crd.DeepCopy(), nil
 }
 
 // embeddedCRD returns the embedded Kueue CRD with the given plural.
@@ -131,17 +76,12 @@ func embeddedCRD(t *testing.T, plural string) *apiextensionsv1.CustomResourceDef
 	return nil
 }
 
-// installedCRD returns crd as an earlier release left it: v1beta1 is still
-// listed and in status.storedVersions, objects are stored as storageVersion.
-func installedCRD(crd *apiextensionsv1.CustomResourceDefinition, storageVersion string) *apiextensionsv1.CustomResourceDefinition {
+// installedCRD returns crd as an earlier release installed it, still listing
+// v1beta1, with the given stored versions.
+func installedCRD(crd *apiextensionsv1.CustomResourceDefinition, storedVersions ...string) *apiextensionsv1.CustomResourceDefinition {
 	installed := crd.DeepCopy()
-	for i := range installed.Spec.Versions {
-		installed.Spec.Versions[i].Storage = installed.Spec.Versions[i].Name == storageVersion
-	}
-	installed.Spec.Versions = append(installed.Spec.Versions, apiextensionsv1.CustomResourceDefinitionVersion{
-		Name: "v1beta1", Served: true, Storage: storageVersion == "v1beta1",
-	})
-	installed.Status.StoredVersions = []string{"v1beta1", "v1beta2"}
+	installed.Spec.Versions = append(installed.Spec.Versions, apiextensionsv1.CustomResourceDefinitionVersion{Name: "v1beta1", Served: true})
+	installed.Status.StoredVersions = storedVersions
 	return installed
 }
 
@@ -153,75 +93,76 @@ func eventReasons(recorder events.InMemoryRecorder) map[string]string {
 	return reasons
 }
 
-func TestMigrateStoredVersions(t *testing.T) {
+func TestCheckStoredVersions(t *testing.T) {
 	required := embeddedCRD(t, "localqueues")
-	gvr := schema.GroupVersionResource{Group: required.Spec.Group, Version: "v1beta2", Resource: "localqueues"}
-	queue := &unstructured.Unstructured{}
-	queue.SetAPIVersion(gvr.GroupVersion().String())
-	queue.SetKind("LocalQueue")
-	queue.SetNamespace("team-a")
-	queue.SetName("user-queue")
 
 	testCases := map[string]struct {
-		installed      *apiextensionsv1.CustomResourceDefinition
-		wantErr        bool
-		wantPrunes     [][]string
-		wantPatches    int
-		wantEvents     map[string]string
-		wantVerified   bool
-		wantGetsByCall []int
+		installed *apiextensionsv1.CustomResourceDefinition
+		// completeMigration removes v1beta1 from the stored versions after
+		// the first check, as the administrator does once every object is
+		// stored as v1beta2.
+		completeMigration bool
+		wantErrByCall     []bool
+		wantGetsByCall    []int
+		wantEvents        map[string]string
+		wantVerified      bool
 	}{
-		"migrates the live stale stored versions": {
-			installed:      installedCRD(required, "v1beta2"),
-			wantPrunes:     [][]string{{"v1beta2"}},
-			wantPatches:    1,
-			wantEvents:     map[string]string{"StorageVersionMigrated": corev1.EventTypeNormal},
-			wantVerified:   true,
-			wantGetsByCall: []int{2, 2},
-		},
-		"skips a CRD that is not installed": {
-			wantVerified:   true,
-			wantEvents:     map[string]string{},
+		"a CRD that is not installed passes and is not read again": {
+			wantErrByCall:  []bool{false, false},
 			wantGetsByCall: []int{1, 1},
+			wantEvents:     map[string]string{},
+			wantVerified:   true,
 		},
-		"fails and retries when the installed CRD stores a dropped version": {
-			installed:      installedCRD(required, "v1beta1"),
-			wantErr:        true,
-			wantEvents:     map[string]string{"StorageVersionMigrationFailed": corev1.EventTypeWarning},
+		"an installed CRD that stores only v1beta2 passes and is not read again": {
+			installed:      installedCRD(required, "v1beta2"),
+			wantErrByCall:  []bool{false, false},
+			wantGetsByCall: []int{1, 1},
+			wantEvents:     map[string]string{},
+			wantVerified:   true,
+		},
+		"an installed CRD that still records v1beta1 fails on every sync without writing": {
+			installed:      installedCRD(required, "v1beta1", "v1beta2"),
+			wantErrByCall:  []bool{true, true},
 			wantGetsByCall: []int{1, 2},
+			wantEvents:     map[string]string{"StoredVersionsCheckFailed": corev1.EventTypeWarning},
+		},
+		"a sync after the storage migration was completed passes": {
+			installed:         installedCRD(required, "v1beta1", "v1beta2"),
+			completeMigration: true,
+			wantErrByCall:     []bool{true, false},
+			wantGetsByCall:    []int{1, 2},
+			wantEvents:        map[string]string{"StoredVersionsCheckFailed": corev1.EventTypeWarning},
+			wantVerified:      true,
 		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			crdClient := &fakeCRDClient{crd: tc.installed}
-			dynamicClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
-				map[schema.GroupVersionResource]string{gvr: "LocalQueueList"}, queue.DeepCopy())
+			crdClient := &fakeCRDClient{installed: map[string]*apiextensionsv1.CustomResourceDefinition{}}
+			if tc.installed != nil {
+				crdClient.installed[required.Name] = tc.installed
+			}
 			recorder := events.NewInMemoryRecorder("test", clock.RealClock{})
-			c := &TargetConfigReconciler{crdClient: crdClient, dynamicClient: dynamicClient, eventRecorder: recorder}
+			c := &TargetConfigReconciler{crdClient: crdClient, eventRecorder: recorder}
 
+			errs := make([]bool, 0, 2)
 			gets := make([]int, 0, 2)
 			for range 2 {
-				err := c.migrateStoredVersions(t.Context(), required)
-				if (err != nil) != tc.wantErr {
-					t.Fatalf("got error %v, want error %t", err, tc.wantErr)
+				err := c.checkStoredVersions(t.Context(), required)
+				if err != nil && !strings.Contains(err.Error(), "complete the storage migration before upgrading") {
+					t.Errorf("error %q does not state the storage migration prerequisite", err)
 				}
+				errs = append(errs, err != nil)
 				gets = append(gets, crdClient.gets)
+				if tc.completeMigration {
+					crdClient.installed[required.Name].Status.StoredVersions = []string{"v1beta2"}
+				}
 			}
 
+			if diff := cmp.Diff(tc.wantErrByCall, errs); diff != "" {
+				t.Errorf("unexpected errors by call (-want,+got):\n%s", diff)
+			}
 			if diff := cmp.Diff(tc.wantGetsByCall, gets); diff != "" {
 				t.Errorf("unexpected CRD reads after each call (-want,+got):\n%s", diff)
-			}
-			if diff := cmp.Diff(tc.wantPrunes, crdClient.statusUpdates); diff != "" {
-				t.Errorf("unexpected status updates (-want,+got):\n%s", diff)
-			}
-			patches := 0
-			for _, action := range dynamicClient.Actions() {
-				if _, ok := action.(clienttesting.PatchAction); ok {
-					patches++
-				}
-			}
-			if patches != tc.wantPatches {
-				t.Errorf("got %d patches, want %d", patches, tc.wantPatches)
 			}
 			if diff := cmp.Diff(tc.wantEvents, eventReasons(recorder)); diff != "" {
 				t.Errorf("unexpected events (-want,+got):\n%s", diff)
@@ -256,10 +197,10 @@ func bundledNonAlphaCRDNames(t *testing.T) []string {
 	return names
 }
 
-// TestManageCustomResourcesMigratesBeforeApplying checks that the stored
-// objects of every embedded CRD are migrated before any CRD is applied, and
-// that a failed migration applies nothing.
-func TestManageCustomResourcesMigratesBeforeApplying(t *testing.T) {
+// TestManageCustomResourcesChecksBeforeApplying checks that every embedded CRD
+// is checked before any CRD is applied, and that a failed check applies
+// nothing.
+func TestManageCustomResourcesChecksBeforeApplying(t *testing.T) {
 	const namespace = "openshift-kueue-operator"
 	all := bundledNonAlphaCRDNames(t)
 	if !slices.Contains(all, "workloads.kueue.x-k8s.io") || !slices.Contains(all, "localqueues.kueue.x-k8s.io") {
@@ -267,37 +208,37 @@ func TestManageCustomResourcesMigratesBeforeApplying(t *testing.T) {
 	}
 
 	testCases := map[string]struct {
-		failMigration  string
-		failApply      string
-		wantMigrations []string
-		wantApplies    []string
-		wantErr        bool
+		failChecks  []string
+		failApply   string
+		wantApplies []string
+		wantErr     []string
 	}{
-		"every CRD is migrated before the first is applied": {
-			wantMigrations: all,
-			wantApplies:    all,
+		"every CRD is checked before the first is applied": {
+			wantApplies: all,
 		},
-		"a failed migration stops the migrations and applies no CRD": {
-			failMigration:  "localqueues.kueue.x-k8s.io",
-			wantMigrations: all[:slices.Index(all, "localqueues.kueue.x-k8s.io")+1],
-			wantErr:        true,
+		"one failed check applies no CRD": {
+			failChecks: []string{"localqueues.kueue.x-k8s.io"},
+			wantErr:    []string{"localqueues.kueue.x-k8s.io"},
 		},
-		"a failed apply happens after every migration": {
-			failApply:      all[0],
-			wantMigrations: all,
-			wantApplies:    all[:1],
-			wantErr:        true,
+		"every failed check is reported and no CRD is applied": {
+			failChecks: []string{"localqueues.kueue.x-k8s.io", "workloads.kueue.x-k8s.io"},
+			wantErr:    []string{"localqueues.kueue.x-k8s.io", "workloads.kueue.x-k8s.io"},
+		},
+		"a failed apply happens after every check": {
+			failApply:   all[0],
+			wantApplies: all[:1],
+			wantErr:     []string{"apply failed"},
 		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			var steps []string
-			var migrations, applies []string
-			migrate := func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
-				steps = append(steps, "migrate")
-				migrations = append(migrations, crd.Name)
-				if crd.Name == tc.failMigration {
-					return errors.New("migration failed")
+			var checks, applies []string
+			check := func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
+				steps = append(steps, "check")
+				checks = append(checks, crd.Name)
+				if slices.Contains(tc.failChecks, crd.Name) {
+					return errors.New("check failed for " + crd.Name)
 				}
 				return nil
 			}
@@ -321,24 +262,83 @@ func TestManageCustomResourcesMigratesBeforeApplying(t *testing.T) {
 			specAnnotations := map[string]string{}
 			c := &TargetConfigReconciler{operatorNamespace: namespace}
 
-			err := c.manageCustomResourcesWith(t.Context(), specAnnotations, migrate, apply)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("got error %v, want error %t", err, tc.wantErr)
+			err := c.manageCustomResourcesWith(t.Context(), specAnnotations, check, apply)
+			if (err != nil) != (len(tc.wantErr) > 0) {
+				t.Fatalf("got error %v, want error mentioning %v", err, tc.wantErr)
+			}
+			for _, want := range tc.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not mention %q", err, want)
+				}
 			}
 
 			// The embedded CRDs are processed in asset order, which sorts by name.
-			if diff := cmp.Diff(tc.wantMigrations, migrations); diff != "" {
-				t.Errorf("unexpected migrations (-want,+got):\n%s", diff)
+			if diff := cmp.Diff(all, checks); diff != "" {
+				t.Errorf("unexpected checks (-want,+got):\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.wantApplies, applies); diff != "" {
 				t.Errorf("unexpected applies (-want,+got):\n%s", diff)
 			}
-			if firstApply := slices.Index(steps, "apply"); firstApply >= 0 && slices.Contains(steps[firstApply:], "migrate") {
-				t.Errorf("a migration ran after a CRD was applied: %v", steps)
+			if firstApply := slices.Index(steps, "apply"); firstApply >= 0 && slices.Contains(steps[firstApply:], "check") {
+				t.Errorf("a check ran after a CRD was applied: %v", steps)
 			}
-			if tc.failApply == "" && tc.failMigration == "" && len(specAnnotations) != len(all) {
+			if len(tc.wantErr) == 0 && len(specAnnotations) != len(all) {
 				t.Errorf("got %d CRD spec annotations, want %d", len(specAnnotations), len(all))
 			}
 		})
+	}
+}
+
+// TestManageCustomResourcesRejectsStaleStoredVersions drives the real check
+// through the start of sync and the CRD step: one installed CRD that still
+// records v1beta1 stops every CRD apply, while missing and compatible CRDs
+// pass, and the next sync after the storage migration applies every CRD.
+func TestManageCustomResourcesRejectsStaleStoredVersions(t *testing.T) {
+	all := bundledNonAlphaCRDNames(t)
+	localQueues := embeddedCRD(t, "localqueues")
+	clusterQueues := embeddedCRD(t, "clusterqueues")
+	crdClient := &fakeCRDClient{installed: map[string]*apiextensionsv1.CustomResourceDefinition{
+		clusterQueues.Name: installedCRD(clusterQueues, "v1beta2"),
+		localQueues.Name:   installedCRD(localQueues, "v1beta1", "v1beta2"),
+	}}
+	recorder := events.NewInMemoryRecorder("test", clock.RealClock{})
+	c := &TargetConfigReconciler{operatorNamespace: "openshift-kueue-operator", crdClient: crdClient, eventRecorder: recorder}
+
+	var applies []string
+	apply := func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, bool, error) {
+		applies = append(applies, crd.Name)
+		return crd, true, nil
+	}
+	wantStale := func(err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), localQueues.Name) || !strings.Contains(err.Error(), "remove [v1beta1] from status.storedVersions") {
+			t.Fatalf("got error %v, want the stale stored version of %s", err, localQueues.Name)
+		}
+	}
+
+	// sync checks every embedded CRD before changing any operand resource.
+	wantStale(c.checkKueueCustomResourceDefinitions(t.Context()))
+	if crdClient.gets != len(all) {
+		t.Errorf("got %d CRD reads, want one per embedded CRD", crdClient.gets)
+	}
+	// The CRD step checks again before applying: only the failed CRD is read.
+	wantStale(c.manageCustomResourcesWith(t.Context(), map[string]string{}, c.checkStoredVersions, apply))
+	if crdClient.gets != len(all)+1 {
+		t.Errorf("got %d CRD reads, want only the failed CRD to be read again", crdClient.gets)
+	}
+	if len(applies) != 0 {
+		t.Errorf("applied %v despite a failed check", applies)
+	}
+
+	// Once the storage migration is completed, the next sync applies every CRD.
+	crdClient.installed[localQueues.Name].Status.StoredVersions = []string{"v1beta2"}
+	if err := c.checkKueueCustomResourceDefinitions(t.Context()); err != nil {
+		t.Fatalf("unexpected error after the storage migration: %v", err)
+	}
+	if err := c.manageCustomResourcesWith(t.Context(), map[string]string{}, c.checkStoredVersions, apply); err != nil {
+		t.Fatalf("unexpected error after the storage migration: %v", err)
+	}
+	if diff := cmp.Diff(all, applies); diff != "" {
+		t.Errorf("unexpected applies after the storage migration (-want,+got):\n%s", diff)
 	}
 }
