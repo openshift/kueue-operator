@@ -25,7 +25,7 @@ E2E_TARGET_FOLDERS="${E2E_TARGET_FOLDERS:-${E2E_TARGET_FOLDER:-singlecluster}}"
 # Remove this workaround once the test runner's builder provides Go 1.27.
 bootstrap_go=$(command -v go.real || command -v go)
 toolchain_root=$(
-  GOEXPERIMENT='' GOTOOLCHAIN=go1.27.0 "$bootstrap_go" env GOROOT
+  GOEXPERIMENT='' GOTOOLCHAIN=go1.27.4 "$bootstrap_go" env GOROOT
 )
 export GOROOT="$toolchain_root"
 export PATH="$GOROOT/bin:$PATH"
