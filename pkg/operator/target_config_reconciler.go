@@ -1630,9 +1630,14 @@ func kueueCRDNames() ([]string, error) {
 	return names, nil
 }
 
+// clusterProfileCRDName is the CRD that the Kueue manager reads by name at
+// startup when the MultiKueueClusterProfile feature gate is enabled.
+const clusterProfileCRDName = "clusterprofiles.multicluster.x-k8s.io"
+
 // scopeManagerRoleResourceNames restricts the webhook configuration and CRD
 // rules to only the resources owned by Kueue, preventing the controller from
-// modifying other operators' webhook configurations or CRDs.
+// modifying other operators' webhook configurations or CRDs. The upstream rule
+// that only allows getting the ClusterProfile CRD by name is kept as is.
 func scopeManagerRoleResourceNames(role *rbacv1.ClusterRole) error {
 	crdNames, err := kueueCRDNames()
 	if err != nil {
@@ -1647,11 +1652,20 @@ func scopeManagerRoleResourceNames(role *rbacv1.ClusterRole) error {
 				kueueValidatingWebhookConfigurationName,
 			}
 		}
-		if isCRDRule(rule) {
+		if isCRDRule(rule) && !isClusterProfileCRDGetRule(rule) {
 			rule.ResourceNames = crdNames
 		}
 	}
 	return nil
+}
+
+// isClusterProfileCRDGetRule returns true if the rule only allows getting the
+// ClusterProfile CRD by name.
+func isClusterProfileCRDGetRule(rule *rbacv1.PolicyRule) bool {
+	return slices.Equal(rule.APIGroups, []string{"apiextensions.k8s.io"}) &&
+		slices.Equal(rule.Resources, []string{"customresourcedefinitions"}) &&
+		slices.Equal(rule.ResourceNames, []string{clusterProfileCRDName}) &&
+		slices.Equal(rule.Verbs, []string{"get"})
 }
 
 // isWebhookConfigurationRule returns true if the rule grants access to webhook configurations.

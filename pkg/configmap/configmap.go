@@ -319,10 +319,10 @@ func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityE
 // by default upstream but are not supported by the operator.
 var alwaysDisabledFeatureGates = []string{
 	// MultiKueueClusterProfile is Beta and enabled by default since Kueue 0.21.
-	// When enabled, the Kueue manager reads the ClusterProfile CRD at startup and
-	// exits on any error other than NotFound. The operator does not support
-	// ClusterProfile-based MultiKueue and scopes the manager role's CRD rules to
-	// Kueue CRDs, so that read is forbidden.
+	// When enabled, the Kueue manager reads the ClusterProfile CRD at startup and,
+	// if that CRD is installed, watches ClusterProfiles in its namespace. The
+	// operator does not support ClusterProfile-based MultiKueue and does not grant
+	// the manager access to ClusterProfiles, so that watch would be forbidden.
 	"MultiKueueClusterProfile",
 }
 
