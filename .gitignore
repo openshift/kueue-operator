@@ -27,3 +27,6 @@ go.work.sum
 .envrc
 
 reports/
+
+# validate-art-build skill artifacts (tested-images.json, JUnit, must-gather)
+art-evidence/

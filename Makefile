@@ -201,6 +201,8 @@ sync-manifests:
 sync-manifests-from-submodule:
 	hack/sync_manifests.py --src-dir upstream/kueue/src/config/default/
 
+# Extra ginkgo flags, e.g. GINKGO_EXTRA_ARGS="--skip='(?i)jobset|leaderworker'"
+GINKGO_EXTRA_ARGS ?=
 GINKGO = $(shell pwd)/bin/ginkgo
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
@@ -227,7 +229,7 @@ wait-for-cert-manager:
 .PHONY: e2e-ci-test
 e2e-ci-test: ginkgo
 	@echo "Running operator e2e tests..."
-	$(GINKGO) --keep-going --flake-attempts=3 --timeout=120m --label-filter="!disruptive && !flaky" --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
+	$(GINKGO) --keep-going --flake-attempts=3 --timeout=120m --label-filter="!disruptive && !flaky" $(GINKGO_EXTRA_ARGS) --junit-report=${ARTIFACT_DIR}/e2e-junit.xml --no-color -v ./test/e2e/...
 
 .PHONY: e2e-ci-test-dra
 e2e-ci-test-dra: ginkgo
