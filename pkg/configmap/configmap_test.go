@@ -57,8 +57,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -142,7 +140,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   CustomMetricLabels: true
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -211,8 +208,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -269,8 +264,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -332,8 +325,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -399,8 +390,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -464,8 +453,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -531,8 +518,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -599,8 +584,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -667,8 +650,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -738,8 +719,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -807,8 +786,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -867,8 +844,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -926,8 +901,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -980,7 +953,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  MultiKueueClusterProfile: false
   SparkApplicationIntegration: true
 health:
   healthProbeBindAddress: :8081
@@ -1041,8 +1013,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1124,7 +1094,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   KueueDRAIntegrationConsumableCapacity: true
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1229,7 +1198,6 @@ controller:
     Workload.kueue.x-k8s.io: 5
 featureGates:
   KueueDRAIntegrationConsumableCapacity: true
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1321,8 +1289,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1393,7 +1359,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  MultiKueueClusterProfile: false
   ShortWorkloadNames: true
 health:
   healthProbeBindAddress: :8081
@@ -1465,8 +1430,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1533,8 +1496,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1592,8 +1553,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1669,7 +1628,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  MultiKueueClusterProfile: false
   ShortWorkloadNames: true
 health:
   healthProbeBindAddress: :8081
@@ -1735,7 +1693,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  MultiKueueClusterProfile: false
   ShortWorkloadNames: true
 health:
   healthProbeBindAddress: :8081
@@ -1791,7 +1748,6 @@ controller:
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
 featureGates:
-  MultiKueueClusterProfile: false
   SparkApplicationIntegration: true
 health:
   healthProbeBindAddress: :8081
@@ -1851,8 +1807,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1921,8 +1875,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  MultiKueueClusterProfile: false
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1970,10 +1922,7 @@ webhook:
 }
 
 func TestBuildFeatureGatesForDRASources(t *testing.T) {
-	const (
-		consumableCapacityGate       = "KueueDRAIntegrationConsumableCapacity"
-		multiKueueClusterProfileGate = "MultiKueueClusterProfile"
-	)
+	const consumableCapacityGate = "KueueDRAIntegrationConsumableCapacity"
 
 	capacityResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Sources: []kueue.DeviceClassSourceConfig{{Type: kueue.DeviceClassSourceTypeCapacity}}}}}
 	noSourceResources := kueue.Resources{DeviceClassMappings: []kueue.DeviceClassMapping{{Name: "gpu.memory"}}}
@@ -1983,15 +1932,11 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 		draConsumableCapacityEnabled bool
 		want                         map[string]bool
 	}{
-		"empty configuration keeps MultiKueueClusterProfile disabled": {
-			want: map[string]bool{multiKueueClusterProfileGate: false},
-		},
 		"capacity source enables consumable capacity gate": {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: true,
 			want: map[string]bool{
-				multiKueueClusterProfileGate: false,
-				consumableCapacityGate:       true,
+				consumableCapacityGate: true,
 			},
 		},
 		"capacity source in a later mapping enables consumable capacity gate": {
@@ -2005,19 +1950,16 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 			},
 			draConsumableCapacityEnabled: true,
 			want: map[string]bool{
-				multiKueueClusterProfileGate: false,
-				consumableCapacityGate:       true,
+				consumableCapacityGate: true,
 			},
 		},
 		"mappings without sources enable no gate": {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: noSourceResources},
 			draConsumableCapacityEnabled: true,
-			want:                         map[string]bool{multiKueueClusterProfileGate: false},
 		},
 		"capacity source does not enable gate when dependency is unavailable": {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: false,
-			want:                         map[string]bool{multiKueueClusterProfileGate: false},
 		},
 		"custom labels presence enables custom metrics labels gate": {
 			kueueCfg: kueue.KueueConfiguration{
@@ -2028,8 +1970,7 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 			},
 			draConsumableCapacityEnabled: false,
 			want: map[string]bool{
-				multiKueueClusterProfileGate: false,
-				"CustomMetricLabels":         true,
+				"CustomMetricLabels": true,
 			},
 		},
 	}
@@ -2041,5 +1982,14 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 				t.Fatalf("unexpected feature gates (-want,+got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestBuildFeatureGatesKeepsMultiKueueClusterProfileDefault checks that the
+// operator leaves the MultiKueueClusterProfile feature gate at Kueue's default.
+func TestBuildFeatureGatesKeepsMultiKueueClusterProfileDefault(t *testing.T) {
+	gates := buildFeatureGates(kueue.KueueConfiguration{}, false)
+	if enabled, set := gates["MultiKueueClusterProfile"]; set {
+		t.Errorf("MultiKueueClusterProfile is set to %t, want Kueue's default", enabled)
 	}
 }

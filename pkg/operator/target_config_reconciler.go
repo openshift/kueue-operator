@@ -655,6 +655,10 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 	specAnnotations["rolebinding/"+roleBindingManagerSecrets.Name] = hash
 
+	if err := c.manageClusterProfilesRBAC(ctx, specAnnotations, ownerReference); err != nil {
+		return err
+	}
+
 	if c.serviceMonitorSupport {
 		prometheusRole, _, err := c.manageRole(ctx, "assets/kueue-operator/role-prometheus.yaml", ownerReference)
 		if err != nil {
@@ -1508,6 +1512,32 @@ func (c *TargetConfigReconciler) manageClusterRoleBindingsWithoutNamespaceOverri
 	}
 	// Note: We do NOT override subject namespaces here - they remain as specified in the asset file
 	return c.applyClusterRoleBindingWithCache(ctx, required)
+}
+
+// manageClusterProfilesRBAC lets the Kueue manager read ClusterProfiles in the
+// operator namespace. With the MultiKueueClusterProfile feature gate enabled,
+// the manager watches them there once the ClusterProfile CRD is installed.
+func (c *TargetConfigReconciler) manageClusterProfilesRBAC(ctx context.Context, specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
+	role, _, err := c.manageRole(ctx, "assets/kueue-operator/role-manager-clusterprofiles.yaml", ownerReference)
+	if err != nil {
+		return fmt.Errorf("unable to manage the manager clusterprofiles Role: %w", err)
+	}
+	hash, err := computeSpecHash(role.Rules)
+	if err != nil {
+		return fmt.Errorf("failed to hash Role rules: %w", err)
+	}
+	specAnnotations["role/"+role.Name] = hash
+
+	roleBinding, _, err := c.manageRoleBindings(ctx, "assets/kueue-operator/rolebinding-manager-clusterprofiles.yaml", ownerReference, true)
+	if err != nil {
+		return fmt.Errorf("unable to manage the manager clusterprofiles RoleBinding: %w", err)
+	}
+	hash, err = computeSpecHash([]interface{}{roleBinding.Subjects, roleBinding.RoleRef})
+	if err != nil {
+		return fmt.Errorf("failed to hash RoleBinding: %w", err)
+	}
+	specAnnotations["rolebinding/"+roleBinding.Name] = hash
+	return nil
 }
 
 func (c *TargetConfigReconciler) manageRole(ctx context.Context, assetPath string, ownerReference metav1.OwnerReference) (*rbacv1.Role, bool, error) {

@@ -309,21 +309,10 @@ func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityE
 			featureGates[g.name] = true
 		}
 	}
-	for _, name := range alwaysDisabledFeatureGates {
-		featureGates[name] = false
+	if len(featureGates) == 0 {
+		return nil
 	}
 	return featureGates
-}
-
-// alwaysDisabledFeatureGates lists upstream Kueue feature gates that are enabled
-// by default upstream but are not supported by the operator.
-var alwaysDisabledFeatureGates = []string{
-	// MultiKueueClusterProfile is Beta and enabled by default since Kueue 0.21.
-	// When enabled, the Kueue manager reads the ClusterProfile CRD at startup and,
-	// if that CRD is installed, watches ClusterProfiles in its namespace. The
-	// operator does not support ClusterProfile-based MultiKueue and does not grant
-	// the manager access to ClusterProfiles, so that watch would be forbidden.
-	"MultiKueueClusterProfile",
 }
 
 func buildControllerMetrics(cm kueue.ControllerManager) []configapi.ControllerMetricsCustomLabel {
