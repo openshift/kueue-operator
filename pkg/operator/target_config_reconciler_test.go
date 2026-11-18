@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -238,6 +239,101 @@ func TestScopeManagerRoleResourceNames(t *testing.T) {
 				},
 			},
 		},
+		"keeps the named ClusterProfile CRD get rule": {
+			input: &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"apiextensions.k8s.io"},
+						Resources: []string{"customresourcedefinitions"},
+						Verbs:     []string{"list", "watch"},
+					},
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: []string{"clusterprofiles.multicluster.x-k8s.io"},
+						Verbs:         []string{"get"},
+					},
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: []string{"workloads.kueue.x-k8s.io"},
+						Verbs:         []string{"get", "update"},
+					},
+				},
+			},
+			expected: &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: expectedCRDNames,
+						Verbs:         []string{"list", "watch"},
+					},
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: []string{"clusterprofiles.multicluster.x-k8s.io"},
+						Verbs:         []string{"get"},
+					},
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: expectedCRDNames,
+						Verbs:         []string{"get", "update"},
+					},
+				},
+			},
+		},
+		"scopes a ClusterProfile CRD rule that allows writes": {
+			input: &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: []string{"clusterprofiles.multicluster.x-k8s.io"},
+						Verbs:         []string{"get", "update"},
+					},
+				},
+			},
+			expected: &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: expectedCRDNames,
+						Verbs:         []string{"get", "update"},
+					},
+				},
+			},
+		},
+		"scopes a named get rule for another CRD": {
+			input: &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: []string{"widgets.example.com"},
+						Verbs:         []string{"get"},
+					},
+				},
+			},
+			expected: &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"apiextensions.k8s.io"},
+						Resources:     []string{"customresourcedefinitions"},
+						ResourceNames: expectedCRDNames,
+						Verbs:         []string{"get"},
+					},
+				},
+			},
+		},
 		"no rules is a no-op": {
 			input: &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{Name: "kueue-manager-role"},
@@ -257,5 +353,63 @@ func TestScopeManagerRoleResourceNames(t *testing.T) {
 				t.Errorf("unexpected result (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// crdAccessAllowed reports whether role allows verb on the CRD named name.
+func crdAccessAllowed(role *rbacv1.ClusterRole, verb, name string) bool {
+	matches := func(values []string, value, all string) bool {
+		return slices.Contains(values, value) || slices.Contains(values, all)
+	}
+	for _, rule := range role.Rules {
+		if matches(rule.APIGroups, "apiextensions.k8s.io", rbacv1.APIGroupAll) &&
+			matches(rule.Resources, "customresourcedefinitions", rbacv1.ResourceAll) &&
+			matches(rule.Verbs, verb, rbacv1.VerbAll) &&
+			(len(rule.ResourceNames) == 0 || slices.Contains(rule.ResourceNames, name)) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestManagerRoleCRDAccess checks the CRD permissions of the bundled manager
+// role after scoping: the Kueue manager may get the ClusterProfile CRD, which
+// it reads at startup when the MultiKueueClusterProfile feature gate is
+// enabled, but not change it, and may not read or change any other CRD that
+// Kueue does not own.
+func TestManagerRoleCRDAccess(t *testing.T) {
+	role := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/kueue-operator/clusterroles/clusterrole-manager-role.yaml"))
+	if err := scopeManagerRoleResourceNames(role); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kueueCRDs, err := kueueCRDNames()
+	if err != nil {
+		t.Fatalf("failed to derive CRD names: %v", err)
+	}
+
+	for _, verb := range []string{"get", "create", "update", "patch", "delete"} {
+		if got, want := crdAccessAllowed(role, verb, clusterProfileCRDName), verb == "get"; got != want {
+			t.Errorf("%s on %s: allowed %t, want %t", verb, clusterProfileCRDName, got, want)
+		}
+		if crdAccessAllowed(role, verb, "widgets.example.com") {
+			t.Errorf("%s on an unrelated CRD is allowed", verb)
+		}
+	}
+	for _, name := range kueueCRDs {
+		for _, verb := range []string{"get", "update"} {
+			if !crdAccessAllowed(role, verb, name) {
+				t.Errorf("%s on %s is not allowed", verb, name)
+			}
+		}
+		for _, verb := range []string{"create", "delete"} {
+			if crdAccessAllowed(role, verb, name) {
+				t.Errorf("%s on %s is allowed", verb, name)
+			}
+		}
+	}
+	for _, rule := range role.Rules {
+		if isCRDRule(&rule) && len(rule.ResourceNames) == 0 {
+			t.Errorf("CRD rule without resource names: %+v", rule)
+		}
 	}
 }

@@ -655,6 +655,10 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	}
 	specAnnotations["rolebinding/"+roleBindingManagerSecrets.Name] = hash
 
+	if err := c.manageClusterProfilesRBAC(ctx, specAnnotations, ownerReference); err != nil {
+		return err
+	}
+
 	if c.serviceMonitorSupport {
 		prometheusRole, _, err := c.manageRole(ctx, "assets/kueue-operator/role-prometheus.yaml", ownerReference)
 		if err != nil {
@@ -1510,6 +1514,32 @@ func (c *TargetConfigReconciler) manageClusterRoleBindingsWithoutNamespaceOverri
 	return c.applyClusterRoleBindingWithCache(ctx, required)
 }
 
+// manageClusterProfilesRBAC lets the Kueue manager read ClusterProfiles in the
+// operator namespace. With the MultiKueueClusterProfile feature gate enabled,
+// the manager watches them there once the ClusterProfile CRD is installed.
+func (c *TargetConfigReconciler) manageClusterProfilesRBAC(ctx context.Context, specAnnotations map[string]string, ownerReference metav1.OwnerReference) error {
+	role, _, err := c.manageRole(ctx, "assets/kueue-operator/role-manager-clusterprofiles.yaml", ownerReference)
+	if err != nil {
+		return fmt.Errorf("unable to manage the manager clusterprofiles Role: %w", err)
+	}
+	hash, err := computeSpecHash(role.Rules)
+	if err != nil {
+		return fmt.Errorf("failed to hash Role rules: %w", err)
+	}
+	specAnnotations["role/"+role.Name] = hash
+
+	roleBinding, _, err := c.manageRoleBindings(ctx, "assets/kueue-operator/rolebinding-manager-clusterprofiles.yaml", ownerReference, true)
+	if err != nil {
+		return fmt.Errorf("unable to manage the manager clusterprofiles RoleBinding: %w", err)
+	}
+	hash, err = computeSpecHash([]interface{}{roleBinding.Subjects, roleBinding.RoleRef})
+	if err != nil {
+		return fmt.Errorf("failed to hash RoleBinding: %w", err)
+	}
+	specAnnotations["rolebinding/"+roleBinding.Name] = hash
+	return nil
+}
+
 func (c *TargetConfigReconciler) manageRole(ctx context.Context, assetPath string, ownerReference metav1.OwnerReference) (*rbacv1.Role, bool, error) {
 	required := resourceread.ReadRoleV1OrDie(bindata.MustAsset(assetPath))
 	required.OwnerReferences = []metav1.OwnerReference{
@@ -1630,9 +1660,14 @@ func kueueCRDNames() ([]string, error) {
 	return names, nil
 }
 
+// clusterProfileCRDName is the CRD that the Kueue manager reads by name at
+// startup when the MultiKueueClusterProfile feature gate is enabled.
+const clusterProfileCRDName = "clusterprofiles.multicluster.x-k8s.io"
+
 // scopeManagerRoleResourceNames restricts the webhook configuration and CRD
 // rules to only the resources owned by Kueue, preventing the controller from
-// modifying other operators' webhook configurations or CRDs.
+// modifying other operators' webhook configurations or CRDs. The upstream rule
+// that only allows getting the ClusterProfile CRD by name is kept as is.
 func scopeManagerRoleResourceNames(role *rbacv1.ClusterRole) error {
 	crdNames, err := kueueCRDNames()
 	if err != nil {
@@ -1647,11 +1682,20 @@ func scopeManagerRoleResourceNames(role *rbacv1.ClusterRole) error {
 				kueueValidatingWebhookConfigurationName,
 			}
 		}
-		if isCRDRule(rule) {
+		if isCRDRule(rule) && !isClusterProfileCRDGetRule(rule) {
 			rule.ResourceNames = crdNames
 		}
 	}
 	return nil
+}
+
+// isClusterProfileCRDGetRule returns true if the rule only allows getting the
+// ClusterProfile CRD by name.
+func isClusterProfileCRDGetRule(rule *rbacv1.PolicyRule) bool {
+	return slices.Equal(rule.APIGroups, []string{"apiextensions.k8s.io"}) &&
+		slices.Equal(rule.Resources, []string{"customresourcedefinitions"}) &&
+		slices.Equal(rule.ResourceNames, []string{clusterProfileCRDName}) &&
+		slices.Equal(rule.Verbs, []string{"get"})
 }
 
 // isWebhookConfigurationRule returns true if the rule grants access to webhook configurations.

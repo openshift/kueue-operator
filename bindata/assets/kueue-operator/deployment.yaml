@@ -70,6 +70,9 @@ spec:
         volumeMounts:
         - mountPath: /visibility
           name: visibility
+        - mountPath: /visibility-certs
+          name: visibility-certs
+          readOnly: true
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
@@ -85,6 +88,10 @@ spec:
       volumes:
       - emptyDir: {}
         name: visibility
+      - name: visibility-certs
+        secret:
+          defaultMode: 420
+          secretName: kueue-visibility-server-cert
       - name: cert
         secret:
           defaultMode: 420
