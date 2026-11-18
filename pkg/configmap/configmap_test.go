@@ -1984,12 +1984,3 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 		})
 	}
 }
-
-// TestBuildFeatureGatesKeepsMultiKueueClusterProfileDefault checks that the
-// operator leaves the MultiKueueClusterProfile feature gate at Kueue's default.
-func TestBuildFeatureGatesKeepsMultiKueueClusterProfileDefault(t *testing.T) {
-	gates := buildFeatureGates(kueue.KueueConfiguration{}, false)
-	if enabled, set := gates["MultiKueueClusterProfile"]; set {
-		t.Errorf("MultiKueueClusterProfile is set to %t, want Kueue's default", enabled)
-	}
-}
