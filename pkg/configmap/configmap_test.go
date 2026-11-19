@@ -138,8 +138,6 @@ controller:
     Pod: 5
     ResourceFlavor.kueue.x-k8s.io: 1
     Workload.kueue.x-k8s.io: 5
-featureGates:
-  CustomMetricLabels: true
 health:
   healthProbeBindAddress: :8081
 integrations:
@@ -1961,7 +1959,7 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: false,
 		},
-		"custom labels presence enables custom metrics labels gate": {
+		"custom labels presence does not enable custom metrics labels gate": {
 			kueueCfg: kueue.KueueConfiguration{
 				ControllerManager: kueue.ControllerManager{
 					Metrics: kueue.ControllerMetrics{
@@ -1969,9 +1967,6 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 				},
 			},
 			draConsumableCapacityEnabled: false,
-			want: map[string]bool{
-				"CustomMetricLabels": true,
-			},
 		},
 	}
 
