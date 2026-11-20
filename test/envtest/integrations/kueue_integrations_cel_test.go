@@ -38,6 +38,9 @@ var (
 	err     error
 )
 
+// initialFrameworks are the frameworks of the cluster Kueue object before each spec.
+var initialFrameworks = []kueueopv1.KueueIntegration{kueueopv1.KueueIntegrationBatchJob}
+
 // allFrameworks lists every value of the frameworks enum.
 var allFrameworks = []kueueopv1.KueueIntegration{
 	kueueopv1.KueueIntegrationBatchJob,
@@ -79,12 +82,12 @@ var _ = BeforeSuite(func() {
 	}
 
 	cfg, err := testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
+	Expect(err).NotTo(HaveOccurred(), "failed to start the envtest environment")
+	Expect(cfg).NotTo(BeNil(), "envtest returned no REST config")
 
 	clients, err = kueueclient.NewForConfig(cfg)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(clients).NotTo(BeNil())
+	Expect(err).NotTo(HaveOccurred(), "failed to create the Kueue clients")
+	Expect(clients).NotTo(BeNil(), "no Kueue clients were created")
 
 	kueues := clients.KueueV1().Kueues()
 	kueueObj := &kueueopv1.Kueue{
@@ -93,33 +96,37 @@ var _ = BeforeSuite(func() {
 			OperatorSpec: operatorv1.OperatorSpec{ManagementState: operatorv1.Managed},
 			Config: kueueopv1.KueueConfiguration{
 				Integrations: kueueopv1.Integrations{
-					Frameworks: []kueueopv1.KueueIntegration{kueueopv1.KueueIntegrationBatchJob},
+					Frameworks: initialFrameworks,
 				},
 			},
 		},
 	}
 	_, err = kueues.Create(context.Background(), kueueObj, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "failed to create the cluster Kueue object")
 })
 
 var _ = AfterSuite(func() {
 	if testEnv == nil {
 		return
 	}
-	Expect(testEnv.Stop()).To(Succeed())
+	Expect(testEnv.Stop()).To(Succeed(), "failed to stop the envtest environment")
 })
 
 // setFrameworks fetches the current cluster Kueue and updates it with the given
 // frameworks, returning the API server error (if any).
 func setFrameworks(ctx context.Context, frameworks []kueueopv1.KueueIntegration) error {
 	current, getErr := clients.KueueV1().Kueues().Get(ctx, "cluster", metav1.GetOptions{})
-	Expect(getErr).NotTo(HaveOccurred())
+	Expect(getErr).NotTo(HaveOccurred(), "failed to get the cluster Kueue object")
 	current.Spec.Config.Integrations.Frameworks = frameworks
 	_, updateErr := clients.KueueV1().Kueues().Update(ctx, current, metav1.UpdateOptions{})
 	return updateErr
 }
 
 var _ = Describe("IntegrationsCEL", func() {
+	AfterEach(func(ctx context.Context) {
+		Expect(setFrameworks(ctx, initialFrameworks)).To(Succeed(), "failed to restore the initial frameworks")
+	})
+
 	It("should allow the DisaggregatedSet framework", func(ctx context.Context) {
 		By("setting frameworks to DisaggregatedSet")
 		err = setFrameworks(ctx, []kueueopv1.KueueIntegration{kueueopv1.KueueIntegrationDisaggregatedSet})
@@ -147,7 +154,7 @@ var _ = Describe("IntegrationsCEL", func() {
 		Expect(err.Error()).To(Or(
 			ContainSubstring("each item in frameworks must be unique"),
 			ContainSubstring("Duplicate value"),
-		))
+		), "want the duplicate-framework error text")
 	})
 
 	It("should not allow a framework with the wrong case", func(ctx context.Context) {
@@ -157,7 +164,7 @@ var _ = Describe("IntegrationsCEL", func() {
 			"want error for Disaggregatedset: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
 			"want invalid for Disaggregatedset: %v", err)
-		Expect(err.Error()).To(ContainSubstring("Unsupported value"))
+		Expect(err.Error()).To(ContainSubstring("Unsupported value"), "want the enum error text for the wrong-case framework")
 	})
 
 	It("should not allow an unknown framework", func(ctx context.Context) {
@@ -167,10 +174,10 @@ var _ = Describe("IntegrationsCEL", func() {
 			"want error for an unknown framework: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
 			"want invalid for an unknown framework: %v", err)
-		Expect(err.Error()).To(ContainSubstring("Unsupported value"))
+		Expect(err.Error()).To(ContainSubstring("Unsupported value"), "want the enum error text for the unknown framework")
 	})
 
-	It("should not allow more than 19 frameworks", func(ctx context.Context) {
+	It("should not allow more frameworks than the list maximum", func(ctx context.Context) {
 		By("setting 20 frameworks")
 		tooMany := append(append([]kueueopv1.KueueIntegration{}, allFrameworks...), kueueopv1.KueueIntegrationBatchJob)
 		err = setFrameworks(ctx, tooMany)
@@ -178,6 +185,6 @@ var _ = Describe("IntegrationsCEL", func() {
 			"want error for 20 frameworks: %v", err)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(),
 			"want invalid for 20 frameworks: %v", err)
-		Expect(err.Error()).To(ContainSubstring("must have at most 19 items"))
+		Expect(err.Error()).To(ContainSubstring("must have at most 19 items"), "want the list-maximum error text")
 	})
 })
