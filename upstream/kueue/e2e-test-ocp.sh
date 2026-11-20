@@ -65,7 +65,7 @@ function ginkgo_label_filter() {
     singlecluster)
       # TAS suites live below singlecluster/tasapi and share generic feature labels such as
       # feature:job with this lane, so exclude their area label explicitly.
-      echo "(feature:certs || feature:cohort || feature:deployment || feature:disaggregatedset || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas"
+      echo "(feature:certs || feature:cohort || feature:deployment || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas"
       ;;
     certmanager)
       echo "!feature:prometheus"
@@ -109,130 +109,9 @@ label_worker_nodes
 # Disable scc rules for e2e pod tests
 allow_privileged_access
 
-# Prints the frameworks of the cluster Kueue CR, one per line.
-function kueue_frameworks() {
-  $OC get kueue.kueue.openshift.io/cluster -o go-template='{{range .spec.config.integrations.frameworks}}{{.}}{{"\n"}}{{end}}'
-}
-
-DISAGGREGATEDSET_ADDED=false
-# Bounds of the wait for the DisaggregatedSet configuration rollout.
-DISAGGREGATEDSET_ROLLOUT_TIMEOUT="${DISAGGREGATEDSET_ROLLOUT_TIMEOUT:-300}"
-DISAGGREGATEDSET_POLL_INTERVAL="${DISAGGREGATEDSET_POLL_INTERVAL:-5}"
-
-# Prints the hash of the kueue-manager-config data that the operator records in the
-# kueue-controller-manager Pod template, or nothing when it is not set.
-function manager_config_hash() {
-  $OC get deployment kueue-controller-manager -n "$KUEUE_NAMESPACE" -o go-template=\
-'{{with .spec.template.metadata.annotations}}{{with index . "configmap/kueue-manager-config"}}{{.}}{{end}}{{end}}'
-}
-
-# Writes the Go source of a helper that prints the hash the operator records in the
-# kueue-controller-manager Pod template for the kueue-manager-config data, read from the
-# ConfigMap JSON on stdin. It computes the same value as computeSpecHash(cm.Data) in
-# pkg/operator: the SHA-256 of the JSON encoding of the data map, in hex.
-function write_config_hash_helper() {
-  cat > "$1" <<'EOF'
-package main
-
-import (
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
-	"os"
-)
-
-func main() {
-	var cm struct {
-		Data map[string]string `json:"data"`
-	}
-	if err := json.NewDecoder(os.Stdin).Decode(&cm); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	data, err := json.Marshal(cm.Data)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Printf("%x\n", sha256.Sum256(data))
-}
-EOF
-}
-
-# Waits until the operator has rendered the DisaggregatedSet framework and feature gate
-# into kueue-manager-config and the kueue-controller-manager Pod template carries the
-# hash of exactly that configuration, then waits for the Deployment to roll out that
-# template. The Available condition of the Kueue CR is not enough: it only counts ready
-# replicas, which the previous template can still satisfy. Comparing the template hash
-# with the hash of the observed configuration, instead of with the hash before the
-# change, also rejects a template that carries an unrelated configuration change.
-function wait_for_disaggregatedset_rollout() {
-  local deadline=$((SECONDS + DISAGGREGATEDSET_ROLLOUT_TIMEOUT))
-  local helper_dir config expected_hash hash remaining
-  helper_dir=$(mktemp -d)
-  write_config_hash_helper "$helper_dir/main.go"
-  if ! (cd "$helper_dir" && GOFLAGS='' go build -o config-hash main.go); then
-    echo "Error: failed to build the kueue-manager-config hash helper" >&2
-    rm -rf "$helper_dir"
-    return 1
-  fi
-  echo "Waiting for the kueue-controller-manager rollout of the DisaggregatedSet configuration..."
-  until config=$($OC get configmap kueue-manager-config -n "$KUEUE_NAMESPACE" -o json) &&
-    grep -q "disaggregatedset.x-k8s.io/disaggregatedset" <<< "$config" &&
-    grep -q "DisaggregatedSetIntegration: true" <<< "$config" &&
-    expected_hash=$("$helper_dir/config-hash" <<< "$config") &&
-    hash=$(manager_config_hash) && [ "$hash" = "$expected_hash" ]; do
-    if [ "$SECONDS" -ge "$deadline" ]; then
-      echo "Error: timed out after ${DISAGGREGATEDSET_ROLLOUT_TIMEOUT}s waiting for the DisaggregatedSet configuration in the kueue-controller-manager Deployment" >&2
-      rm -rf "$helper_dir"
-      return 1
-    fi
-    sleep "$DISAGGREGATEDSET_POLL_INTERVAL"
-  done
-  rm -rf "$helper_dir"
-  remaining=$((deadline - SECONDS))
-  if [ "$remaining" -lt 1 ]; then
-    remaining=1
-  fi
-  $OC rollout status deployment/kueue-controller-manager -n "$KUEUE_NAMESPACE" --timeout="${remaining}s"
-  hash=$(manager_config_hash)
-  if [ "$hash" != "$expected_hash" ]; then
-    echo "Error: the kueue-controller-manager Pod template changed during the DisaggregatedSet rollout" >&2
-    return 1
-  fi
-}
-
-# Removes DisaggregatedSet from the Kueue CR when the runner added it and the
-# script exits before the normal restore, keeping the original exit status.
-# shellcheck disable=SC2317 # invoked through the EXIT trap
-function restore_disaggregatedset_on_exit() {
-  local status=$?
-  if [ "$DISAGGREGATEDSET_ADDED" = true ]; then
-    restore_kueue_for_folder singlecluster || echo "Error: failed to remove DisaggregatedSet from the cluster Kueue CR" >&2
-  fi
-  exit "$status"
-}
-
 function configure_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
-    singlecluster)
-      # The upstream DisaggregatedSet cases need the DisaggregatedSet integration,
-      # which requires a LeaderWorkerSet that serves disaggregatedset.x-k8s.io/v1.
-      local frameworks_output
-      if ! frameworks_output=$(kueue_frameworks); then
-        echo "Error: failed to read the cluster Kueue CR frameworks" >&2
-        return 1
-      fi
-      if ! grep -qx "DisaggregatedSet" <<< "$frameworks_output"; then
-        echo "Adding DisaggregatedSet to the cluster Kueue CR frameworks for singlecluster..."
-        $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
-          '[{"op":"add","path":"/spec/config/integrations/frameworks/-","value":"DisaggregatedSet"}]'
-        DISAGGREGATEDSET_ADDED=true
-        trap restore_disaggregatedset_on_exit EXIT
-        wait_for_disaggregatedset_rollout
-      fi
-      ;;
     sequential)
       echo "Patching cluster Kueue CR for sequential (admissionFairSharing)..."
       $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
@@ -258,30 +137,6 @@ function configure_kueue_for_folder() {
 function restore_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
-    singlecluster)
-      if [ "$DISAGGREGATEDSET_ADDED" = true ]; then
-        local frameworks_output index
-        local -a frameworks
-        if ! frameworks_output=$(kueue_frameworks); then
-          echo "Error: failed to read the cluster Kueue CR frameworks; DisaggregatedSet may still be enabled" >&2
-          return 1
-        fi
-        mapfile -t frameworks <<< "$frameworks_output"
-        for index in "${!frameworks[@]}"; do
-          if [ "${frameworks[$index]}" = "DisaggregatedSet" ]; then
-            echo "Removing DisaggregatedSet from the cluster Kueue CR frameworks..."
-            if ! $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
-              "[{\"op\":\"test\",\"path\":\"/spec/config/integrations/frameworks/${index}\",\"value\":\"DisaggregatedSet\"},{\"op\":\"remove\",\"path\":\"/spec/config/integrations/frameworks/${index}\"}]"; then
-              echo "Error: failed to remove DisaggregatedSet from the cluster Kueue CR" >&2
-              return 1
-            fi
-            break
-          fi
-        done
-        # DisaggregatedSet was removed, or is confirmed absent.
-        DISAGGREGATEDSET_ADDED=false
-      fi
-      ;;
     sequential)
       echo "Removing admissionFairSharing from cluster Kueue CR..."
       $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
