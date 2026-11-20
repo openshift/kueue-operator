@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	clientgotesting "k8s.io/client-go/testing"
 )
@@ -148,16 +149,27 @@ func TestMissingDisaggregatedSetDependencies(t *testing.T) {
 		"no frameworks": {},
 	}
 
-	t.Run("canceled context reports the API as missing", func(t *testing.T) {
+	t.Run("the discovery request uses the given context", func(t *testing.T) {
+		frameworks := []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet}
+		newDiscovery := func() *contextCheckingDiscovery {
+			return &contextCheckingDiscovery{FakeDiscovery: &fakediscovery.FakeDiscovery{
+				Fake: &clientgotesting.Fake{Resources: []*metav1.APIResourceList{disaggregatedSetResources}},
+			}}
+		}
+
+		got, err := missingDisaggregatedSetDependencies(t.Context(), frameworks, newDiscovery())
+		if err != nil {
+			t.Fatalf("unexpected error with a live context: %v", err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("expected no missing dependencies with a live context, got %v", got)
+		}
+
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		fake := &clientgotesting.Fake{Resources: []*metav1.APIResourceList{disaggregatedSetResources}}
-		fake.PrependReactor("get", "resource", func(clientgotesting.Action) (bool, runtime.Object, error) {
-			return true, nil, ctx.Err()
-		})
-		got, err := missingDisaggregatedSetDependencies(ctx, []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet}, &fakediscovery.FakeDiscovery{Fake: fake})
+		got, err = missingDisaggregatedSetDependencies(ctx, frameworks, newDiscovery())
 		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("expected context.Canceled, got %v", err)
+			t.Fatalf("expected context.Canceled from the discovery request, got %v", err)
 		}
 		if diff := cmp.Diff([]string{disaggregatedSetMissingDependency}, got); diff != "" {
 			t.Fatalf("unexpected dependencies (-want +got):\n%s", diff)
@@ -184,6 +196,22 @@ func TestMissingDisaggregatedSetDependencies(t *testing.T) {
 			}
 		})
 	}
+}
+
+// contextCheckingDiscovery is a discovery double that fails the discovery
+// request with the error of the context it receives, so tests can observe
+// whether a caller propagates its context to discovery.
+type contextCheckingDiscovery struct {
+	*fakediscovery.FakeDiscovery
+}
+
+var _ discovery.DiscoveryInterfaceWithContext = &contextCheckingDiscovery{}
+
+func (d *contextCheckingDiscovery) ServerResourcesForGroupVersionWithContext(ctx context.Context, groupVersion string) (*metav1.APIResourceList, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return d.FakeDiscovery.ServerResourcesForGroupVersionWithContext(ctx, groupVersion)
 }
 
 // TestPodBasedWebhookAssets runs the webhook filtering against the bundled
