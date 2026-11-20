@@ -1,16 +1,19 @@
 package operator
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openshift/kueue-operator/bindata"
 	kueuev1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
+	"github.com/openshift/kueue-operator/pkg/webhook"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	clientgotesting "k8s.io/client-go/testing"
@@ -89,6 +92,253 @@ func TestMissingConsumableCapacityDependencies(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if diff := cmp.Diff(tc.want, missingConsumableCapacityDependencies(tc.resources, tc.enabled)); diff != "" {
 				t.Fatalf("unexpected dependencies (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestMissingDisaggregatedSetDependencies(t *testing.T) {
+	disaggregatedSetResources := &metav1.APIResourceList{
+		GroupVersion: "disaggregatedset.x-k8s.io/v1",
+		APIResources: []metav1.APIResource{
+			{Name: "disaggregatedsets", Kind: "DisaggregatedSet", Namespaced: true},
+		},
+	}
+	tests := map[string]struct {
+		frameworks []kueuev1.KueueIntegration
+		resources  []*metav1.APIResourceList
+		listErr    error
+		want       []string
+		wantErr    bool
+	}{
+		"disaggregatedset selected and API group not served": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet},
+			want:       []string{disaggregatedSetMissingDependency},
+		},
+		"disaggregatedset selected and only another version served": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet},
+			resources: []*metav1.APIResourceList{{
+				GroupVersion: "disaggregatedset.x-k8s.io/v1alpha1",
+				APIResources: []metav1.APIResource{{Name: "disaggregatedsets", Kind: "DisaggregatedSet", Namespaced: true}},
+			}},
+			want: []string{disaggregatedSetMissingDependency},
+		},
+		"disaggregatedset selected and v1 served without the DisaggregatedSet kind": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet},
+			resources: []*metav1.APIResourceList{{
+				GroupVersion: "disaggregatedset.x-k8s.io/v1",
+				APIResources: []metav1.APIResource{{Name: "disaggregatedsetrolescalers", Kind: "DisaggregatedSetRoleScaler", Namespaced: true}},
+			}},
+			want: []string{disaggregatedSetMissingDependency},
+		},
+		"disaggregatedset selected and v1 served": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationLeaderWorkerSet, kueuev1.KueueIntegrationDisaggregatedSet},
+			resources:  []*metav1.APIResourceList{disaggregatedSetResources},
+		},
+		"disaggregatedset selected and discovery fails": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet},
+			listErr:    errors.New("discovery unavailable"),
+			want:       []string{disaggregatedSetMissingDependency},
+			wantErr:    true,
+		},
+		"disaggregatedset not selected and API not served": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationBatchJob, kueuev1.KueueIntegrationLeaderWorkerSet},
+		},
+		"no frameworks": {},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			fake := &clientgotesting.Fake{Resources: tc.resources}
+			if tc.listErr != nil {
+				fake.PrependReactor("get", "resource", func(clientgotesting.Action) (bool, runtime.Object, error) {
+					return true, nil, tc.listErr
+				})
+			}
+			got, err := missingDisaggregatedSetDependencies(tc.frameworks, &fakediscovery.FakeDiscovery{Fake: fake})
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("unexpected error: %v, want error: %t", err, tc.wantErr)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Fatalf("unexpected dependencies (-want +got):\n%s", diff)
+			}
+			if !slices.Contains(tc.frameworks, kueuev1.KueueIntegrationDisaggregatedSet) && len(fake.Actions()) != 0 {
+				t.Fatalf("expected no discovery calls when DisaggregatedSet is not selected, got %d", len(fake.Actions()))
+			}
+		})
+	}
+}
+
+// TestPodBasedWebhookAssets runs the webhook filtering against the bundled
+// webhook configurations. Every webhook in the assets must map to a registered
+// framework, otherwise the filtering panics during reconciliation.
+func TestPodBasedWebhookAssets(t *testing.T) {
+	validating := resourceread.ReadValidatingWebhookConfigurationV1OrDie(bindata.MustAsset("assets/kueue-operator/validatingwebhook.yaml"))
+	mutating := resourceread.ReadMutatingWebhookConfigurationV1OrDie(bindata.MustAsset("assets/kueue-operator/mutatingwebhook.yaml"))
+	allFrameworks := []kueuev1.KueueIntegration{
+		kueuev1.KueueIntegrationBatchJob,
+		kueuev1.KueueIntegrationRayJob,
+		kueuev1.KueueIntegrationRayCluster,
+		kueuev1.KueueIntegrationRayService,
+		kueuev1.KueueIntegrationJobSet,
+		kueuev1.KueueIntegrationMPIJob,
+		kueuev1.KueueIntegrationPaddleJob,
+		kueuev1.KueueIntegrationPyTorchJob,
+		kueuev1.KueueIntegrationTFJob,
+		kueuev1.KueueIntegrationTrainJob,
+		kueuev1.KueueIntegrationXGBoostJob,
+		kueuev1.KueueIntegrationJaxJob,
+		kueuev1.KueueIntegrationAppWrapper,
+		kueuev1.KueueIntegrationPod,
+		kueuev1.KueueIntegrationDeployment,
+		kueuev1.KueueIntegrationStatefulSet,
+		kueuev1.KueueIntegrationLeaderWorkerSet,
+		kueuev1.KueueIntegrationSparkApplication,
+		kueuev1.KueueIntegrationDisaggregatedSet,
+	}
+	withoutDisaggregatedSet := slices.DeleteFunc(slices.Clone(allFrameworks), func(f kueuev1.KueueIntegration) bool {
+		return f == kueuev1.KueueIntegrationDisaggregatedSet
+	})
+
+	tests := map[string]struct {
+		frameworks           []kueuev1.KueueIntegration
+		wantDisaggregatedSet bool
+		wantPod              bool
+	}{
+		"all frameworks": {
+			frameworks:           allFrameworks,
+			wantDisaggregatedSet: true,
+			wantPod:              true,
+		},
+		"all frameworks except disaggregatedset": {
+			frameworks: withoutDisaggregatedSet,
+			wantPod:    true,
+		},
+		"disaggregatedset only": {
+			frameworks:           []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet},
+			wantDisaggregatedSet: true,
+			wantPod:              true,
+		},
+		"batch job only": {
+			frameworks: []kueuev1.KueueIntegration{kueuev1.KueueIntegrationBatchJob},
+		},
+		"no frameworks": {},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("webhook filtering panicked on the bundled webhook assets: %v", r)
+				}
+			}()
+			cfg := kueuev1.KueueConfiguration{Integrations: kueuev1.Integrations{Frameworks: tc.frameworks}}
+			gotValidating := webhook.ModifyPodBasedValidatingWebhook(cfg, validating)
+			gotMutating := webhook.ModifyPodBasedMutatingWebhook(cfg, mutating)
+
+			validatingSelectors := map[string]*metav1.LabelSelector{}
+			for _, wh := range gotValidating.Webhooks {
+				validatingSelectors[wh.Name] = wh.NamespaceSelector
+			}
+			mutatingSelectors := map[string]*metav1.LabelSelector{}
+			for _, wh := range gotMutating.Webhooks {
+				mutatingSelectors[wh.Name] = wh.NamespaceSelector
+			}
+			for name, want := range map[string]bool{"vdisaggregatedset.kb.io": tc.wantDisaggregatedSet, "vpod.kb.io": tc.wantPod} {
+				selector, got := validatingSelectors[name]
+				if got != want {
+					t.Errorf("validating webhook %q present: %t, want %t", name, got, want)
+				}
+				if got && !hasManagedNamespaceRequirement(selector) {
+					t.Errorf("validating webhook %q namespace selector does not require the managed label: %+v", name, selector)
+				}
+			}
+			for name, want := range map[string]bool{"mdisaggregatedset.kb.io": tc.wantDisaggregatedSet, "mpod.kb.io": tc.wantPod} {
+				selector, got := mutatingSelectors[name]
+				if got != want {
+					t.Errorf("mutating webhook %q present: %t, want %t", name, got, want)
+				}
+				if got && !hasManagedNamespaceRequirement(selector) {
+					t.Errorf("mutating webhook %q namespace selector does not require the managed label: %+v", name, selector)
+				}
+			}
+		})
+	}
+}
+
+func hasManagedNamespaceRequirement(selector *metav1.LabelSelector) bool {
+	if selector == nil {
+		return false
+	}
+	return slices.ContainsFunc(selector.MatchExpressions, func(req metav1.LabelSelectorRequirement) bool {
+		return req.Key == "kueue.openshift.io/managed" &&
+			req.Operator == metav1.LabelSelectorOpIn &&
+			slices.Equal(req.Values, []string{"true"})
+	})
+}
+
+// TestDisaggregatedSetRBACAssets checks the DisaggregatedSet permissions synced
+// from upstream Kueue: the Kueue manager can read DisaggregatedSets, and the
+// editor and viewer roles are aggregated into the Kueue batch admin and user roles.
+func TestDisaggregatedSetRBACAssets(t *testing.T) {
+	managerRole := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset("assets/kueue-operator/clusterroles/clusterrole-manager-role.yaml"))
+	if err := scopeManagerRoleResourceNames(managerRole); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, rule := range managerRole.Rules {
+		if slices.Contains(rule.APIGroups, "disaggregatedset.x-k8s.io") && slices.Contains(rule.Resources, "disaggregatedsets") {
+			found = true
+			if diff := cmp.Diff([]string{"get", "list", "watch"}, rule.Verbs); diff != "" {
+				t.Errorf("unexpected manager role verbs for disaggregatedsets (-want +got):\n%s", diff)
+			}
+			if len(rule.ResourceNames) != 0 {
+				t.Errorf("manager role rule for disaggregatedsets is scoped to resource names %v", rule.ResourceNames)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("manager role has no rule for disaggregatedsets")
+	}
+
+	tests := map[string]struct {
+		asset     string
+		name      string
+		wantVerbs []string
+	}{
+		"editor": {
+			asset:     "assets/kueue-operator/clusterroles/clusterrole-disaggregatedset-editor-role.yaml",
+			name:      "kueue-disaggregatedset-editor-role",
+			wantVerbs: []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+		},
+		"viewer": {
+			asset:     "assets/kueue-operator/clusterroles/clusterrole-disaggregatedset-viewer-role.yaml",
+			name:      "kueue-disaggregatedset-viewer-role",
+			wantVerbs: []string{"get", "list", "watch"},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			role := resourceread.ReadClusterRoleV1OrDie(bindata.MustAsset(tc.asset))
+			if role.Name != tc.name {
+				t.Errorf("unexpected role name %q, want %q", role.Name, tc.name)
+			}
+			if role.AggregationRule != nil {
+				t.Errorf("role %q has an aggregation rule, so the operator would not apply it", role.Name)
+			}
+			for _, label := range []string{"rbac.kueue.x-k8s.io/batch-admin", "rbac.kueue.x-k8s.io/batch-user"} {
+				if role.Labels[label] != "true" {
+					t.Errorf("role %q is missing aggregation label %s=true", role.Name, label)
+				}
+			}
+			var verbs []string
+			for _, rule := range role.Rules {
+				if slices.Contains(rule.Resources, "disaggregatedsets") {
+					verbs = rule.Verbs
+				}
+			}
+			if diff := cmp.Diff(tc.wantVerbs, verbs); diff != "" {
+				t.Errorf("unexpected verbs for disaggregatedsets (-want +got):\n%s", diff)
 			}
 		})
 	}

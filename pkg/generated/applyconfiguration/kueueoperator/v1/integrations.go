@@ -29,9 +29,9 @@ import (
 // which jobs will be managed by Kueue.
 type IntegrationsApplyConfiguration struct {
 	// frameworks are a list of frameworks that Kueue has support for.
-	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet and SparkApplication.
+	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet, SparkApplication and DisaggregatedSet.
 	// frameworks are required and must have at least one element.
-	// frameworks can not have more than 18 elements.
+	// frameworks can not have more than 19 elements.
 	// Each framework represents a type of job that Kueue will manage.
 	Frameworks []kueueoperatorv1.KueueIntegration `json:"frameworks,omitempty"`
 	// externalFrameworks are a list of GroupVersionResources

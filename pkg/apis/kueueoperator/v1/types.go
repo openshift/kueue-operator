@@ -231,7 +231,7 @@ type SourceKeyAnnotation struct {
 	Key string `json:"key,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;RayService;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet;SparkApplication
+// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;RayService;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet;SparkApplication;DisaggregatedSet
 type KueueIntegration string
 
 const (
@@ -253,6 +253,7 @@ const (
 	KueueIntegrationStatefulSet      KueueIntegration = "StatefulSet"
 	KueueIntegrationLeaderWorkerSet  KueueIntegration = "LeaderWorkerSet"
 	KueueIntegrationSparkApplication KueueIntegration = "SparkApplication"
+	KueueIntegrationDisaggregatedSet KueueIntegration = "DisaggregatedSet"
 )
 
 // +kubebuilder:validation:Enum=Default;Custom
@@ -379,11 +380,11 @@ type ExternalFramework struct {
 // which jobs will be managed by Kueue.
 type Integrations struct {
 	// frameworks are a list of frameworks that Kueue has support for.
-	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet and SparkApplication.
+	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet, SparkApplication and DisaggregatedSet.
 	// frameworks are required and must have at least one element.
-	// frameworks can not have more than 18 elements.
+	// frameworks can not have more than 19 elements.
 	// Each framework represents a type of job that Kueue will manage.
-	// +kubebuilder:validation:MaxItems=18
+	// +kubebuilder:validation:MaxItems=19
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, x == y))",message="each item in frameworks must be unique"
 	// +listType=set
