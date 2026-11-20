@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -78,7 +79,7 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 				config.Integrations.Frameworks = append(config.Integrations.Frameworks, framework)
 			}
 		}
-		applyKueueConfig(ctx, *config, kubeClient)
+		applyKueueConfigAndWaitForRollout(ctx, *config)
 	})
 
 	AfterAll(func(ctx context.Context) {
@@ -86,7 +87,7 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 			return
 		}
 		By("Restoring the initial Kueue configuration")
-		applyKueueConfig(ctx, initialKueueInstance.Spec.Config, kubeClient)
+		applyKueueConfigAndWaitForRollout(ctx, initialKueueInstance.Spec.Config)
 	})
 
 	When("the integration is enabled", func() {
@@ -286,15 +287,22 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 			_, err = disaggregatedSets(ns.Name).Update(ctx, current, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Keep the highest reservation seen while the rollout runs, so a single
+			// over-quota observation fails the spec instead of being retried away.
+			maxReserved := resource.Quantity{}
 			Eventually(func(g Gomega) {
+				if reserved := reservedCPU(g, ctx, cqName); reserved.Cmp(maxReserved) > 0 {
+					maxReserved = reserved.DeepCopy()
+				}
 				g.Expect(sliceWorkloads(g, ctx, ns.Name, ds.GetUID())).To(HaveLen(2))
-				g.Expect(reservedCPU(g, ctx, cqName).Cmp(resource.MustParse(quotaTwoSlices))).To(BeNumerically("<=", 0))
 				pods := disaggregatedSetPods(g, ctx, ns.Name, ds.GetName())
 				g.Expect(pods).To(HaveLen(8))
 				for _, pod := range pods {
 					g.Expect(pod.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{Name: "ROLLOUT", Value: "v2"}), "Pod %s is not rolled out", pod.Name)
 				}
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+			Expect(maxReserved.Cmp(resource.MustParse(quotaTwoSlices))).To(BeNumerically("<=", 0),
+				"the rollout reserved %s CPU, more than the %s quota of two slices", maxReserved.String(), quotaTwoSlices)
 
 			By("Checking that the rollout kept the slice Workloads")
 			final := sliceWorkloads(Default, ctx, ns.Name, ds.GetUID())
@@ -412,6 +420,13 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 			g.Expect(admittedSliceWorkloads(g, ctx, ns.Name, ds.GetUID())).To(Equal(2))
 		}, testutils.WorkloadTimeout, testutils.OperatorPoll).Should(Succeed())
 
+		By("Recording the Pods of both admitted slices before the preemption")
+		var originalPods []types.UID
+		Eventually(func(g Gomega) {
+			originalPods = ungatedPodUIDs(g, ctx, ns.Name, ds.GetName())
+			g.Expect(originalPods).To(HaveLen(8), "every Pod of both admitted slices must be ungated before the preemption")
+		}, testutils.WorkloadTimeout, testutils.OperatorPoll).Should(Succeed())
+
 		By("Creating a higher-priority Job that needs the quota of one slice")
 		job := builder.NewJob()
 		job.Labels[testutils.QueueLabel] = lqName
@@ -446,7 +461,8 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 		var keptPods []types.UID
 		Eventually(func(g Gomega) {
 			keptPods = ungatedPodUIDs(g, ctx, ns.Name, ds.GetName())
-			g.Expect(keptPods).To(HaveLen(4))
+			g.Expect(keptPods).To(HaveLen(4), "only the Pods of the surviving slice must stay ungated")
+			g.Expect(originalPods).To(ContainElements(keptPods), "the surviving slice must keep its original Pods, not recreated ones")
 		}, testutils.WorkloadTimeout, testutils.OperatorPoll).Should(Succeed())
 		Consistently(func(g Gomega) {
 			wl, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(ns.Name).Get(ctx, kept, metav1.GetOptions{})
@@ -507,7 +523,7 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 		config.Integrations.Frameworks = slices.DeleteFunc(config.Integrations.Frameworks, func(f ssv1.KueueIntegration) bool {
 			return f == ssv1.KueueIntegrationDisaggregatedSet
 		})
-		applyKueueConfig(ctx, *config, kubeClient)
+		applyKueueConfigAndWaitForRollout(ctx, *config)
 
 		cm, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -530,6 +546,47 @@ var _ = Describe("DisaggregatedSet", Label("disaggregatedset"), Ordered, func() 
 		}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 	})
 })
+
+// kueueManagerConfigAnnotation is the Pod template annotation in which the
+// operator records the hash of the kueue-manager-config data.
+const kueueManagerConfigAnnotation = "configmap/kueue-manager-config"
+
+// applyKueueConfigAndWaitForRollout applies the configuration with applyKueueConfig,
+// then waits until the kueue-controller-manager Deployment has rolled out the Pod
+// template that carries the new manager configuration. A Deployment whose old
+// replicas are still ready is not enough: their webhooks would serve the tests
+// with the previous configuration.
+func applyKueueConfigAndWaitForRollout(ctx context.Context, config ssv1.KueueConfiguration) {
+	deployments := kubeClient.AppsV1().Deployments(testutils.OperatorNamespace)
+	configMaps := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace)
+	before, err := deployments.Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-controller-manager Deployment")
+	configBefore, err := configMaps.Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-manager-config ConfigMap")
+
+	applyKueueConfig(ctx, config, kubeClient)
+
+	configAfter, err := configMaps.Get(ctx, "kueue-manager-config", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-manager-config ConfigMap")
+	configChanged := !maps.Equal(configBefore.Data, configAfter.Data)
+	previousConfigHash := before.Spec.Template.Annotations[kueueManagerConfigAnnotation]
+
+	By("Waiting for the kueue-controller-manager rollout of the new configuration")
+	Eventually(func(g Gomega) {
+		d, err := deployments.Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-controller-manager Deployment")
+		if configChanged {
+			g.Expect(d.Spec.Template.Annotations[kueueManagerConfigAnnotation]).NotTo(Equal(previousConfigHash),
+				"the Deployment template does not carry the new manager configuration yet")
+		}
+		replicas := ptr.Deref(d.Spec.Replicas, 1)
+		g.Expect(d.Status.ObservedGeneration).To(BeNumerically(">=", d.Generation), "the Deployment controller has not observed the latest template")
+		g.Expect(d.Status.UpdatedReplicas).To(Equal(replicas), "not every replica runs the latest template")
+		g.Expect(d.Status.ReadyReplicas).To(Equal(replicas), "not every replica is ready")
+		g.Expect(d.Status.AvailableReplicas).To(Equal(replicas), "not every replica is available")
+		g.Expect(d.Status.Replicas).To(Equal(replicas), "replicas of the previous template are still running")
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
+}
 
 func disaggregatedSets(namespace string) dynamic.ResourceInterface {
 	return clients.DynamicClient.Resource(testutils.DisaggregatedSetGVR).Namespace(namespace)
@@ -595,7 +652,9 @@ func setTemplateAnnotation(ds *unstructured.Unstructured, key, value string) {
 	Expect(err).NotTo(HaveOccurred())
 	for i := range roles {
 		for _, template := range []string{"leaderTemplate", "workerTemplate"} {
-			if _, found, _ := unstructured.NestedMap(roles[i].(map[string]any), "spec", "leaderWorkerTemplate", template); !found {
+			_, found, err := unstructured.NestedMap(roles[i].(map[string]any), "spec", "leaderWorkerTemplate", template)
+			Expect(err).NotTo(HaveOccurred(), "role %d has a malformed %s", i, template)
+			if !found {
 				continue
 			}
 			Expect(unstructured.SetNestedField(roles[i].(map[string]any), value, "spec", "leaderWorkerTemplate", template, "metadata", "annotations", key)).To(Succeed())
@@ -840,26 +899,38 @@ func dumpDisaggregatedSetDiagnostics(ctx context.Context, namespace, cqName stri
 		}
 		GinkgoWriter.Printf("=== %s ===\n%s\n", title, out)
 	}
-	if list, err := disaggregatedSets(namespace).List(ctx, metav1.ListOptions{}); err == nil {
+	if list, err := disaggregatedSets(namespace).List(ctx, metav1.ListOptions{}); err != nil {
+		GinkgoLogr.Error(err, "failed to list DisaggregatedSets for diagnostics", "namespace", namespace)
+	} else {
 		dump("DisaggregatedSets", list.Items)
 	}
-	if list, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{}); err == nil {
+	if list, err := clients.UpstreamKueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{}); err != nil {
+		GinkgoLogr.Error(err, "failed to list Workloads for diagnostics", "namespace", namespace)
+	} else {
 		dump("Workloads", list.Items)
 	}
-	if pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{}); err == nil {
+	if pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{}); err != nil {
+		GinkgoLogr.Error(err, "failed to list Pods for diagnostics", "namespace", namespace)
+	} else {
 		for _, pod := range pods.Items {
 			GinkgoWriter.Printf("Pod %s owners=%v gates=%v phase=%s\n", pod.Name, pod.OwnerReferences, pod.Spec.SchedulingGates, pod.Status.Phase)
 		}
 	}
-	if cq, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cqName, metav1.GetOptions{}); err == nil {
+	if cq, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, cqName, metav1.GetOptions{}); err != nil {
+		GinkgoLogr.Error(err, "failed to get the ClusterQueue for diagnostics", "clusterQueue", cqName)
+	} else {
 		dump("ClusterQueue status", cq.Status)
 	}
-	if events, err := kubeClient.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{}); err == nil {
+	if events, err := kubeClient.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{}); err != nil {
+		GinkgoLogr.Error(err, "failed to list Events for diagnostics", "namespace", namespace)
+	} else {
 		for _, event := range events.Items {
 			GinkgoWriter.Printf("Event %s %s/%s: %s\n", event.Reason, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Message)
 		}
 	}
-	if cm, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{}); err == nil {
+	if cm, err := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace).Get(ctx, "kueue-manager-config", metav1.GetOptions{}); err != nil {
+		GinkgoLogr.Error(err, "failed to get the kueue-manager-config ConfigMap for diagnostics", "namespace", testutils.OperatorNamespace)
+	} else {
 		GinkgoWriter.Printf("=== kueue-manager-config ===\n%s\n", cm.Data["controller_manager_config.yaml"])
 	}
 	testutils.DumpKueueControllerManagerLogs(ctx, kubeClient, 200)
