@@ -116,17 +116,34 @@ function kueue_frameworks() {
 
 DISAGGREGATEDSET_ADDED=false
 
+# Removes DisaggregatedSet from the Kueue CR when the runner added it and the
+# script exits before the normal restore, keeping the original exit status.
+# shellcheck disable=SC2317 # invoked through the EXIT trap
+function restore_disaggregatedset_on_exit() {
+  local status=$?
+  if [ "$DISAGGREGATEDSET_ADDED" = true ]; then
+    restore_kueue_for_folder singlecluster || echo "Error: failed to remove DisaggregatedSet from the cluster Kueue CR" >&2
+  fi
+  exit "$status"
+}
+
 function configure_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
     singlecluster)
       # The upstream DisaggregatedSet cases need the DisaggregatedSet integration,
       # which requires a LeaderWorkerSet that serves disaggregatedset.x-k8s.io/v1.
-      if ! kueue_frameworks | grep -qx "DisaggregatedSet"; then
+      local frameworks_output
+      if ! frameworks_output=$(kueue_frameworks); then
+        echo "Error: failed to read the cluster Kueue CR frameworks" >&2
+        return 1
+      fi
+      if ! grep -qx "DisaggregatedSet" <<< "$frameworks_output"; then
         echo "Adding DisaggregatedSet to the cluster Kueue CR frameworks for singlecluster..."
         $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
           '[{"op":"add","path":"/spec/config/integrations/frameworks/-","value":"DisaggregatedSet"}]'
         DISAGGREGATEDSET_ADDED=true
+        trap restore_disaggregatedset_on_exit EXIT
         # Let's wait for the reconciliation to complete. The test suite checks if kueue-controller-manager is available.
         $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
       fi
@@ -158,16 +175,25 @@ function restore_kueue_for_folder() {
   case "$folder" in
     singlecluster)
       if [ "$DISAGGREGATEDSET_ADDED" = true ]; then
-        local frameworks index
-        mapfile -t frameworks < <(kueue_frameworks)
+        local frameworks_output index
+        local -a frameworks
+        if ! frameworks_output=$(kueue_frameworks); then
+          echo "Error: failed to read the cluster Kueue CR frameworks; DisaggregatedSet may still be enabled" >&2
+          return 1
+        fi
+        mapfile -t frameworks <<< "$frameworks_output"
         for index in "${!frameworks[@]}"; do
           if [ "${frameworks[$index]}" = "DisaggregatedSet" ]; then
             echo "Removing DisaggregatedSet from the cluster Kueue CR frameworks..."
-            $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
-              "[{\"op\":\"test\",\"path\":\"/spec/config/integrations/frameworks/${index}\",\"value\":\"DisaggregatedSet\"},{\"op\":\"remove\",\"path\":\"/spec/config/integrations/frameworks/${index}\"}]"
+            if ! $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
+              "[{\"op\":\"test\",\"path\":\"/spec/config/integrations/frameworks/${index}\",\"value\":\"DisaggregatedSet\"},{\"op\":\"remove\",\"path\":\"/spec/config/integrations/frameworks/${index}\"}]"; then
+              echo "Error: failed to remove DisaggregatedSet from the cluster Kueue CR" >&2
+              return 1
+            fi
             break
           fi
         done
+        # DisaggregatedSet was removed, or is confirmed absent.
         DISAGGREGATEDSET_ADDED=false
       fi
       ;;
