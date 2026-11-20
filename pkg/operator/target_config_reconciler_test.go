@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -147,6 +148,22 @@ func TestMissingDisaggregatedSetDependencies(t *testing.T) {
 		"no frameworks": {},
 	}
 
+	t.Run("canceled context reports the API as missing", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		fake := &clientgotesting.Fake{Resources: []*metav1.APIResourceList{disaggregatedSetResources}}
+		fake.PrependReactor("get", "resource", func(clientgotesting.Action) (bool, runtime.Object, error) {
+			return true, nil, ctx.Err()
+		})
+		got, err := missingDisaggregatedSetDependencies(ctx, []kueuev1.KueueIntegration{kueuev1.KueueIntegrationDisaggregatedSet}, &fakediscovery.FakeDiscovery{Fake: fake})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got %v", err)
+		}
+		if diff := cmp.Diff([]string{disaggregatedSetMissingDependency}, got); diff != "" {
+			t.Fatalf("unexpected dependencies (-want +got):\n%s", diff)
+		}
+	})
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			fake := &clientgotesting.Fake{Resources: tc.resources}
@@ -155,7 +172,7 @@ func TestMissingDisaggregatedSetDependencies(t *testing.T) {
 					return true, nil, tc.listErr
 				})
 			}
-			got, err := missingDisaggregatedSetDependencies(tc.frameworks, &fakediscovery.FakeDiscovery{Fake: fake})
+			got, err := missingDisaggregatedSetDependencies(t.Context(), tc.frameworks, &fakediscovery.FakeDiscovery{Fake: fake})
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("unexpected error: %v, want error: %t", err, tc.wantErr)
 			}

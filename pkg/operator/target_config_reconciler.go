@@ -344,7 +344,7 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 	// LeaderWorkerSet serves. The framework and its feature gate are still rendered
 	// while the API is missing: Kueue registers the webhook and defers the controller
 	// setup until the API is served, so no restart is needed once it is installed.
-	disaggregatedSetDeps, err := missingDisaggregatedSetDependencies(kueue.Spec.Config.Integrations.Frameworks, c.discoveryClient)
+	disaggregatedSetDeps, err := missingDisaggregatedSetDependencies(ctx, kueue.Spec.Config.Integrations.Frameworks, c.discoveryClient)
 	if err != nil {
 		klog.Errorf("unable to check if the DisaggregatedSet API is served: %v", err)
 	}
@@ -2527,16 +2527,32 @@ var disaggregatedSetGVK = schema.GroupVersionKind{
 // missing dependency when the DisaggregatedSet integration is enabled and the API
 // is not served. Discovery is used instead of the CRD informer cache because the
 // cache strips the CRD status, and discovery only lists the served versions of
-// established CRDs. When the check fails, the API is reported as missing.
-func missingDisaggregatedSetDependencies(frameworks []kueuev1.KueueIntegration, discoveryClient discovery.DiscoveryInterface) ([]string, error) {
+// established CRDs. When the check fails, the API is reported as missing. The
+// discovery request uses the sync context, so it is canceled with the sync.
+func missingDisaggregatedSetDependencies(ctx context.Context, frameworks []kueuev1.KueueIntegration, discoveryClient discovery.DiscoveryInterface) ([]string, error) {
 	if !slices.Contains(frameworks, kueuev1.KueueIntegrationDisaggregatedSet) {
 		return nil, nil
 	}
-	served, err := isResourceRegistered(discoveryClient, disaggregatedSetGVK)
+	served, err := isResourceRegisteredWithContext(ctx, discovery.ToDiscoveryInterfaceWithContext(discoveryClient), disaggregatedSetGVK)
 	if err != nil || !served {
 		return []string{disaggregatedSetMissingDependency}, err
 	}
 	return nil, nil
+}
+
+// isResourceRegisteredWithContext reports whether discovery serves the kind of
+// the given GroupVersionKind, using ctx for the discovery request.
+func isResourceRegisteredWithContext(ctx context.Context, discoveryClient discovery.DiscoveryInterfaceWithContext, gvk schema.GroupVersionKind) (bool, error) {
+	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersionWithContext(ctx, gvk.GroupVersion().String())
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return slices.ContainsFunc(apiResourceList.APIResources, func(r metav1.APIResource) bool {
+		return r.Kind == gvk.Kind
+	}), nil
 }
 
 func isResourceRegistered(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (bool, error) {
