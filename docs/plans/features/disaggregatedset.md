@@ -97,7 +97,7 @@ Location: `test/e2e/e2e_disaggregatedset_test.go`, label `disaggregatedset` (and
 | E8 | Rollout | A template change that keeps the Pod shape rolls out within the admitted quota and keeps the slice Workloads | Automated, not run yet |
 | E9 | Validation | `maxSurge` above zero, `subRoles`, a queue name in role metadata, and replica or resource changes of a running DisaggregatedSet are rejected | Automated, not run yet |
 | E10 | Unmanaged namespace | A DisaggregatedSet in a namespace without `kueue.openshift.io/managed=true` gets no Workloads and no gates | Automated, not run yet |
-| E11 | No queue name | In a managed namespace without a default LocalQueue, a DisaggregatedSet without a queue name gets no Workloads | Automated, not run yet |
+| E11 | No queue name | With `spec.config.workloadManagement.labelPolicy: QueueName`, in a managed namespace without a default LocalQueue, a DisaggregatedSet without a queue name gets no Workloads (`None` renders `manageJobsWithoutQueueName: true`, which manages workloads without a queue name) | Automated, not run yet |
 | E12 | Existing integrations | A Job, a Pod and a LeaderWorkerSet are admitted while the integration is enabled | Automated, not run yet |
 | E13 | Disablement | Removing `DisaggregatedSet` after the DisaggregatedSets are deleted removes the framework, the gate and the DisaggregatedSet webhooks without degrading the `Kueue` CR | Automated, not run yet |
 | E14 | TAS placement | Every PodSet of a slice gets a topology assignment | Automated, not run yet |
