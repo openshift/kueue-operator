@@ -58,8 +58,40 @@ index 24811bd7d..307dbd677 100644
  
  		rf = utiltestingapi.MakeResourceFlavor("afs-rf").Obj()
  		behavioral.MustCreate(ctx, k8sClient, rf)
+diff --git a/test/e2e/sequential/extended/disaggregatedset_test.go b/test/e2e/sequential/extended/disaggregatedset_test.go
+index 3ec7221c8..bea91973f 100644
+--- a/test/e2e/sequential/extended/disaggregatedset_test.go
++++ b/test/e2e/sequential/extended/disaggregatedset_test.go
+@@ -28,7 +28,6 @@ import (
+ 	"sigs.k8s.io/controller-runtime/pkg/client"
+ 	disaggregatedsetv1 "sigs.k8s.io/lws/api/disaggregatedset/v1"
+ 
+-	configapi "sigs.k8s.io/kueue/apis/config/v1beta2"
+ 	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta2"
+ 	"sigs.k8s.io/kueue/pkg/controller/jobs/disaggregatedset"
+ 	utiltesting "sigs.k8s.io/kueue/pkg/util/testing"
+@@ -47,16 +46,9 @@ var _ = ginkgo.Describe("DisaggregatedSet rollout with waitForPodsReady", ginkgo
+ 	)
+ 
+ 	ginkgo.BeforeAll(func() {
+-		// The extended configuration already enables the DisaggregatedSet
+-		// integration, so only waitForPodsReady is added.
+-		e2e.UpdateKueueConfigurationAndRestart(ctx, k8sClient, defaultKueueCfg, kindClusterName, func(cfg *configapi.Configuration) {
+-			cfg.WaitForPodsReady = &configapi.WaitForPodsReady{
+-				BlockAdmission: new(false),
+-				Timeout:        metav1.Duration{Duration: behavioral.VeryLongTimeout},
+-				// Above the time that a rollout of the DisaggregatedSet takes.
+-				RecoveryTimeout: &metav1.Duration{Duration: behavioral.VeryLongTimeout},
+-			}
+-		})
++		// On OCP, the Kueue configuration is managed by the Kueue CR, so the
++		// test cannot add waitForPodsReady by restarting Kueue with a new configuration.
++		ginkgo.Skip("Kueue configuration is managed by the kueue-operator on OCP")
+ 	})
+ 
+ 	ginkgo.BeforeEach(func() {
 diff --git a/test/e2e/singlecluster/extended/suite_test.go b/test/e2e/singlecluster/extended/suite_test.go
-index 9f27f4b48..3e612b22f 100644
+index d6f591f74..3e612b22f 100644
 --- a/test/e2e/singlecluster/extended/suite_test.go
 +++ b/test/e2e/singlecluster/extended/suite_test.go
 @@ -55,12 +55,8 @@ var _ = ginkgo.BeforeSuite(func() {
@@ -69,7 +101,7 @@ index 9f27f4b48..3e612b22f 100644
 -	if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
 -		e2e.WaitForJobSetAvailability(ctx, k8sClient)
 -	}
--	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
+-	if ginkgo.Label("feature:leaderworkerset", "feature:disaggregatedset").MatchesLabelFilter(labelFilter) {
 -		e2e.WaitForLeaderWorkerSetAvailability(ctx, k8sClient, cfg)
 -	}
 +	// On OCP, JobSet and LeaderWorkerSet operators run in different namespaces,

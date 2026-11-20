@@ -2,7 +2,9 @@
 
 ## e2e.patch
 
-This patch sets up our e2e tests to skip waiting for operators as the namespace name is different and set up our namespaces. It also uses the OpenShift metrics certificate secret name and skips the configuration change for admission fair sharing as the configuration is managed in the Kueue instance.
+This patch sets up our e2e tests to skip waiting for operators as the namespace name is different and set up our namespaces. The skipped JobSet and LeaderWorkerSet availability checks include the `feature:disaggregatedset` label, because DisaggregatedSet is served by LeaderWorkerSet. It also uses the OpenShift metrics certificate secret name and skips the configuration change for admission fair sharing as the configuration is managed in the Kueue instance.
+
+It also skips the sequential `DisaggregatedSet rollout with waitForPodsReady` test. That test restarts Kueue with a modified configuration (`UpdateKueueConfigurationAndRestart`), which conflicts with the configuration managed by the Kueue instance.
 
 ## test_util_e2e.patch
 
