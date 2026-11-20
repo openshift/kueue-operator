@@ -87,6 +87,7 @@ func buildFrameworkList(kueuelist []kueue.KueueIntegration) []string {
 	conversionMap[string(kueue.KueueIntegrationStatefulSet)] = "statefulset"
 	conversionMap[string(kueue.KueueIntegrationTrainJob)] = "trainer.kubeflow.org/trainjob"
 	conversionMap[string(kueue.KueueIntegrationSparkApplication)] = "sparkoperator.k8s.io/sparkapplication"
+	conversionMap[string(kueue.KueueIntegrationDisaggregatedSet)] = "disaggregatedset.x-k8s.io/disaggregatedset"
 
 	ret := make([]string, 0, len(kueuelist))
 	for _, val := range kueuelist {
@@ -288,6 +289,13 @@ func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityE
 			// Kueue, it will be enabled by default and this explicit enablement won't be necessary.
 			name:    "SparkApplicationIntegration",
 			enabled: slices.Contains(kueueCfg.Integrations.Frameworks, kueue.KueueIntegrationSparkApplication),
+		},
+		{
+			// DisaggregatedSetIntegration is Alpha in Kueue, so we explicitly enable it
+			// when DisaggregatedSet is in the frameworks list. Kueue fails to start when the
+			// framework is listed without the gate, so the two are always rendered together.
+			name:    "DisaggregatedSetIntegration",
+			enabled: slices.Contains(kueueCfg.Integrations.Frameworks, kueue.KueueIntegrationDisaggregatedSet),
 		},
 		{
 			// ShortWorkloadNames prevents workload names from exceeding the 63-char
