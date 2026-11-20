@@ -49,7 +49,9 @@ Operator e2e tests use Ginkgo v2 + Gomega with label-based filtering (`Label("op
 
 ### Reuse TestResourceBuilder for workload objects
 
-All e2e tests that create workload objects (Job, Pod, JobSet, StatefulSet, Deployment, LeaderWorkerSet) must use `testutils.TestResourceBuilder` from `test/e2e/testutils/builders.go`. Do not construct raw struct literals for these types.
+All e2e tests that create workload objects (Job, Pod, JobSet, StatefulSet, Deployment, LeaderWorkerSet, DisaggregatedSet) must use `testutils.TestResourceBuilder` from `test/e2e/testutils/builders.go`. Do not construct raw struct literals for these types.
+
+`NewDisaggregatedSet()` returns an `*unstructured.Unstructured`, so the e2e tests do not depend on the typed DisaggregatedSet API. Create it with `clients.DynamicClient` and `testutils.DisaggregatedSetGVR`.
 
 ```go
 builder := testutils.NewTestResourceBuilder(namespace.Name, queueName)

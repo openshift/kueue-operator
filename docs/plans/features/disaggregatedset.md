@@ -87,21 +87,21 @@ Location: `test/e2e/e2e_disaggregatedset_test.go`, label `disaggregatedset` (and
 
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
-| E1 | Enablement | The ConfigMap, the webhooks with managed-namespace selectors and a non-degraded `Kueue` CR; the fixture gets two admitted slice Workloads | Planned |
-| E2 | Slice identity | Each slice Workload has the PodSets `prefill: 2`, `decode-leader: 1`, `decode-worker: 1` and 700m CPU | Planned |
-| E3 | Partial quota | With 500m, no slice reserves quota and every Pod stays gated; raising the quota admits both slices | Planned |
-| E4 | One-slice quota | With 1000m, exactly one slice is admitted and the four Pods of the other slice stay gated | Planned |
-| E5 | Whole-slice preemption | A higher-priority Job preempts exactly one slice; the other slice keeps its Pods; the slice is re-admitted when the Job is deleted | Planned |
-| E6 | Slice scaling | Scaling to three slices adds a gated slice; scaling to one releases the quota of removed slices | Planned |
-| E7 | Scale through zero | At zero replicas the slice Workloads are deleted and the quota is released; scaling up admits new slices | Planned |
-| E8 | Rollout | A template change that keeps the Pod shape rolls out within the admitted quota and keeps the slice Workloads | Planned |
-| E9 | Validation | `maxSurge` above zero, `subRoles`, a queue name in role metadata, and replica or resource changes of a running DisaggregatedSet are rejected | Planned |
-| E10 | Unmanaged namespace | A DisaggregatedSet in a namespace without `kueue.openshift.io/managed=true` gets no Workloads and no gates | Planned |
-| E11 | No queue name | In a managed namespace without a default LocalQueue, a DisaggregatedSet without a queue name gets no Workloads | Planned |
-| E12 | Existing integrations | A Job, a Pod and a LeaderWorkerSet are admitted while the integration is enabled | Planned |
-| E13 | Disablement | Removing `DisaggregatedSet` after the DisaggregatedSets are deleted removes the framework, the gate and the DisaggregatedSet webhooks without degrading the `Kueue` CR | Planned |
-| E14 | TAS placement | Every PodSet of a slice gets a topology assignment | Planned |
-| E15 | TAS conflicts | TAS annotations combined with a placement policy or the exclusive-topology annotation are rejected | Planned |
+| E1 | Enablement | The ConfigMap, the webhooks with managed-namespace selectors and a non-degraded `Kueue` CR; the fixture gets two admitted slice Workloads | Automated, not run yet |
+| E2 | Slice identity | Each slice Workload has the PodSets `prefill: 2`, `decode-leader: 1`, `decode-worker: 1` and 700m CPU | Automated, not run yet |
+| E3 | Partial quota | With 500m, no slice reserves quota and every Pod stays gated; raising the quota admits both slices | Automated, not run yet |
+| E4 | One-slice quota | With 1000m, exactly one slice is admitted and the four Pods of the other slice stay gated | Automated, not run yet |
+| E5 | Whole-slice preemption | A higher-priority Job preempts exactly one slice; the other slice keeps its Pods; the slice is re-admitted when the Job is deleted | Automated, not run yet |
+| E6 | Slice scaling | Scaling to three slices adds a gated slice; scaling to one releases the quota of removed slices | Automated, not run yet |
+| E7 | Scale through zero | At zero replicas the slice Workloads are deleted and the quota is released; scaling up admits new slices | Automated, not run yet |
+| E8 | Rollout | A template change that keeps the Pod shape rolls out within the admitted quota and keeps the slice Workloads | Automated, not run yet |
+| E9 | Validation | `maxSurge` above zero, `subRoles`, a queue name in role metadata, and replica or resource changes of a running DisaggregatedSet are rejected | Automated, not run yet |
+| E10 | Unmanaged namespace | A DisaggregatedSet in a namespace without `kueue.openshift.io/managed=true` gets no Workloads and no gates | Automated, not run yet |
+| E11 | No queue name | In a managed namespace without a default LocalQueue, a DisaggregatedSet without a queue name gets no Workloads | Automated, not run yet |
+| E12 | Existing integrations | A Job, a Pod and a LeaderWorkerSet are admitted while the integration is enabled | Automated, not run yet |
+| E13 | Disablement | Removing `DisaggregatedSet` after the DisaggregatedSets are deleted removes the framework, the gate and the DisaggregatedSet webhooks without degrading the `Kueue` CR | Automated, not run yet |
+| E14 | TAS placement | Every PodSet of a slice gets a topology assignment | Automated, not run yet |
+| E15 | TAS conflicts | TAS annotations combined with a placement policy or the exclusive-topology annotation are rejected | Automated, not run yet |
 
 #### Upstream Suite
 

@@ -25,6 +25,9 @@ import (
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	jobsetapi "sigs.k8s.io/jobset/api/jobset/v1alpha2"
 	lwsapi "sigs.k8s.io/lws/api/leaderworkerset/v1"
@@ -367,6 +370,106 @@ func (b *TestResourceBuilder) NewLeaderWorkerSet(opts LeaderWorkerSetOptions) *l
 	}
 
 	return lws
+}
+
+// DisaggregatedSetGVR is the resource of the DisaggregatedSet API served by LeaderWorkerSet.
+var DisaggregatedSetGVR = schema.GroupVersionResource{
+	Group:    "disaggregatedset.x-k8s.io",
+	Version:  "v1",
+	Resource: "disaggregatedsets",
+}
+
+const (
+	// DisaggregatedSetNameLabel is the label that the DisaggregatedSet controller sets on its Pods.
+	DisaggregatedSetNameLabel = "disaggregatedset.x-k8s.io/name"
+	// WorkloadPriorityClassLabel selects the WorkloadPriorityClass of a workload.
+	WorkloadPriorityClassLabel = "kueue.x-k8s.io/priority-class"
+)
+
+type DisaggregatedSetOptions struct {
+	// QueueName: if non-empty, adds the kueue.x-k8s.io/queue-name label
+	QueueName string
+	// WorkloadPriorityClass: if non-empty, adds the kueue.x-k8s.io/priority-class label
+	WorkloadPriorityClass string
+	// Slices: defaults to 2 if <= 0
+	Slices int
+}
+
+// NewDisaggregatedSet creates a DisaggregatedSet with two roles as an unstructured
+// object, so the e2e tests do not need the typed DisaggregatedSet API:
+//   - prefill: 2 replicas of a single worker requesting 200m CPU and 64Mi memory
+//   - decode: 1 replica of a leader requesting 100m CPU and a worker requesting
+//     200m CPU, both with 64Mi memory
+//
+// Kueue admits each slice as one Workload with the PodSets prefill (2 Pods),
+// decode-leader (1 Pod) and decode-worker (1 Pod), which request 700m CPU and
+// 256Mi memory in total.
+func (b *TestResourceBuilder) NewDisaggregatedSet(opts DisaggregatedSetOptions) *unstructured.Unstructured {
+	slices := opts.Slices
+	if slices <= 0 {
+		slices = 2
+	}
+	labels := map[string]any{}
+	if opts.QueueName != "" {
+		labels[QueueLabel] = opts.QueueName
+	}
+	if opts.WorkloadPriorityClass != "" {
+		labels[WorkloadPriorityClassLabel] = opts.WorkloadPriorityClass
+	}
+
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": DisaggregatedSetGVR.GroupVersion().String(),
+		"kind":       "DisaggregatedSet",
+		"metadata": map[string]any{
+			"generateName": "test-ds-",
+			"namespace":    b.namespace,
+			"labels":       labels,
+		},
+		"spec": map[string]any{
+			"slices": int64(slices),
+			"roles": []any{
+				map[string]any{
+					"name": "prefill",
+					"spec": map[string]any{
+						"replicas": int64(2),
+						"leaderWorkerTemplate": map[string]any{
+							"size":           int64(1),
+							"workerTemplate": b.disaggregatedSetPodTemplate("prefill", "200m"),
+						},
+					},
+				},
+				map[string]any{
+					"name": "decode",
+					"spec": map[string]any{
+						"replicas": int64(1),
+						"leaderWorkerTemplate": map[string]any{
+							"size":           int64(2),
+							"leaderTemplate": b.disaggregatedSetPodTemplate("decode-leader", "100m"),
+							"workerTemplate": b.disaggregatedSetPodTemplate("decode-worker", "200m"),
+						},
+					},
+				},
+			},
+		},
+	}}
+}
+
+// disaggregatedSetPodTemplate returns a Pod template with the builder defaults
+// and the given CPU request as an unstructured map.
+func (b *TestResourceBuilder) disaggregatedSetPodTemplate(name, cpu string) map[string]any {
+	spec := b.NewPod().Spec
+	spec.RestartPolicy = ""
+	spec.Containers[0].Name = name
+	spec.Containers[0].Command = []string{"sh", "-c", "sleep 3600"}
+	spec.Containers[0].Resources.Requests = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse(cpu),
+		corev1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	template, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&corev1.PodTemplateSpec{Spec: spec})
+	if err != nil {
+		panic(fmt.Sprintf("failed to convert the %s Pod template: %v", name, err))
+	}
+	return template
 }
 
 // NewResourceClaimTemplate creates a ResourceClaimTemplate for DRA e2e tests.
