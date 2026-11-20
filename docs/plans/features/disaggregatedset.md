@@ -75,7 +75,7 @@ Location: `test/envtest/integrations/kueue_integrations_cel_test.go`.
 |----|----------|-------------------|----------|--------|
 | T1 | Framework and gate rendering | `DisaggregatedSet` renders `disaggregatedset.x-k8s.io/disaggregatedset` and `DisaggregatedSetIntegration: true`, also together with SparkApplication | `pkg/configmap/configmap_test.go` | Implemented |
 | T2 | Default off | Without `DisaggregatedSet`, no gate and no framework are rendered and existing outputs are unchanged | `pkg/configmap/configmap_test.go` | Implemented |
-| T3 | Webhook selection | The DisaggregatedSet and Pod webhooks are kept with the managed-namespace selector when selected, and removed otherwise | `pkg/webhook/pod_webhook_test.go` | Implemented |
+| T3 | Webhook selection | The DisaggregatedSet and Pod webhooks are kept with the managed-namespace selector when DisaggregatedSet is selected; otherwise the DisaggregatedSet webhooks are removed, and the Pod webhook stays only when another framework that needs it, such as LeaderWorkerSet, is selected | `pkg/webhook/pod_webhook_test.go` | Implemented |
 | T4 | Webhook assets | The filtering runs on the bundled webhook configurations without a panic for every framework selection | `pkg/operator/target_config_reconciler_test.go` | Implemented |
 | T5 | Prerequisite | The DisaggregatedSet API is reported as missing unless discovery serves `disaggregatedset.x-k8s.io/v1` `DisaggregatedSet`; no check when the framework is not selected | `pkg/operator/target_config_reconciler_test.go` | Implemented |
 | T6 | RBAC assets | The manager role can read DisaggregatedSets, and the editor and viewer roles carry the batch admin and user aggregation labels | `pkg/operator/target_config_reconciler_test.go` | Implemented |
@@ -99,7 +99,7 @@ Location: `test/e2e/e2e_disaggregatedset_test.go`, label `disaggregatedset` (and
 | E10 | Unmanaged namespace | A DisaggregatedSet in a namespace without `kueue.openshift.io/managed=true` gets no Workloads and no gates | Planned |
 | E11 | No queue name | A DisaggregatedSet without a queue name gets no Workloads | Planned |
 | E12 | Existing integrations | A Job, a Pod and a LeaderWorkerSet are admitted while the integration is enabled | Planned |
-| E13 | Disablement | Removing `DisaggregatedSet` after the DisaggregatedSets are deleted removes the framework, the gate and the webhooks without degrading the `Kueue` CR | Planned |
+| E13 | Disablement | Removing `DisaggregatedSet` after the DisaggregatedSets are deleted removes the framework, the gate and the DisaggregatedSet webhooks without degrading the `Kueue` CR | Planned |
 | E14 | TAS placement | Every PodSet of a slice gets a topology assignment | Planned |
 | E15 | TAS conflicts | TAS annotations combined with a placement policy or the exclusive-topology annotation are rejected | Planned |
 
