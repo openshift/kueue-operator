@@ -107,7 +107,7 @@ Location: `test/e2e/e2e_disaggregatedset_test.go`, label `disaggregatedset` (and
 
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
-| R1 | U5 in the `singlecluster` folder | The runner adds `DisaggregatedSet` to the `Kueue` CR and selects `feature:disaggregatedset`; JUnit lists the cases as run | Planned |
+| R1 | U5 in the `singlecluster` folder | The runner adds `DisaggregatedSet` to the `Kueue` CR and selects `feature:disaggregatedset`; JUnit lists the cases as run | Automated, not run yet |
 | R2 | U7 TAS cases | Not wired; E14–E15 cover TAS downstream | Not planned |
 | R3 | U6 sequential rollout | Skipped by the carry patch | Implemented (skip) |
 

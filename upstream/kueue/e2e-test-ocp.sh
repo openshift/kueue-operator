@@ -65,7 +65,7 @@ function ginkgo_label_filter() {
     singlecluster)
       # TAS suites live below singlecluster/tasapi and share generic feature labels such as
       # feature:job with this lane, so exclude their area label explicitly.
-      echo "(feature:certs || feature:cohort || feature:deployment || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas"
+      echo "(feature:certs || feature:cohort || feature:deployment || feature:disaggregatedset || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas"
       ;;
     certmanager)
       echo "!feature:prometheus"
@@ -109,9 +109,28 @@ label_worker_nodes
 # Disable scc rules for e2e pod tests
 allow_privileged_access
 
+# Prints the frameworks of the cluster Kueue CR, one per line.
+function kueue_frameworks() {
+  $OC get kueue.kueue.openshift.io/cluster -o go-template='{{range .spec.config.integrations.frameworks}}{{.}}{{"\n"}}{{end}}'
+}
+
+DISAGGREGATEDSET_ADDED=false
+
 function configure_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
+    singlecluster)
+      # The upstream DisaggregatedSet cases need the DisaggregatedSet integration,
+      # which requires a LeaderWorkerSet that serves disaggregatedset.x-k8s.io/v1.
+      if ! kueue_frameworks | grep -qx "DisaggregatedSet"; then
+        echo "Adding DisaggregatedSet to the cluster Kueue CR frameworks for singlecluster..."
+        $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
+          '[{"op":"add","path":"/spec/config/integrations/frameworks/-","value":"DisaggregatedSet"}]'
+        DISAGGREGATEDSET_ADDED=true
+        # Let's wait for the reconciliation to complete. The test suite checks if kueue-controller-manager is available.
+        $OC wait kueue.kueue.openshift.io/cluster --for=condition=Available="False" --timeout=120s
+      fi
+      ;;
     sequential)
       echo "Patching cluster Kueue CR for sequential (admissionFairSharing)..."
       $OC patch kueue.kueue.openshift.io/cluster --type=merge -p \
@@ -137,6 +156,21 @@ function configure_kueue_for_folder() {
 function restore_kueue_for_folder() {
   local folder="$1"
   case "$folder" in
+    singlecluster)
+      if [ "$DISAGGREGATEDSET_ADDED" = true ]; then
+        local frameworks index
+        mapfile -t frameworks < <(kueue_frameworks)
+        for index in "${!frameworks[@]}"; do
+          if [ "${frameworks[$index]}" = "DisaggregatedSet" ]; then
+            echo "Removing DisaggregatedSet from the cluster Kueue CR frameworks..."
+            $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
+              "[{\"op\":\"test\",\"path\":\"/spec/config/integrations/frameworks/${index}\",\"value\":\"DisaggregatedSet\"},{\"op\":\"remove\",\"path\":\"/spec/config/integrations/frameworks/${index}\"}]"
+            break
+          fi
+        done
+        DISAGGREGATEDSET_ADDED=false
+      fi
+      ;;
     sequential)
       echo "Removing admissionFairSharing from cluster Kueue CR..."
       $OC patch kueue.kueue.openshift.io/cluster --type=json -p \
