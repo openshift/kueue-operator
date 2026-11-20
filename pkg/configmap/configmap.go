@@ -297,10 +297,6 @@ func buildFeatureGates(kueueCfg kueue.KueueConfiguration, draConsumableCapacityE
 			enabled: len(kueueCfg.Integrations.ExternalFrameworks) > 0 ||
 				(kueueCfg.MultiKueue != nil && len(kueueCfg.MultiKueue.ExternalFrameworks) > 0),
 		},
-		{
-			name:    "CustomMetricLabels",
-			enabled: len(kueueCfg.ControllerManager.Metrics.CustomLabels) > 0,
-		},
 	}
 
 	featureGates := map[string]bool{}
