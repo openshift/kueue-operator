@@ -19,7 +19,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 
@@ -553,38 +552,27 @@ const kueueManagerConfigAnnotation = "configmap/kueue-manager-config"
 
 // applyKueueConfigAndWaitForRollout applies the configuration with applyKueueConfig,
 // then waits until the kueue-controller-manager Deployment has rolled out the Pod
-// template that carries the new manager configuration. A Deployment whose old
-// replicas are still ready is not enough: their webhooks would serve the tests
-// with the previous configuration.
+// template that carries the rendered manager configuration. The template must
+// carry the operator's hash of exactly that ConfigMap data, also when the
+// configuration did not change. A Deployment whose old replicas are still ready
+// is not enough: their webhooks would serve the tests with the previous
+// configuration.
 func applyKueueConfigAndWaitForRollout(ctx context.Context, config ssv1.KueueConfiguration) {
 	deployments := kubeClient.AppsV1().Deployments(testutils.OperatorNamespace)
 	configMaps := kubeClient.CoreV1().ConfigMaps(testutils.OperatorNamespace)
-	before, err := deployments.Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-controller-manager Deployment")
-	configBefore, err := configMaps.Get(ctx, "kueue-manager-config", metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-manager-config ConfigMap")
 
 	applyKueueConfig(ctx, config, kubeClient)
 
 	configAfter, err := configMaps.Get(ctx, "kueue-manager-config", metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-manager-config ConfigMap")
-	configChanged := !maps.Equal(configBefore.Data, configAfter.Data)
-	previousConfigHash := before.Spec.Template.Annotations[kueueManagerConfigAnnotation]
+	wantConfigHash, err := testutils.ConfigMapDataHash(configAfter.Data)
+	Expect(err).NotTo(HaveOccurred(), "failed to hash the kueue-manager-config ConfigMap data")
 
-	By("Waiting for the kueue-controller-manager rollout of the new configuration")
+	By("Waiting for the kueue-controller-manager rollout of the requested configuration")
 	Eventually(func(g Gomega) {
 		d, err := deployments.Get(ctx, "kueue-controller-manager", metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred(), "failed to get the kueue-controller-manager Deployment")
-		if configChanged {
-			g.Expect(d.Spec.Template.Annotations[kueueManagerConfigAnnotation]).NotTo(Equal(previousConfigHash),
-				"the Deployment template does not carry the new manager configuration yet")
-		}
-		replicas := ptr.Deref(d.Spec.Replicas, 1)
-		g.Expect(d.Status.ObservedGeneration).To(BeNumerically(">=", d.Generation), "the Deployment controller has not observed the latest template")
-		g.Expect(d.Status.UpdatedReplicas).To(Equal(replicas), "not every replica runs the latest template")
-		g.Expect(d.Status.ReadyReplicas).To(Equal(replicas), "not every replica is ready")
-		g.Expect(d.Status.AvailableReplicas).To(Equal(replicas), "not every replica is available")
-		g.Expect(d.Status.Replicas).To(Equal(replicas), "replicas of the previous template are still running")
+		testutils.ExpectDeploymentRolledOut(g, d, kueueManagerConfigAnnotation, wantConfigHash)
 	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed())
 }
 
