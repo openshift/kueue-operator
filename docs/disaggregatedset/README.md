@@ -14,12 +14,19 @@ The integration is **alpha** in Kueue and disabled by default. For the upstream
 behavior, see the Kueue guide
 [Run DisaggregatedSet](https://github.com/kubernetes-sigs/kueue/blob/4f3748d8f2c8b9fc68d131d6e23d44faf33f77c1/site/content/en/docs/tasks/run/disaggregatedset.md).
 
+This demo describes a setup that depends on releases that are not available
+yet. See the [prerequisites](#prerequisites) before you start.
+
 ## Prerequisites
 
-- The kueue-operator is installed and its `Kueue` CR (`metadata.name: cluster`)
+- The kueue-operator is installed in a version that supports the
+  `DisaggregatedSet` integration, and its `Kueue` CR (`metadata.name: cluster`)
   is `Managed`.
 - A LeaderWorkerSet installation that serves the
-  `disaggregatedset.x-k8s.io/v1` API. Check it with:
+  `disaggregatedset.x-k8s.io/v1` API. With the Leader Worker Set Operator, this
+  requires version 1.1, which is not released yet. Until it is released, the
+  Leader Worker Set Operator from the catalog does not serve this API, and you
+  cannot run this demo with it. Check that the API is served with:
 
   ```bash
   oc api-resources --api-group=disaggregatedset.x-k8s.io
