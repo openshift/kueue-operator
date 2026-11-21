@@ -1,0 +1,92 @@
+# Each slice runs a prefill role with two Pods and a decode role with a leader
+# and a worker. Kueue admits each slice as one Workload with three PodSets
+# (prefill, decode-leader and decode-worker) that request 700m CPU in total.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: model-server
+  namespace: kueue-disaggregatedset-demo
+  labels:
+    kueue.x-k8s.io/queue-name: disaggregatedset-lq
+spec:
+  slices: 2
+  roles:
+  - name: prefill
+    spec:
+      replicas: 2
+      leaderWorkerTemplate:
+        size: 1
+        workerTemplate:
+          spec:
+            automountServiceAccountToken: false
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+            - name: prefill
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command: ["sh", "-c", "sleep 3600"]
+              resources:
+                requests:
+                  cpu: "200m"
+                  memory: 64Mi
+                limits:
+                  cpu: "200m"
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+  - name: decode
+    spec:
+      replicas: 1
+      leaderWorkerTemplate:
+        size: 2
+        leaderTemplate:
+          spec:
+            automountServiceAccountToken: false
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+            - name: decode-leader
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command: ["sh", "-c", "sleep 3600"]
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: 64Mi
+                limits:
+                  cpu: "100m"
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+        workerTemplate:
+          spec:
+            automountServiceAccountToken: false
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+            - name: decode-worker
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command: ["sh", "-c", "sleep 3600"]
+              resources:
+                requests:
+                  cpu: "200m"
+                  memory: 64Mi
+                limits:
+                  cpu: "200m"
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
