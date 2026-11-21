@@ -1,4 +1,4 @@
-FROM registry.redhat.io/ubi9/ubi@sha256:1e9f0ed9fceafb40878bc1705ff124aa150e3fed873f18c42cdc2dded319e0a8 as builder
+FROM registry.redhat.io/ubi9/ubi@sha256:6636b79fba9e5044360366f189333c30b5ce528efd92c40c68b074592b971fcd as builder
 RUN dnf -y install jq
 
 ARG RELATED_IMAGE_FILE=related_images.json
