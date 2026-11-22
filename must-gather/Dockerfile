@@ -1,6 +1,6 @@
 FROM registry.redhat.io/openshift5/ose-must-gather-rhel9@sha256:8f26555c99bc1c7e4d88d08aad33ea96827303c2179cd9387494e51f0b996b84 as builder
 
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:9aca95ae4e261eab848dc6abdfd08eb4c2453944232021245b2e3108eb25ae18
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc@sha256:5e9a0970f73f4800445c3ce0ca0d6b7ea1a8c620b81e735d16432db09d6787bc
 
 COPY --from=builder /usr/bin/oc /usr/bin/oc
 COPY --from=builder /usr/bin/gather /usr/bin/gather_original
