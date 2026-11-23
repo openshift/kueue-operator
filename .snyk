@@ -9,6 +9,8 @@ exclude:
     - upstream/kueue/src/cmd/experimental/kueue-viz/**
     # Disable kueuectl as openshift does not support.
     - upstream/kueue/src/cmd/kueuectl/**
+    # Disable kueuectl-docs (kueuectl documentation generator) as openshift does not support kueuectl.
+    - upstream/kueue/src/cmd/kueuectl-docs/**
     - upstream/kueue/src/site/**
     - upstream/kueue/src/vendor/**
     - upstream/kueue/src/"**/*_test.go"
