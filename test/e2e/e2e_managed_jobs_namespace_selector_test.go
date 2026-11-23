@@ -18,13 +18,15 @@ package e2e
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kueueoperatorv1 "github.com/openshift/kueue-operator/pkg/apis/kueueoperator/v1"
 	"github.com/openshift/kueue-operator/test/e2e/testutils"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	corev1 "k8s.io/api/core/v1"
 	upstreamkueueclient "sigs.k8s.io/kueue/client-go/clientset/versioned"
@@ -106,20 +108,9 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying no workload is created for the job in unmanaged namespace")
-			Consistently(func() error {
-				workloads, err := nsKueueClient.KueueV1beta2().Workloads(unmanagedNs.Name).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					return err
-				}
-				for _, wl := range workloads.Items {
-					for _, ownerRef := range wl.OwnerReferences {
-						if ownerRef.UID == createdJob.UID {
-							return fmt.Errorf("unexpected workload found for job in unmanaged namespace")
-						}
-					}
-				}
-				return nil
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "No workload should be created in unmanaged namespace")
+			expectNoWorkloadForJob(ctx, nsKueueClient, unmanagedNs.Name, createdJob.UID,
+				"unexpected workload found for job in unmanaged namespace",
+				testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll)
 		})
 
 		It("should reconcile a job without queue-name in labeled namespace and create a workload", func(ctx context.Context) {
@@ -151,20 +142,9 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(), "Job should run without Kueue interference in unlabeled namespace")
 
 			By("verifying no workload is created for the job in unmanaged namespace")
-			Consistently(func() error {
-				workloads, err := nsKueueClient.KueueV1beta2().Workloads(unmanagedNs.Name).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					return err
-				}
-				for _, wl := range workloads.Items {
-					for _, ownerRef := range wl.OwnerReferences {
-						if ownerRef.UID == createdJob.UID {
-							return fmt.Errorf("unexpected workload found for job with queue-name in unmanaged namespace")
-						}
-					}
-				}
-				return nil
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "No workload should be created in unmanaged namespace")
+			expectNoWorkloadForJob(ctx, nsKueueClient, unmanagedNs.Name, createdJob.UID,
+				"unexpected workload found for job with queue-name in unmanaged namespace",
+				testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll)
 		})
 
 	})
@@ -213,20 +193,54 @@ var _ = Describe("ManagedJobsNamespaceSelectorAlwaysRespected", Label("managed-j
 			defer testutils.CleanUpJob(ctx, kubeClient, createdJob.Namespace, createdJob.Name)
 
 			By("verifying no workload is created for the job in unmanaged namespace")
-			Consistently(func() error {
-				workloads, err := nsKueueClient.KueueV1beta2().Workloads(unmanagedNs.Name).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					return err
-				}
-				for _, wl := range workloads.Items {
-					for _, ownerRef := range wl.OwnerReferences {
-						if ownerRef.UID == createdJob.UID {
-							return fmt.Errorf("unexpected workload found for job in unmanaged namespace")
-						}
-					}
-				}
-				return nil
-			}, testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll).Should(Succeed(), "No workload should be created in unmanaged namespace")
+			expectNoWorkloadForJob(ctx, nsKueueClient, unmanagedNs.Name, createdJob.UID,
+				"unexpected workload found for job in unmanaged namespace",
+				testutils.ConsistentlyTimeout, testutils.ConsistentlyPoll)
 		})
 	})
 })
+
+// expectNoWorkloadForJob asserts that no Workload exists for jobUID in namespace for
+// a full observation window. A List failing with a server-side, retryable error is
+// inconclusive, so the window restarts and a pass always means the whole window was
+// observed. Any other List error fails immediately, and so does a Workload ever seen
+// for the job.
+func expectNoWorkloadForJob(ctx context.Context, nsKueueClient *upstreamkueueclient.Clientset,
+	namespace string, jobUID types.UID, message string, window, poll time.Duration) {
+	retryable := func(err error) bool {
+		return apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) || apierrors.IsTooManyRequests(err) ||
+			apierrors.IsServiceUnavailable(err) || apierrors.IsInternalError(err)
+	}
+	// Two full window restarts' worth of slack before giving up on a flaky API.
+	deadline := time.Now().Add(3 * window)
+	observedSince := time.Now()
+
+	for {
+		workloads, err := nsKueueClient.KueueV1beta2().Workloads(namespace).List(ctx, metav1.ListOptions{})
+		switch {
+		case retryable(err):
+			// Inconclusive: the window has to be observed again from scratch.
+			observedSince = time.Now()
+		case err != nil:
+			Expect(err).NotTo(HaveOccurred(), message)
+		default:
+			for _, wl := range workloads.Items {
+				for _, ownerRef := range wl.OwnerReferences {
+					Expect(ownerRef.UID).NotTo(Equal(jobUID), message)
+				}
+			}
+			if time.Since(observedSince) >= window {
+				return
+			}
+		}
+
+		if time.Now().After(deadline) {
+			Fail(message + ": retryable List errors prevented observing a full window")
+		}
+		select {
+		case <-ctx.Done():
+			Fail(message + ": context cancelled before a full window was observed")
+		case <-time.After(poll):
+		}
+	}
+}

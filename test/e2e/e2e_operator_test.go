@@ -1012,22 +1012,9 @@ var _ = Describe("Kueue Operator", Label("operator"), Ordered, func() {
 			defer testutils.CleanUpObject(ctx, genericClient, lwsWithoutQueue)
 
 			By("verifying no workload is created for LeaderWorkerSet in unlabeled namespace")
-			Consistently(func() error {
-				allWorkloads, err := kueueClient.KueueV1beta2().Workloads(testNamespaceWithoutLabel).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					return err
-				}
-
-				for _, wl := range allWorkloads.Items {
-					for _, ownerRef := range wl.OwnerReferences {
-						if ownerRef.UID == lwsWithoutQueue.GetUID() {
-							return fmt.Errorf("unexpected workload found in unlabeled namespace")
-						}
-					}
-				}
-
-				return nil
-			}, testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll).Should(Succeed(), "No workload should be created in unlabeled namespace")
+			expectNoWorkloadForJob(ctx, kueueClient, testNamespaceWithoutLabel, lwsWithoutQueue.GetUID(),
+				"No workload should be created for a LeaderWorkerSet in an unlabeled namespace",
+				testutils.ConsistentlyLongTimeout, testutils.ConsistentlyLongPoll)
 
 			By("verifying LeaderWorkerSet pods are running in unlabeled namespace")
 			Eventually(func() error {
@@ -1785,8 +1772,54 @@ func verifyWorkloadCreated(kueueClient *upstreamkueueclient.Clientset, namespace
 			return nil
 		}
 		return fmt.Errorf("workload %s/%s not admitted or finished", namespace, workload.Name)
-	}, testutils.WorkloadTimeout, testutils.WorkloadPoll).Should(Succeed())
+	}, testutils.WorkloadTimeout, testutils.WorkloadPoll).Should(Succeed(), func() string {
+		return workloadAdmissionReport(kueueClient, namespace, workload)
+	})
 	return workload.Name
+}
+
+// workloadAdmissionReport explains, at failure time, why a Workload did not become
+// admitted: the Workload conditions plus the state of the ClusterQueue behind its
+// LocalQueue. It is passed as a lazily-evaluated Eventually description, so it only
+// runs when the assertion fails.
+func workloadAdmissionReport(kueueClient *upstreamkueueclient.Clientset, namespace string, expected *kueuev1beta2.Workload) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	wl, err := kueueClient.KueueV1beta2().Workloads(namespace).Get(ctx, expected.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Sprintf("failed to read workload %s/%s: %v", namespace, expected.Name, err)
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "workload %s/%s not admitted or finished after %s (queueName=%q priority=%v)",
+		namespace, wl.Name, testutils.WorkloadTimeout, wl.Spec.QueueName, wl.Spec.Priority)
+	for _, condition := range wl.Status.Conditions {
+		fmt.Fprintf(&b, "\n  condition %s=%s reason=%q message=%q",
+			condition.Type, condition.Status, condition.Reason, condition.Message)
+	}
+	if wl.Spec.QueueName == "" {
+		return b.String()
+	}
+
+	localQueue, err := kueueClient.KueueV1beta2().LocalQueues(namespace).Get(ctx, string(wl.Spec.QueueName), metav1.GetOptions{})
+	if err != nil {
+		fmt.Fprintf(&b, "\n  localqueue %s/%s: %v", namespace, wl.Spec.QueueName, err)
+		return b.String()
+	}
+
+	clusterQueue, err := kueueClient.KueueV1beta2().ClusterQueues().Get(ctx, string(localQueue.Spec.ClusterQueue), metav1.GetOptions{})
+	if err != nil {
+		fmt.Fprintf(&b, "\n  clusterqueue %s: %v", localQueue.Spec.ClusterQueue, err)
+		return b.String()
+	}
+	fmt.Fprintf(&b, "\n  clusterqueue %s: admittedWorkloads=%d pendingWorkloads=%d reservingWorkloads=%d",
+		clusterQueue.Name, clusterQueue.Status.AdmittedWorkloads,
+		clusterQueue.Status.PendingWorkloads, clusterQueue.Status.ReservingWorkloads)
+	for _, condition := range clusterQueue.Status.Conditions {
+		fmt.Fprintf(&b, "\n  cq condition %s=%s reason=%q message=%q",
+			condition.Type, condition.Status, condition.Reason, condition.Message)
+	}
+	return b.String()
 }
 
 func deployOperand() error {
