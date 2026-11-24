@@ -61,6 +61,7 @@ var webhooksList = map[string]string{
 	annotationCohort:                               "cohort",
 	string(kueue.KueueIntegrationAppWrapper):       "appwrapper",
 	string(kueue.KueueIntegrationSparkApplication): "sparkapplication",
+	string(kueue.KueueIntegrationDisaggregatedSet): "disaggregatedset",
 }
 
 func ModifyPodBasedValidatingWebhook(kueueCfg kueue.KueueConfiguration, currentWebhook *admissionregistrationv1.ValidatingWebhookConfiguration) *admissionregistrationv1.ValidatingWebhookConfiguration {
@@ -238,19 +239,20 @@ func defaultLabelSelector() *metav1.LabelSelector {
 }
 
 // buildEnabledFrameworks creates a map of enabled frameworks from the kueue configuration,
-// and implicitly enables the Pod integration when LeaderWorkerSet, StatefulSet, or Deployment
-// are enabled (since they require pod scheduling gates).
+// and implicitly enables the Pod integration when LeaderWorkerSet, StatefulSet, Deployment,
+// or DisaggregatedSet are enabled (since they require pod scheduling gates).
 func buildEnabledFrameworks(kueueCfg kueue.KueueConfiguration) map[string]bool {
 	enabledFrameworks := make(map[string]bool)
 	for _, fw := range kueueCfg.Integrations.Frameworks {
 		enabledFrameworks[string(fw)] = true
 	}
 
-	// Pod webhook is required for LeaderWorkerSet, StatefulSet, and Deployment
-	// to properly add scheduling gates to pods
+	// Pod webhook is required for LeaderWorkerSet, StatefulSet, Deployment, and
+	// DisaggregatedSet to properly add scheduling gates to pods
 	if enabledFrameworks[string(kueue.KueueIntegrationLeaderWorkerSet)] ||
 		enabledFrameworks[string(kueue.KueueIntegrationStatefulSet)] ||
-		enabledFrameworks[string(kueue.KueueIntegrationDeployment)] {
+		enabledFrameworks[string(kueue.KueueIntegrationDeployment)] ||
+		enabledFrameworks[string(kueue.KueueIntegrationDisaggregatedSet)] {
 		enabledFrameworks[string(kueue.KueueIntegrationPod)] = true
 	}
 

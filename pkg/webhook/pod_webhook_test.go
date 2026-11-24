@@ -160,6 +160,88 @@ func TestModifyPodBasedValidatingWebhook(t *testing.T) {
 				},
 			},
 		},
+		"disaggregatedset enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationDisaggregatedSet,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vjob.kb.io"},
+					{Name: "vpod.kb.io"},
+					{
+						Name: "vdisaggregatedset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kubernetes.io/metadata.name",
+									Operator: metav1.LabelSelectorOpNotIn,
+									Values:   []string{"kube-system", "openshift-kueue-operator"},
+								},
+							},
+						},
+					},
+					{Name: "vworkload.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{
+						Name:              "vpod.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+					{
+						Name: "vdisaggregatedset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{},
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+								{
+									Key:      "kubernetes.io/metadata.name",
+									Operator: metav1.LabelSelectorOpNotIn,
+									Values:   []string{"kube-system", "openshift-kueue-operator"},
+								},
+							},
+						},
+					},
+					{
+						Name:              "vworkload.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+				},
+			},
+		},
+		"disaggregatedset webhook removed when the framework is not selected": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationBatchJob,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{Name: "vjob.kb.io"},
+					{Name: "vpod.kb.io"},
+					{Name: "vdisaggregatedset.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.ValidatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.ValidatingWebhook{
+					{
+						Name:              "vjob.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+				},
+			},
+		},
 		"leaderworkerset enables pod webhook automatically": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
@@ -436,6 +518,88 @@ func TestModifyPodBasedMutatingWebhook(t *testing.T) {
 								},
 							},
 						},
+					},
+				},
+			},
+		},
+		"disaggregatedset enables pod webhook automatically": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationDisaggregatedSet,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mjob.kb.io"},
+					{Name: "mpod.kb.io"},
+					{
+						Name: "mdisaggregatedset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kubernetes.io/metadata.name",
+									Operator: metav1.LabelSelectorOpNotIn,
+									Values:   []string{"kube-system", "openshift-kueue-operator"},
+								},
+							},
+						},
+					},
+					{Name: "mworkload.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name:              "mpod.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+					{
+						Name: "mdisaggregatedset.kb.io",
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{},
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "kueue.openshift.io/managed",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"true"},
+								},
+								{
+									Key:      "kubernetes.io/metadata.name",
+									Operator: metav1.LabelSelectorOpNotIn,
+									Values:   []string{"kube-system", "openshift-kueue-operator"},
+								},
+							},
+						},
+					},
+					{
+						Name:              "mworkload.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
+					},
+				},
+			},
+		},
+		"disaggregatedset webhook removed when the framework is not selected": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{
+						kueue.KueueIntegrationBatchJob,
+					},
+				},
+			},
+			oldWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{Name: "mjob.kb.io"},
+					{Name: "mpod.kb.io"},
+					{Name: "mdisaggregatedset.kb.io"},
+				},
+			},
+			newWebhook: &admissionregistrationv1.MutatingWebhookConfiguration{
+				Webhooks: []admissionregistrationv1.MutatingWebhook{
+					{
+						Name:              "mjob.kb.io",
+						NamespaceSelector: defaultLabelSelector(),
 					},
 				},
 			},
