@@ -108,7 +108,14 @@ second slice.
 ## 4. Clean up and disable the integration
 
 Delete every DisaggregatedSet that Kueue manages, and wait until its Workloads
-and Pods are gone, before you remove `DisaggregatedSet` from the frameworks:
+and Pods are gone, before you remove `DisaggregatedSet` from the frameworks.
+This follows the upstream guidance in
+[Disabling the integration](https://github.com/kubernetes-sigs/kueue/blob/4f3748d8f2c8b9fc68d131d6e23d44faf33f77c1/site/content/en/docs/tasks/run/disaggregatedset.md#disabling-the-integration):
+delete every managed DisaggregatedSet before you disable the integration, and
+recreate them afterwards if you still need them. The operator enables the
+`DisaggregatedSetIntegration` feature gate only while `DisaggregatedSet` is
+listed, so removing the framework also disables the gate. Removing the
+framework while managed DisaggregatedSets exist is outside this workflow.
 
 ```bash
 oc delete -f 05-disaggregatedset.yaml

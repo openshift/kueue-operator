@@ -1,7 +1,9 @@
 # Test Plan for the DisaggregatedSet integration
 
 **Plan Status:** Draft
-**Story:** OCPKUEUE-989
+**Feature:** [OCPSTRAT-3982](https://redhat.atlassian.net/browse/OCPSTRAT-3982) — DisaggregatedSet integration
+**Testing Epic:** [OCPKUEUE-968](https://redhat.atlassian.net/browse/OCPKUEUE-968)
+**Test Plan Story:** [OCPKUEUE-989](https://redhat.atlassian.net/browse/OCPKUEUE-989)
 
 ## Overview
 
@@ -20,7 +22,9 @@
 
 | Type | Link |
 |------|------|
-| Story | OCPKUEUE-989 |
+| Feature | [OCPSTRAT-3982](https://redhat.atlassian.net/browse/OCPSTRAT-3982) — DisaggregatedSet integration |
+| Testing Epic | [OCPKUEUE-968](https://redhat.atlassian.net/browse/OCPKUEUE-968) |
+| Test Plan Story | [OCPKUEUE-989](https://redhat.atlassian.net/browse/OCPKUEUE-989) |
 | KEP-11952 | [kubernetes-sigs/kueue#17500](https://github.com/kubernetes-sigs/kueue/pull/17500) — DisaggregatedSet integration |
 | Upstream implementation | [kubernetes-sigs/kueue#17675](https://github.com/kubernetes-sigs/kueue/pull/17675), merge commit [`4f3748d8`](https://github.com/kubernetes-sigs/kueue/commit/4f3748d8f2c8b9fc68d131d6e23d44faf33f77c1) |
 | Upstream tests | `pkg/controller/jobs/disaggregatedset/*_test.go`, `test/integration/singlecluster/controller/jobs/disaggregatedset/`, `test/integration/singlecluster/webhook/jobs/disaggregatedset_webhook_test.go`, `test/e2e/singlecluster/extended/disaggregatedset{,_lifecycle}_test.go`, `test/e2e/sequential/extended/disaggregatedset_test.go`, `test/e2e/singlecluster/tasapi/extended/disaggregatedset_test.go` |
@@ -42,8 +46,8 @@ The kueue-operator exposes the integration as the `DisaggregatedSet` value of `s
 - **Upstream:** [kubernetes-sigs/kueue#17675](https://github.com/kubernetes-sigs/kueue/pull/17675) covers the controller, webhook, PodSet and Pod adoption logic with unit, integration and e2e tests. Downstream does not re-implement this logic. The upstream e2e suites (U5) are a group of scenarios that can be reused in the future through `make e2e-upstream-test`. Today the runner does not select them. A reused upstream case counts as coverage for a downstream scenario only when it makes an equivalent observable assertion, works with the operator-managed configuration, and its JUnit report shows it selected and run, not filtered.
 - **Downstream:** Tests in the `kueue-operator` repo cover what upstream cannot, split by layer:
   - CEL validation (envtest) checks how the `Kueue` CR rejects invalid framework lists (C1).
-  - Unit tests check the CR → ConfigMap rendering, webhook filtering and namespace selection, RBAC assets and the prerequisite check (T1–T6), and CI `test-generate` checks the generated CRD (T7).
-  - Planned e2e tests check enablement, admission, preemption, quota release and disablement through the operator-managed deployment on OpenShift (E1–E16). They are not implemented yet; until they run, DisaggregatedSet runtime behavior is not covered by downstream automated tests.
+  - Unit tests check the CR → ConfigMap rendering, webhook filtering and namespace selection, RBAC assets and the prerequisite check (T1–T6), and CI `test-generate` checks the generated CRD (T7). T8 (disable after enable) is planned.
+  - Planned e2e tests check enablement, admission, preemption, quota release and disablement through the operator-managed deployment on OpenShift (E1–E16). E17 is a planned, non-gating characterization of disabling with live managed DisaggregatedSets. They are not implemented yet; until they run, DisaggregatedSet runtime behavior is not covered by downstream automated tests.
   - Manual tests check the missing-prerequisite recovery and the enablement guide (M1–M2).
 
   Behavioral scenarios stay planned downstream until an equivalent upstream case has run evidence.
@@ -66,13 +70,15 @@ Each row lists the upstream tests, whether `make e2e-upstream-test` (`upstream/k
 
 ### Downstream Tests
 
+The implemented CEL and unit tests (C1, T1–T7) are part of the operator change [openshift/kueue-operator#3072](https://github.com/openshift/kueue-operator/pull/3072), which adds the integration. They are not on this documentation branch, and "Implemented in #3072" refers to that change.
+
 #### CEL Validation Tests
 
 Location: `test/envtest/integrations/kueue_integrations_cel_test.go`.
 
 | ID | Scenario | What It Validates | Status |
 |----|----------|-------------------|--------|
-| C1 | Invalid frameworks | A duplicated `DisaggregatedSet`, a wrong-case value and an unknown value are rejected | Implemented |
+| C1 | Invalid frameworks | A duplicated `DisaggregatedSet`, a wrong-case value and an unknown value are rejected | Implemented in #3072 |
 
 The CRD OpenAPI schema enforces the `DisaggregatedSet` enum value and the 19-item list maximum, and T7 checks the generated schema; no separate envtest specs cover them.
 
@@ -80,13 +86,14 @@ The CRD OpenAPI schema enforces the `DisaggregatedSet` enum value and the 19-ite
 
 | ID | Scenario | What It Validates | Location | Status |
 |----|----------|-------------------|----------|--------|
-| T1 | Framework and gate rendering | `DisaggregatedSet` renders `disaggregatedset.x-k8s.io/disaggregatedset` and `DisaggregatedSetIntegration: true`, also together with SparkApplication | `pkg/configmap/configmap_test.go` (`TestBuildConfigMap` cases `disaggregated set` and `disaggregated set and spark application`; `TestBuildFeatureGatesForDRASources` case `disaggregatedset framework enables disaggregatedset integration gate`) | Implemented |
-| T2 | Default off | Without `DisaggregatedSet`, no gate and no framework are rendered, and the outputs of the existing cases are unchanged | `pkg/configmap/configmap_test.go` (`TestBuildFeatureGatesForDRASources` case `frameworks without disaggregatedset do not enable disaggregatedset integration gate`) | Implemented |
-| T3 | Webhook selection | The DisaggregatedSet and Pod webhooks are kept with the managed-namespace selector when DisaggregatedSet is selected; otherwise the DisaggregatedSet webhooks are removed, and the Pod webhook stays only when another framework that needs it, such as LeaderWorkerSet, is selected | `pkg/webhook/pod_webhook_test.go` (`TestModifyPodBasedValidatingWebhook`, `TestModifyPodBasedMutatingWebhook`) | Implemented |
-| T4 | Webhook assets | The filtering runs on the bundled webhook configurations without a panic for every framework selection | `pkg/operator/target_config_reconciler_test.go` (`TestPodBasedWebhookAssets`) | Implemented |
-| T5 | Prerequisite | The DisaggregatedSet API is reported as missing unless discovery serves `disaggregatedset.x-k8s.io/v1` `DisaggregatedSet`; no check when the framework is not selected | `pkg/operator/target_config_reconciler_test.go` (`TestMissingDisaggregatedSetDependencies`) | Implemented |
-| T6 | RBAC assets | The manager role can read DisaggregatedSets, and the editor and viewer roles carry the batch admin and user aggregation labels | `pkg/operator/target_config_reconciler_test.go` (`TestDisaggregatedSetRBACAssets`) | Implemented |
-| T7 | Generated artifacts | `make generate manifests regen-crd` leaves no diff; the CRD copies list `DisaggregatedSet` with `maxItems: 19` | CI `test-generate` | Implemented |
+| T1 | Framework and gate rendering | `DisaggregatedSet` renders `disaggregatedset.x-k8s.io/disaggregatedset` and `DisaggregatedSetIntegration: true`, also together with SparkApplication | `pkg/configmap/configmap_test.go` (`TestBuildConfigMap` cases `disaggregated set` and `disaggregated set and spark application`; `TestBuildFeatureGatesForDRASources` case `disaggregatedset framework enables disaggregatedset integration gate`) | Implemented in #3072 |
+| T2 | Default off | Without `DisaggregatedSet`, no gate and no framework are rendered, and the outputs of the existing cases are unchanged | `pkg/configmap/configmap_test.go` (`TestBuildFeatureGatesForDRASources` case `frameworks without disaggregatedset do not enable disaggregatedset integration gate`) | Implemented in #3072 |
+| T3 | Webhook selection | The DisaggregatedSet and Pod webhooks are kept with the managed-namespace selector when DisaggregatedSet is selected; otherwise the DisaggregatedSet webhooks are removed, and the Pod webhook stays only when another framework that needs it, such as LeaderWorkerSet, is selected | `pkg/webhook/pod_webhook_test.go` (`TestModifyPodBasedValidatingWebhook`, `TestModifyPodBasedMutatingWebhook`) | Implemented in #3072 |
+| T4 | Webhook assets | The filtering runs on the bundled webhook configurations without a panic for every framework selection | `pkg/operator/target_config_reconciler_test.go` (`TestPodBasedWebhookAssets`) | Implemented in #3072 |
+| T5 | Prerequisite | The DisaggregatedSet API is reported as missing unless discovery serves `disaggregatedset.x-k8s.io/v1` `DisaggregatedSet`; no check when the framework is not selected | `pkg/operator/target_config_reconciler_test.go` (`TestMissingDisaggregatedSetDependencies`) | Implemented in #3072 |
+| T6 | RBAC assets | The manager role can read DisaggregatedSets, and the editor and viewer roles carry the batch admin and user aggregation labels | `pkg/operator/target_config_reconciler_test.go` (`TestDisaggregatedSetRBACAssets`) | Implemented in #3072 |
+| T7 | Generated artifacts | `make generate manifests regen-crd` leaves no diff; the CRD copies list `DisaggregatedSet` with `maxItems: 19` | CI `test-generate` | Implemented in #3072 |
+| T8 | Disable after enable | With the same unrelated settings, render with `DisaggregatedSet`, then remove it and compare the result with the T2 render that never listed it; then add it back and compare the result with the first enabled render. The operator derives the `DisaggregatedSetIntegration` gate only from the frameworks list, so removing the framework also removes the gate; the `Kueue` CR has no separate gate setting | `pkg/configmap/configmap_test.go` | Planned |
 
 #### E2E Tests
 
@@ -108,10 +115,11 @@ These cases are planned and not implemented: the operator change does not includ
 | E10 | Unmanaged namespace | A DisaggregatedSet in a namespace without `kueue.openshift.io/managed=true` gets no Workloads and no gates | Planned |
 | E11 | No queue name | With `spec.config.workloadManagement.labelPolicy: QueueName`, in a managed namespace without a default LocalQueue, a DisaggregatedSet without a queue name gets no Workloads (`None` renders `manageJobsWithoutQueueName: true`, which manages workloads without a queue name) | Planned |
 | E12 | Existing integrations | A Job, a Pod and a LeaderWorkerSet are admitted while the integration is enabled | Planned |
-| E13 | Disablement | Removing the `DisaggregatedSet` framework from the `Kueue` CR, after the DisaggregatedSets are deleted, removes the framework, the gate and the DisaggregatedSet webhooks without degrading the `Kueue` CR | Planned |
+| E13 | Disablement | Following the [documented workflow](https://github.com/kubernetes-sigs/kueue/blob/4f3748d8f2c8b9fc68d131d6e23d44faf33f77c1/site/content/en/docs/tasks/run/disaggregatedset.md#disabling-the-integration), the managed DisaggregatedSets are deleted first. Removing the `DisaggregatedSet` framework from the `Kueue` CR then removes the framework, the gate and the DisaggregatedSet webhooks without degrading the `Kueue` CR | Planned |
 | E14 | TAS placement | Every PodSet of a slice gets a topology assignment | Planned |
 | E15 | TAS conflicts | TAS annotations combined with a placement policy or the exclusive-topology annotation are rejected | Planned |
-| E16 | Quota release | In a ClusterQueue used only by the test, record the CPU and memory reservation of each flavor in the ClusterQueue status (`status.flavorsReservation`) before each step. When a slice is removed by scale-down or deletion, the reservation of its flavor eventually drops by that slice's 700m CPU and 256Mi memory, to the reservation of the surviving slices and of any other workloads. When a slice is preempted (E5), the reservation eventually equals that of the surviving slice, the preemptor and any other workloads. The reservation is zero only when no workload remains in that ClusterQueue. The check waits for the eventual value, because the Pods of a removed slice can still run for a short time after its quota is released | Planned |
+| E16 | Quota release | In a ClusterQueue used only by the test, read the CPU and memory reservation of each flavor in the ClusterQueue status (`status.flavorsReservation`). After a slice is removed by scale-down or deletion, the reservation of its flavor eventually equals the sum of the reservations held, when the status is read, by the surviving slices and by every other admitted workload in that flavor, including workloads admitted after the removal. After a slice is preempted (E5), the sum also includes the preemptor. The check compares against that sum, not against a fixed decrease; the reservation is zero only when no workload holds a reservation in that ClusterQueue. It waits for the eventual value, because the Pods of a removed slice can still run for a short time after its quota is released | Planned |
+| E17 | Disabling with live managed DisaggregatedSets (characterization) | Outside the documented workflow, in an isolated namespace and ClusterQueue: remove the `DisaggregatedSet` framework while a managed DisaggregatedSet runs, and record the state of its Workloads, Pods and scheduling gates and the `Kueue` CR conditions. The case records the observed behavior and expects neither graceful cleanup nor a rejection; the result decides whether the documentation or the integration needs a follow-up. Non-gating | Planned (characterization) |
 
 #### Manual Tests
 
@@ -149,7 +157,7 @@ These cases are planned and not implemented: the operator change does not includ
 ## Test Deliverables
 
 - The operator change in `kueue-operator` with the CEL and unit tests (C1, T1–T7), run by Prow CI `test` and `test-generate`
-- Later: the downstream e2e tests E1–E16, and a CI configuration change that installs a LeaderWorkerSet serving the DisaggregatedSet API in the lanes that run them
+- Later: the planned unit test T8, the downstream e2e tests E1–E17, and a CI configuration change that installs a LeaderWorkerSet serving the DisaggregatedSet API in the lanes that run them
 - Later, case by case: reuse of U5 upstream cases through `make e2e-upstream-test` once they make equivalent assertions and have run evidence
 - Execution evidence: operator, operand and bundle digests, submodule SHA, OCP version, LeaderWorkerSet version, served DisaggregatedSet CRD version, JUnit reports and run links
 - Test report with information for the Docs team
@@ -158,7 +166,7 @@ These cases are planned and not implemented: the operator change does not includ
 
 - Test plan creation and review
 - CEL and unit test automation with the operator change
-- Downstream e2e automation (E1–E16), when a LeaderWorkerSet that serves the DisaggregatedSet API is available for CI
+- Downstream e2e automation (E1–E17), when a LeaderWorkerSet that serves the DisaggregatedSet API is available for CI
 - CI configuration for a LeaderWorkerSet that serves the DisaggregatedSet API
 - Evaluation of U5 upstream cases for reuse
 - Execution, repeated runs of the focused cases to detect timing and cleanup flakes, and evidence collection
@@ -168,7 +176,9 @@ These cases are planned and not implemented: the operator change does not includ
 
 - No critical or major defects remain open
 - C1 and T1–T7 pass in CI `test` and `test-generate`
+- T8, once automated, passes in CI `test`
 - E1–E16, once automated, pass on a recorded build combination, with JUnit showing them selected and run; a scenario covered by a reused upstream case passes only if that case's JUnit shows it selected and run against the operator-managed deployment
+- E17 is non-gating: its observed result is recorded, not judged against an expected outcome
 - No test is reported as passing without a run link
 - Until E1–E16 run, DisaggregatedSet runtime behavior on OpenShift is recorded as not covered by downstream automated tests
 
@@ -183,3 +193,4 @@ These cases are planned and not implemented: the operator change does not includ
 | Upstream cases may rely on configuration changes that the operator-managed deployment does not allow | Such cases are not counted and the downstream cases cover the scenario |
 | The out-of-sync rollout race can recreate a slice Workload | Possible flake in the planned E8; treated as a diagnostic with a `WorkloadRecreated` event |
 | Enabling the integration makes existing queue-labeled DisaggregatedSets managed and rolls them out | Test clusters must start clean; documented in `docs/disaggregatedset/` |
+| Removing the framework, and with it the gate, while managed DisaggregatedSets exist is outside the documented workflow | The upstream guide ([Disabling the integration](https://github.com/kubernetes-sigs/kueue/blob/4f3748d8f2c8b9fc68d131d6e23d44faf33f77c1/site/content/en/docs/tasks/run/disaggregatedset.md#disabling-the-integration)) says to delete every managed DisaggregatedSet first and recreate them afterwards. E13 and `docs/disaggregatedset/` follow that workflow, and E17 characterizes the other case without assuming its outcome |
