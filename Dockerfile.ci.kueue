@@ -1,5 +1,5 @@
 # Temporarily use upstream Go until an OpenShift CI builder image with Go 1.27 is available.
-FROM docker.io/library/golang:1.27.0@sha256:4013ae0f9e7994f8535c58c811f8f863fbed38b72e0d51e6592156f758d66146 AS golang
+FROM docker.io/library/golang:1.27.4@sha256:5f1b98fa02fe396ebce2a0227a0e08309e11792915b9dd2e1f71053d7e7e6666 AS golang
 
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS build
 COPY --from=golang /usr/local/go /usr/local/go
