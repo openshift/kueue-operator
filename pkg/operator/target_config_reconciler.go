@@ -86,6 +86,7 @@ const (
 	kueueAPIVersion                        = "kueue.openshift.io/v1"
 	kindKueue                              = "Kueue"
 	draConsumableCapacityMissingDependency = "DRA Consumable Capacity requires Kubernetes 1.36+ (OCP 4.23+) and the DRAConsumableCapacity feature gate to be enabled"
+	disaggregatedSetMissingDependency      = "a version of LeaderWorkerSet that serves the DisaggregatedSet API (disaggregatedset.x-k8s.io/v1)"
 	secretMetricsServerCert                = "metrics-server-cert"
 	certMetricsCerts                       = "metrics-certs"
 	secretKueueVisibilityServerCert        = "kueue-visibility-server-cert"
@@ -339,6 +340,20 @@ func (c *TargetConfigReconciler) sync(ctx context.Context, syncCtx factory.SyncC
 			}
 		}
 	}
+	// The DisaggregatedSet integration only needs the DisaggregatedSet API, which
+	// LeaderWorkerSet serves. The framework and its feature gate are still rendered
+	// while the API is missing: Kueue registers the webhook and defers the controller
+	// setup until the API is served, so no restart is needed once it is installed.
+	disaggregatedSetDeps, err := missingDisaggregatedSetDependencies(ctx, kueue.Spec.Config.Integrations.Frameworks, c.discoveryClient)
+	if err != nil {
+		klog.Errorf("unable to check if the DisaggregatedSet API is served: %v", err)
+	}
+	if len(disaggregatedSetDeps) > 0 {
+		klog.Errorf("please make sure that LeaderWorkerSet serves the %s API", disaggregatedSetGVK.GroupVersion())
+		c.eventRecorder.Eventf("DisaggregatedSetAPIUnavailable", "the %s API is not served, DisaggregatedSet integration will not take effect until it is installed", disaggregatedSetGVK.GroupVersion())
+		missingDependencies = append(missingDependencies, disaggregatedSetDeps...)
+	}
+
 	// Check DRA API availability (resource.k8s.io/v1).
 	// DRA is GA in Kubernetes 1.34+ (OCP 4.21+).
 	draAPIsAvailable := false
@@ -2499,6 +2514,45 @@ func missingConsumableCapacityDependencies(resources kueuev1.Resources, enabled 
 		return []string{draConsumableCapacityMissingDependency}
 	}
 	return nil
+}
+
+// disaggregatedSetGVK is the API that the DisaggregatedSet integration requires.
+var disaggregatedSetGVK = schema.GroupVersionKind{
+	Group:   "disaggregatedset.x-k8s.io",
+	Version: "v1",
+	Kind:    "DisaggregatedSet",
+}
+
+// missingDisaggregatedSetDependencies reports the DisaggregatedSet API as a
+// missing dependency when the DisaggregatedSet integration is enabled and the API
+// is not served. Discovery is used instead of the CRD informer cache because the
+// cache strips the CRD status, and discovery only lists the served versions of
+// established CRDs. When the check fails, the API is reported as missing. The
+// discovery request uses the sync context, so it is canceled with the sync.
+func missingDisaggregatedSetDependencies(ctx context.Context, frameworks []kueuev1.KueueIntegration, discoveryClient discovery.DiscoveryInterface) ([]string, error) {
+	if !slices.Contains(frameworks, kueuev1.KueueIntegrationDisaggregatedSet) {
+		return nil, nil
+	}
+	served, err := isResourceRegisteredWithContext(ctx, discovery.ToDiscoveryInterfaceWithContext(discoveryClient), disaggregatedSetGVK)
+	if err != nil || !served {
+		return []string{disaggregatedSetMissingDependency}, err
+	}
+	return nil, nil
+}
+
+// isResourceRegisteredWithContext reports whether discovery serves the kind of
+// the given GroupVersionKind, using ctx for the discovery request.
+func isResourceRegisteredWithContext(ctx context.Context, discoveryClient discovery.DiscoveryInterfaceWithContext, gvk schema.GroupVersionKind) (bool, error) {
+	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersionWithContext(ctx, gvk.GroupVersion().String())
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return slices.ContainsFunc(apiResourceList.APIResources, func(r metav1.APIResource) bool {
+		return r.Kind == gvk.Kind
+	}), nil
 }
 
 func isResourceRegistered(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (bool, error) {

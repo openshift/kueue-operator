@@ -983,6 +983,114 @@ webhook:
 			},
 			wantErr: nil,
 		},
+		"disaggregated set": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationDisaggregatedSet},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  DisaggregatedSetIntegration: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - disaggregatedset.x-k8s.io/disaggregatedset
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
+		"disaggregated set and spark application": {
+			configuration: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationDisaggregatedSet, kueue.KueueIntegrationSparkApplication},
+				},
+			},
+			wantCfgMap: &corev1.ConfigMap{
+				Data: map[string]string{
+					controllerManagerConfigYaml: `apiVersion: config.kueue.x-k8s.io/v1beta2
+clientConnection:
+  burst: 100
+  qps: 50
+controller:
+  groupKindConcurrency:
+    ClusterQueue.kueue.x-k8s.io: 1
+    Job.batch: 5
+    LocalQueue.kueue.x-k8s.io: 1
+    Pod: 5
+    ResourceFlavor.kueue.x-k8s.io: 1
+    Workload.kueue.x-k8s.io: 5
+featureGates:
+  DisaggregatedSetIntegration: true
+  SparkApplicationIntegration: true
+health:
+  healthProbeBindAddress: :8081
+integrations:
+  frameworks:
+  - disaggregatedset.x-k8s.io/disaggregatedset
+  - sparkoperator.k8s.io/sparkapplication
+internalCertManagement:
+  enable: false
+kind: Configuration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 2m17s
+  renewDeadline: 1m47s
+  resourceLock: ""
+  resourceName: ""
+  resourceNamespace: ""
+  retryPeriod: 26s
+manageJobsWithoutQueueName: false
+managedJobsNamespaceSelector:
+  matchLabels:
+    kueue.openshift.io/managed: "true"
+metrics:
+  bindAddress: :8443
+  enableClusterQueueResources: true
+namespace: test
+webhook:
+  port: 9443
+`,
+				},
+			},
+			wantErr: nil,
+		},
 		"dra with device class mappings": {
 			configuration: kueue.KueueConfiguration{
 				Integrations: kueue.Integrations{
@@ -1958,6 +2066,23 @@ func TestBuildFeatureGatesForDRASources(t *testing.T) {
 		"capacity source does not enable gate when dependency is unavailable": {
 			kueueCfg:                     kueue.KueueConfiguration{Resources: capacityResources},
 			draConsumableCapacityEnabled: false,
+		},
+		"disaggregatedset framework enables disaggregatedset integration gate": {
+			kueueCfg: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationBatchJob, kueue.KueueIntegrationDisaggregatedSet},
+				},
+			},
+			want: map[string]bool{
+				"DisaggregatedSetIntegration": true,
+			},
+		},
+		"frameworks without disaggregatedset do not enable disaggregatedset integration gate": {
+			kueueCfg: kueue.KueueConfiguration{
+				Integrations: kueue.Integrations{
+					Frameworks: []kueue.KueueIntegration{kueue.KueueIntegrationLeaderWorkerSet, kueue.KueueIntegrationPod},
+				},
+			},
 		},
 		"custom labels presence does not enable custom metrics labels gate": {
 			kueueCfg: kueue.KueueConfiguration{

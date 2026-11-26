@@ -59,7 +59,7 @@ index 24811bd7d..307dbd677 100644
  		rf = utiltestingapi.MakeResourceFlavor("afs-rf").Obj()
  		behavioral.MustCreate(ctx, k8sClient, rf)
 diff --git a/test/e2e/singlecluster/extended/suite_test.go b/test/e2e/singlecluster/extended/suite_test.go
-index 9f27f4b48..3e612b22f 100644
+index d6f591f74..3e612b22f 100644
 --- a/test/e2e/singlecluster/extended/suite_test.go
 +++ b/test/e2e/singlecluster/extended/suite_test.go
 @@ -55,12 +55,8 @@ var _ = ginkgo.BeforeSuite(func() {
@@ -69,7 +69,7 @@ index 9f27f4b48..3e612b22f 100644
 -	if ginkgo.Label("feature:jobset", "feature:trainjob").MatchesLabelFilter(labelFilter) {
 -		e2e.WaitForJobSetAvailability(ctx, k8sClient)
 -	}
--	if ginkgo.Label("feature:leaderworkerset").MatchesLabelFilter(labelFilter) {
+-	if ginkgo.Label("feature:leaderworkerset", "feature:disaggregatedset").MatchesLabelFilter(labelFilter) {
 -		e2e.WaitForLeaderWorkerSetAvailability(ctx, k8sClient, cfg)
 -	}
 +	// On OCP, JobSet and LeaderWorkerSet operators run in different namespaces,
