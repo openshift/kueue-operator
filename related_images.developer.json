@@ -9,6 +9,6 @@
   },
   {
     "name": "operand",
-    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operand-main@sha256:57b1e53ff413da00ca6dfcf20fb2be0e5b12a15a0c7a99f56a4af50481956380 "
+    "image": "quay.io/redhat-user-workloads/kueue-operator-tenant/kueue-operand-main@sha256:1c4e26eb497a118b333a516ae687e90447c16f16dab8efde06e55fd828829895 "
   }
 ]
