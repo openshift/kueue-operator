@@ -32,6 +32,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods/eviction
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
   - pods/finalizers
   verbs:
   - get
@@ -137,6 +143,23 @@ rules:
 - apiGroups:
   - autoscaling.x-k8s.io
   resources:
+  - capacitybuffers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - autoscaling.x-k8s.io
+  resources:
+  - capacitybuffers/status
+  - provisioningrequests/status
+  verbs:
+  - get
+- apiGroups:
+  - autoscaling.x-k8s.io
+  resources:
   - provisioningrequests
   verbs:
   - create
@@ -149,9 +172,10 @@ rules:
 - apiGroups:
   - autoscaling.x-k8s.io
   resources:
-  - provisioningrequests/status
+  - provisioningrequests/finalizers
   verbs:
   - get
+  - update
 - apiGroups:
   - batch
   resources:
@@ -302,6 +326,7 @@ rules:
   - dynamicquotaorchestrators/status
   - localqueues/status
   - multikueueclusters/status
+  - preemptionlimits/status
   - workloads/status
   verbs:
   - get
@@ -310,6 +335,7 @@ rules:
 - apiGroups:
   - kueue.x-k8s.io
   resources:
+  - capacitybufferconfigs
   - capacityproviders
   - cohorts
   - dynamicquotaorchestrators
@@ -318,6 +344,7 @@ rules:
   - multikueueclusters
   - multikueueconfigs
   - preemptionconfigs
+  - preemptionlimits
   - provisioningrequestconfigs
   - workloadpriorityclasses
   verbs:
@@ -423,6 +450,13 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - sparkoperator.k8s.io
+  resources:
+  - sparkapplications/finalizers
+  verbs:
+  - get
+  - update
 - apiGroups:
   - trainer.kubeflow.org
   resources:
