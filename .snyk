@@ -7,6 +7,8 @@ exclude:
     - hack/sync_manifests.py
     # Disable kueue-viz as openshift does not support.
     - upstream/kueue/src/cmd/experimental/kueue-viz/**
+    # Disable kueueviz as openshift does not support.
+    - upstream/kueue/src/cmd/kueueviz/**
     - upstream/kueue/src/site/**
     - upstream/kueue/src/vendor/**
     - upstream/kueue/src/"**/*_test.go"
