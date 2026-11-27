@@ -7,6 +7,8 @@ exclude:
     - hack/sync_manifests.py
     # Disable kueue-viz as openshift does not support.
     - upstream/kueue/src/cmd/experimental/kueue-viz/**
+    # Disable kueueviz as openshift does not support.
+    - upstream/kueue/src/cmd/kueueviz/**
     - upstream/kueue/src/site/**
     - upstream/kueue/src/vendor/**
     - upstream/kueue/src/"**/*_test.go"
@@ -14,9 +16,12 @@ exclude:
     - upstream/kueue/src/hack/**
     # sha1 hash not used for cryptographic purposes
     - upstream/kueue/src/pkg/controller/admissionchecks/provisioning/controller.go
+    - upstream/kueue/src/pkg/controller/admissionchecks/capacitybuffer/controller.go
     - upstream/kueue/src/pkg/controller/jobframework/workload_names.go
     - upstream/kueue/src/pkg/cache/scheduler/was/virtual_podgroups.go
     - upstream/kueue/src/pkg/cache/scheduler/was/virtual_pods.go
+    # upstream CLI docs generator, path traversal from CLI args
+    - upstream/kueue/src/cmd/kueuectl-docs/main.go
     # Disable test code
     - upstream/kueue/src/test/**
     # ginkgo-top is used for displaying test results

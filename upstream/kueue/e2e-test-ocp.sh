@@ -65,7 +65,7 @@ function ginkgo_label_filter() {
     singlecluster)
       # TAS suites live below singlecluster/tasapi and share generic feature labels such as
       # feature:job with this lane, so exclude their area label explicitly.
-      echo "(feature:certs || feature:cohort || feature:deployment || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas"
+      echo "(feature:certs || feature:cohort || feature:deployment || feature:e2e_v1beta1 || feature:job || feature:jobset || feature:leaderworkerset || feature:metrics || feature:statefulset || feature:visibility) && !area:tas && !feature:capacitybuffer"
       ;;
     certmanager)
       echo "!feature:prometheus"
