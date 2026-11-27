@@ -219,18 +219,22 @@ var _ = Describe("Hierarchical Cohorts", Label("cohort"), Ordered, func() {
 			verifyBorrowedCPU(ctx, env.CQFrontend.Name, "250m")
 
 			By("Verifying cq-frontend weightedShare reflects borrowing (weight:3, using 500m)")
-			cqFrontendStatus, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, env.CQFrontend.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cqFrontendStatus.Status.FairSharing).NotTo(BeNil(), "fairSharing status should be populated")
-			Expect(cqFrontendStatus.Status.FairSharing.WeightedShare).To(BeNumerically(">", 0),
-				"cq-frontend weightedShare should be > 0 while borrowing")
+			Eventually(func(g Gomega) {
+				cqFrontendStatus, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, env.CQFrontend.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cqFrontendStatus.Status.FairSharing).NotTo(BeNil(), "fairSharing status should be populated")
+				g.Expect(cqFrontendStatus.Status.FairSharing.WeightedShare).To(BeNumerically(">", 0),
+					"cq-frontend weightedShare should be > 0 while borrowing")
+			}, testutils.WorkloadTimeout, testutils.WorkloadPoll).Should(Succeed())
 
 			By("Verifying cq-ml weightedShare is 0 (no usage yet)")
-			cqMLStatus, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, env.CQML.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cqMLStatus.Status.FairSharing).NotTo(BeNil(), "fairSharing status should be populated on cq-ml")
-			Expect(cqMLStatus.Status.FairSharing.WeightedShare).To(Equal(int64(0)),
-				"cq-ml weightedShare should be 0 with no usage")
+			Eventually(func(g Gomega) {
+				cqMLStatus, err := clients.UpstreamKueueClient.KueueV1beta2().ClusterQueues().Get(ctx, env.CQML.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cqMLStatus.Status.FairSharing).NotTo(BeNil(), "fairSharing status should be populated on cq-ml")
+				g.Expect(cqMLStatus.Status.FairSharing.WeightedShare).To(Equal(int64(0)),
+					"cq-ml weightedShare should be 0 with no usage")
+			}, testutils.WorkloadTimeout, testutils.WorkloadPoll).Should(Succeed())
 
 			By("Creating a long-running job on cq-ml (250m) — weights should protect cq-frontend from preemption")
 			mlJob, err := kubeClient.BatchV1().Jobs(env.NSML.Name).Create(ctx,

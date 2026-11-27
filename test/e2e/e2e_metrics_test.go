@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -63,6 +64,7 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 			}
 			_, err = kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			waitForDefaultServiceAccount(monitoringNamespace)
 		}
 
 		By("Copying metrics certificate secret to monitoring namespace")
@@ -227,22 +229,25 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 				metricsServiceName, testutils.OperatorNamespace, metricsPort)
 			cmd := []string{"/bin/sh", "-c", curlCmd}
 
-			output, err := execInPod(monitoringNamespace, curlPod.Name, cmd)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(output).NotTo(BeEmpty())
+			// The operand may still be rolling out its TLS config, in which case the
+			// service briefly has no ready backend and the connection is refused.
+			var metricsOutput string
+			Eventually(func(g Gomega) {
+				output, err := execInPod(monitoringNamespace, curlPod.Name, cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).NotTo(BeEmpty())
+				metricsOutput = string(output)
+				// Check for Prometheus metric format (key-value or HELP/TYPE lines)
+				g.Expect(metricsOutput).To(ContainSubstring("# HELP"), "Expected metrics output to contain '# HELP'")
+				g.Expect(metricsOutput).To(ContainSubstring("# TYPE"))
+			}, testutils.WorkloadTimeout, testutils.OperatorPoll).Should(Succeed())
 
-			By("Verifying metrics format")
-			metricsOutput := string(output)
 			// Log the output for debugging
 			outputLen := len(metricsOutput)
 			if outputLen > 500 {
 				outputLen = 500
 			}
 			GinkgoWriter.Printf("Metrics output (first %d chars): %s\n", outputLen, metricsOutput[:outputLen])
-
-			// Check for Prometheus metric format (key-value or HELP/TYPE lines)
-			Expect(metricsOutput).To(ContainSubstring("# HELP"), fmt.Sprintf("Expected metrics output to contain '# HELP'"))
-			Expect(metricsOutput).To(ContainSubstring("# TYPE"))
 		})
 
 		It("should expose kueue-specific metrics", func() {
@@ -251,20 +256,19 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 				metricsServiceName, testutils.OperatorNamespace, metricsPort)
 			cmd := []string{"/bin/sh", "-c", curlCmd}
 
-			output, err := execInPod(monitoringNamespace, curlPod.Name, cmd)
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(func(g Gomega) {
+				output, err := execInPod(monitoringNamespace, curlPod.Name, cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				metricsOutput := string(output)
 
-			metricsOutput := string(output)
-
-			By("Checking for kueue build info metric")
-			Expect(metricsOutput).To(ContainSubstring("kueue_build_info"))
-
-			By("Checking for controller-runtime metrics")
-			// These are always present in controller-runtime applications
-			Expect(metricsOutput).To(Or(
-				ContainSubstring("controller_runtime_"),
-				ContainSubstring("workqueue_"),
-			))
+				// kueue build info and controller-runtime metrics are always present
+				// in controller-runtime applications.
+				g.Expect(metricsOutput).To(ContainSubstring("kueue_build_info"))
+				g.Expect(metricsOutput).To(Or(
+					ContainSubstring("controller_runtime_"),
+					ContainSubstring("workqueue_"),
+				))
+			}, testutils.WorkloadTimeout, testutils.OperatorPoll).Should(Succeed())
 		})
 	})
 
@@ -299,6 +303,9 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 				By("Cleaning up test namespace")
 				_ = kubeClient.CoreV1().Namespaces().Delete(context.Background(), testNamespace.Name, metav1.DeleteOptions{})
 			}()
+
+			By("Waiting for the default ServiceAccount in the test namespace")
+			waitForDefaultServiceAccount(testNamespace.Name)
 
 			By("Copying metrics certificate secret to test namespace")
 			secret, err := kubeClient.CoreV1().Secrets(testutils.OperatorNamespace).Get(context.Background(), metricsSecretName, metav1.GetOptions{})
@@ -396,6 +403,20 @@ var _ = Describe("Kueue Metrics", Label("metrics"), Ordered, func() {
 		})
 	})
 })
+
+// waitForDefaultServiceAccount waits for the namespace controller to provision the
+// "default" ServiceAccount, which pods in a freshly created namespace need.
+func waitForDefaultServiceAccount(namespace string) {
+	Eventually(func(g Gomega) {
+		// Keep each Get short: the Eventually window, not an unbounded per-call
+		// context, is what should absorb a slow namespace controller.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, err := kubeClient.CoreV1().ServiceAccounts(namespace).Get(ctx, "default", metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+	}, testutils.OperatorReadyTime, testutils.OperatorPoll).Should(Succeed(),
+		"default ServiceAccount should exist in namespace %s", namespace)
+}
 
 // execInPod executes a command in a pod and returns the output
 func execInPod(namespace, podName string, command []string) ([]byte, error) {
